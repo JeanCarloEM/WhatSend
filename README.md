@@ -27,6 +27,8 @@ O projeto segue um RCF local com estas regras principais:
 - permite forçar reenvio ou limpar histórico sem burlar validação de telefone;
 - registra enviados, erros, pulos, avisos e versões de mensagem em `logs/`;
 - mantém status compacto e colorido no console durante o processamento;
+- permite sessão alternativa por `WA_CLIENT_ID`;
+- permite conectar a navegador já aberto quando ele foi iniciado com depuração remota;
 - roda em Windows, macOS e Linux quando há Node.js LTS e navegador Chromium compatível.
 
 ## Requisitos
@@ -194,6 +196,59 @@ RESEND_AFTER_HOURS=48
 ```
 
 Por padrão, se o `texto.md` nativo mudar 10% ou mais em relação à versão já enviada para um telefone, o sistema considera uma nova mensagem e permite o envio. Se a mensagem for igual ou muito parecida, ela também pode ser reenviada automaticamente depois de 48 horas.
+
+### Navegador já aberto
+
+Se aparecer uma mensagem parecida com:
+
+```text
+The browser is already running for .wwebjs_auth\session. Use a different userDataDir or stop the running browser first.
+```
+
+isso significa que o perfil local salvo em `.wwebjs_auth/session` já está aberto por outro navegador. Há três caminhos:
+
+1. Feche a janela aberta pelo disparador e rode `npm start` novamente.
+2. Use uma sessão separada, que pode pedir novo QR Code:
+
+```env
+WA_CLIENT_ID=campanha_teste
+```
+
+3. Reutilize um navegador já aberto somente se ele tiver sido iniciado com depuração remota.
+
+Exemplo ilustrativo no Windows:
+
+```powershell
+& "C:\caminho\para\chrome.exe" --remote-debugging-port=9222 --user-data-dir="C:\pasta\chrome-whatsapp"
+```
+
+Exemplo ilustrativo em macOS/Linux:
+
+```bash
+google-chrome --remote-debugging-port=9222 --user-data-dir="/caminho/chrome-whatsapp"
+```
+
+Para manter o WhatsApp autenticado nesse modo, reutilize a mesma pasta informada em `--user-data-dir` nas próximas execuções.
+
+Depois configure:
+
+```env
+BROWSER_URL=http://127.0.0.1:9222
+```
+
+Também é aceito:
+
+```env
+BROWSER_WS_ENDPOINT=ws://127.0.0.1:9222/devtools/browser/exemplo
+```
+
+Atalho opcional para usar `http://127.0.0.1:9222`:
+
+```env
+CONNECT_EXISTING_BROWSER=true
+```
+
+Uma janela comum do Chrome, Chromium ou Edge aberta sem depuração remota não pode ser controlada pelo Puppeteer.
 
 ## Execução
 

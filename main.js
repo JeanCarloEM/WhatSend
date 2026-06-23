@@ -206,6 +206,10 @@
  *
  *      ./.wwebjs_auth
  *
+ *   Deve ser possível isolar uma sessão alternativa por:
+ *
+ *      WA_CLIENT_ID
+ *
  * -----------------------------------------------------------------------------
  *
  * RN016 - Operação Local e Privacidade
@@ -265,6 +269,13 @@
  *
  *      PUPPETEER_EXECUTABLE_PATH
  *      CHROME_EXECUTABLE_PATH
+ *
+ *   Quando o navegador já estiver aberto, só deve ser reutilizado se tiver sido
+ *   iniciado com depuração remota e informado por:
+ *
+ *      BROWSER_URL
+ *      BROWSER_WS_ENDPOINT
+ *      CONNECT_EXISTING_BROWSER
  *
  * =============================================================================
  * REQUISITOS NÃO FUNCIONAIS
@@ -354,6 +365,24 @@ function readIntegerEnv(name, fallback) {
 function readNumberEnv(name, fallback) {
   const value = Number.parseFloat(process.env[name]);
   return Number.isFinite(value) && value >= 0 ? value : fallback;
+}
+
+function readFirstEnv(names) {
+  for (const name of names) {
+    const value = String(process.env[name] || "").trim();
+
+    if (value) {
+      return value;
+    }
+  }
+
+  return "";
+}
+
+function isTruthyEnv(value) {
+  return ["1", "true", "yes", "sim", "on"].includes(
+    String(value || "").trim().toLowerCase(),
+  );
 }
 
 function sleep(ms) {
@@ -1451,7 +1480,36 @@ function isBrowserExecutableName(name) {
   ].includes(String(name).toLowerCase());
 }
 
+function getExistingBrowserConnectionConfig() {
+  const browserWSEndpoint = readFirstEnv([
+    "BROWSER_WS_ENDPOINT",
+    "PUPPETEER_BROWSER_WS_ENDPOINT",
+  ]);
+
+  if (browserWSEndpoint) {
+    return { browserWSEndpoint };
+  }
+
+  const browserURL = readFirstEnv(["BROWSER_URL", "PUPPETEER_BROWSER_URL"]);
+
+  if (browserURL) {
+    return { browserURL };
+  }
+
+  if (isTruthyEnv(process.env.CONNECT_EXISTING_BROWSER)) {
+    return { browserURL: "http://127.0.0.1:9222" };
+  }
+
+  return null;
+}
+
 function buildPuppeteerConfig() {
+  const existingBrowserConfig = getExistingBrowserConnectionConfig();
+
+  if (existingBrowserConfig) {
+    return existingBrowserConfig;
+  }
+
   const executablePath = resolveBrowserExecutablePath();
 
   return {
@@ -1463,6 +1521,64 @@ function buildPuppeteerConfig() {
       "--no-default-browser-check",
     ],
   };
+}
+
+function getWhatsAppClientId() {
+  const clientId = readFirstEnv(["WA_CLIENT_ID", "WWEBJS_CLIENT_ID"]);
+
+  if (!clientId) {
+    return undefined;
+  }
+
+  if (!/^[-_\w]+$/i.test(clientId)) {
+    throw new Error(
+      "WA_CLIENT_ID inválido. Use apenas letras, números, hífen ou sublinhado.",
+    );
+  }
+
+  return clientId;
+}
+
+function formatBrowserStartupError(err, paths = PATHS) {
+  const message = err && err.message ? err.message : String(err);
+
+  if (/already running/i.test(message) && /userDataDir/i.test(message)) {
+    return [
+      message,
+      "",
+      "O perfil local do WhatsApp Web já está em uso por outro navegador.",
+      "Para continuar, escolha uma destas opções:",
+      `- feche a janela que está usando ${path.join(paths.auth, "session")} e rode novamente;`,
+      "- use WA_CLIENT_ID=outro_nome para criar uma sessão separada, possivelmente com novo QR Code;",
+      "- para reutilizar uma janela já aberta, inicie Chrome/Edge com depuração remota e configure BROWSER_URL ou BROWSER_WS_ENDPOINT.",
+      "",
+      "Uma janela comum do navegador, aberta sem depuração remota, não pode ser anexada pelo Puppeteer.",
+    ].join("\n");
+  }
+
+  if (
+    /ECONNREFUSED|ECONNRESET|Failed to fetch browser webSocket URL|browserURL/i.test(
+      message,
+    )
+  ) {
+    return [
+      message,
+      "",
+      "Não foi possível conectar ao navegador existente.",
+      "Confirme que ele foi iniciado com depuração remota, por exemplo na porta 9222, e que BROWSER_URL aponta para esse endereço.",
+    ].join("\n");
+  }
+
+  if (/Could not find Chrome/i.test(message)) {
+    return [
+      message,
+      "",
+      "Chrome/Chromium/Edge não foi encontrado pelo Puppeteer.",
+      "Instale um navegador compatível, rode `npx puppeteer browsers install chrome`, ou configure PUPPETEER_EXECUTABLE_PATH no .env.",
+    ].join("\n");
+  }
+
+  return message;
 }
 
 function validateRuntimeFiles(paths = PATHS, options = {}) {
@@ -1501,11 +1617,16 @@ function validateRuntimeFiles(paths = PATHS, options = {}) {
 
   if (checkBrowser) {
     try {
-      const executablePath = resolveBrowserExecutablePath();
+      const existingBrowserConfig = getExistingBrowserConnectionConfig();
+      const executablePath = existingBrowserConfig
+        ? null
+        : resolveBrowserExecutablePath();
 
-      if (!executablePath) {
+      if (!existingBrowserConfig && !executablePath) {
         issues.push("Chrome/Chromium/Edge não encontrado.");
       }
+
+      getWhatsAppClientId();
     } catch (err) {
       issues.push(err.message);
     }
@@ -1653,6 +1774,7 @@ function createWhatsAppClient(paths = PATHS) {
   return new Client({
     authStrategy: new LocalAuth({
       dataPath: paths.auth,
+      clientId: getWhatsAppClientId(),
     }),
 
     puppeteer: buildPuppeteerConfig(),
@@ -1719,7 +1841,7 @@ async function main() {
     registerClientHandlers(client, PATHS, options);
     await client.initialize();
   } catch (err) {
-    console.error(err.message);
+    console.error(formatBrowserStartupError(err, PATHS));
     process.exitCode = 1;
   }
 }
@@ -1735,7 +1857,9 @@ module.exports = {
   buildSendPlan,
   buildPuppeteerConfig,
   calculateDifferencePercent,
+  formatBrowserStartupError,
   findPuppeteerCacheBrowsers,
+  getExistingBrowserConnectionConfig,
   getBrowserExecutableNames,
   getInstalledBrowserCandidates,
   getLinuxBrowserCandidates,
@@ -1743,6 +1867,7 @@ module.exports = {
   getPathBrowserCandidates,
   getSendDecision,
   getTemplateFingerprint,
+  getWhatsAppClientId,
   getWindowsBrowserCandidates,
   formatNameForMessage,
   loadSentRecords,

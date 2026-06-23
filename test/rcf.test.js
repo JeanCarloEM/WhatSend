@@ -11,12 +11,16 @@ const test = require("node:test");
 const {
   applyTemplate,
   buildSendPlan,
+  buildPuppeteerConfig,
+  formatBrowserStartupError,
   formatNameForMessage,
   getBrowserExecutableNames,
+  getExistingBrowserConnectionConfig,
   getInstalledBrowserCandidates,
   getLinuxBrowserCandidates,
   getMacBrowserCandidates,
   getTemplateFingerprint,
+  getWhatsAppClientId,
   getWindowsBrowserCandidates,
   loadAlreadySent,
   loadCsv,
@@ -58,6 +62,32 @@ function createFixture(files = {}) {
   return { root, paths };
 }
 
+function withEnv(values, fn) {
+  const previous = new Map(
+    Object.keys(values).map((key) => [key, process.env[key]]),
+  );
+
+  try {
+    for (const [key, value] of Object.entries(values)) {
+      if (value === undefined) {
+        delete process.env[key];
+      } else {
+        process.env[key] = value;
+      }
+    }
+
+    return fn();
+  } finally {
+    for (const [key, value] of previous.entries()) {
+      if (value === undefined) {
+        delete process.env[key];
+      } else {
+        process.env[key] = value;
+      }
+    }
+  }
+}
+
 test("normaliza telefone e adiciona código do Brasil quando necessário", () => {
   assert.equal(sanitizePhone("(19) 99824-0000"), "5519998240000");
   assert.equal(sanitizePhone("+55 19 99824-0000"), "5519998240000");
@@ -76,6 +106,64 @@ test("gera candidatos de navegador para Windows, macOS e Linux", () => {
   assert.ok(getLinuxBrowserCandidates().some((candidate) => candidate.includes("google-chrome")));
   assert.ok(getInstalledBrowserCandidates("darwin").some((candidate) => candidate.includes("Applications")));
   assert.ok(getBrowserExecutableNames("linux").includes("chromium-browser"));
+});
+
+test("usa navegador existente quando BROWSER_URL está configurado", () => {
+  withEnv(
+    {
+      BROWSER_URL: "http://127.0.0.1:9222",
+      BROWSER_WS_ENDPOINT: "",
+      CONNECT_EXISTING_BROWSER: "",
+      PUPPETEER_BROWSER_URL: "",
+      PUPPETEER_BROWSER_WS_ENDPOINT: "",
+    },
+    () => {
+      assert.deepEqual(getExistingBrowserConnectionConfig(), {
+        browserURL: "http://127.0.0.1:9222",
+      });
+      assert.deepEqual(buildPuppeteerConfig(), {
+        browserURL: "http://127.0.0.1:9222",
+      });
+    },
+  );
+});
+
+test("CONNECT_EXISTING_BROWSER usa a porta local padrão", () => {
+  withEnv(
+    {
+      BROWSER_URL: "",
+      BROWSER_WS_ENDPOINT: "",
+      CONNECT_EXISTING_BROWSER: "true",
+      PUPPETEER_BROWSER_URL: "",
+      PUPPETEER_BROWSER_WS_ENDPOINT: "",
+    },
+    () => {
+      assert.deepEqual(getExistingBrowserConnectionConfig(), {
+        browserURL: "http://127.0.0.1:9222",
+      });
+    },
+  );
+});
+
+test("aceita WA_CLIENT_ID para sessão separada e rejeita valor inválido", () => {
+  withEnv({ WA_CLIENT_ID: "campanha_teste-01", WWEBJS_CLIENT_ID: "" }, () => {
+    assert.equal(getWhatsAppClientId(), "campanha_teste-01");
+  });
+
+  withEnv({ WA_CLIENT_ID: "campanha teste", WWEBJS_CLIENT_ID: "" }, () => {
+    assert.throws(() => getWhatsAppClientId(), /WA_CLIENT_ID inválido/);
+  });
+});
+
+test("explica perfil de navegador já em uso", () => {
+  const message = formatBrowserStartupError(
+    new Error(
+      "The browser is already running for C:\\LOCAL\\whatsapp\\.wwebjs_auth\\session. Use a different `userDataDir` or stop the running browser first.",
+    ),
+  );
+
+  assert.match(message, /perfil local do WhatsApp Web já está em uso/);
+  assert.match(message, /depuração remota/);
 });
 
 test("exige as colunas obrigatórias do RCF no CSV", () => {
