@@ -12,7 +12,12 @@ const {
   applyTemplate,
   buildSendPlan,
   formatNameForMessage,
+  getBrowserExecutableNames,
+  getInstalledBrowserCandidates,
+  getLinuxBrowserCandidates,
+  getMacBrowserCandidates,
   getTemplateFingerprint,
+  getWindowsBrowserCandidates,
   loadAlreadySent,
   loadCsv,
   loadSentRecords,
@@ -63,6 +68,14 @@ test("capitaliza nome e limita em no máximo duas palavras", () => {
   assert.equal(formatNameForMessage("maria eduarda silva extra"), "Maria Eduarda");
   assert.equal(formatNameForMessage("JOÃO"), "João");
   assert.equal(formatNameForMessage("ana-maria exemplo"), "Ana-Maria Exemplo");
+});
+
+test("gera candidatos de navegador para Windows, macOS e Linux", () => {
+  assert.ok(getWindowsBrowserCandidates().some((candidate) => candidate.endsWith("chrome.exe")));
+  assert.ok(getMacBrowserCandidates().some((candidate) => candidate.includes("Google Chrome.app")));
+  assert.ok(getLinuxBrowserCandidates().some((candidate) => candidate.includes("google-chrome")));
+  assert.ok(getInstalledBrowserCandidates("darwin").some((candidate) => candidate.includes("Applications")));
+  assert.ok(getBrowserExecutableNames("linux").includes("chromium-browser"));
 });
 
 test("exige as colunas obrigatórias do RCF no CSV", () => {

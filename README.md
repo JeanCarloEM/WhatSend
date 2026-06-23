@@ -11,12 +11,32 @@ O envio só acontece depois da pré-validação dos arquivos e da validação do
 
 Todos os nomes, telefones, contas e caminhos abaixo são meramente ilustrativos.
 
+## RCF Implementado
+
+O projeto segue um RCF local com estas regras principais:
+
+- usa somente `clientes.csv` e `texto.md` como entradas da campanha;
+- valida CSV, template, logs, anexos locais, sessão e navegador antes de enviar;
+- substitui variáveis `${coluna}` a partir das colunas do CSV;
+- formata `${nome}` com capitalização e no máximo duas palavras;
+- interpreta `![](CAMINHO_OU_URL)` como anexo local ou remoto;
+- baixa anexos remotos uma única vez para cache temporário;
+- envia anexos no início ou final com o texto como legenda quando possível;
+- valida o número no WhatsApp com `client.getNumberId()` antes do envio;
+- evita reenvio com base no telefone, versão nativa do `texto.md` e prazo configurável;
+- permite forçar reenvio ou limpar histórico sem burlar validação de telefone;
+- registra enviados, erros, pulos, avisos e versões de mensagem em `logs/`;
+- mantém status compacto e colorido no console durante o processamento;
+- roda em Windows, macOS e Linux quando há Node.js LTS e navegador Chromium compatível.
+
 ## Requisitos
 
-- Windows 10 ou Windows 11.
+- Windows, macOS ou Linux.
 - Node.js LTS.
-- Google Chrome ou Microsoft Edge instalado.
+- Google Chrome, Chromium ou Microsoft Edge instalado.
 - WhatsApp ativo no celular para escanear o QR Code na primeira execução.
+
+As dependências usadas pelo projeto (`csv-parse`, `dotenv`, `qrcode-terminal`, `puppeteer-core` e `whatsapp-web.js`) são bibliotecas Node compatíveis com as principais plataformas. A automação do WhatsApp Web depende de um navegador Chromium compatível disponível no sistema.
 
 ## Instalação
 
@@ -24,6 +44,13 @@ Na pasta do projeto:
 
 ```powershell
 cd C:\caminho\do\projeto
+npm install
+```
+
+Em macOS/Linux:
+
+```bash
+cd /caminho/do/projeto
 npm install
 ```
 
@@ -133,10 +160,23 @@ Quando o anexo estiver no meio do texto, o sistema envia as partes separadamente
 
 ### `.env` opcional
 
-O projeto tenta encontrar automaticamente Chrome ou Edge no Windows. Se precisar indicar o navegador manualmente, crie um arquivo `.env`:
+O projeto tenta encontrar automaticamente Chrome, Chromium ou Edge no Windows, macOS e Linux. Se precisar indicar o navegador manualmente, crie um arquivo `.env`:
 
 ```env
 PUPPETEER_EXECUTABLE_PATH=C:\caminho\para\chrome.exe
+```
+
+Exemplos ilustrativos por sistema:
+
+```env
+# Windows
+PUPPETEER_EXECUTABLE_PATH=C:\caminho\para\chrome.exe
+
+# macOS
+PUPPETEER_EXECUTABLE_PATH=/Applications/Google Chrome.app/Contents/MacOS/Google Chrome
+
+# Linux
+PUPPETEER_EXECUTABLE_PATH=/usr/bin/google-chrome
 ```
 
 Também é possível ajustar o intervalo aleatório entre envios:
@@ -175,7 +215,19 @@ Durante o envio, o console exibe uma linha de status compacta com progresso, env
 
 Quando um registro é pulado, o console mostra o motivo. O caso mais comum é o telefone já existir em `logs/enviados.csv`.
 
-Para reenviar mesmo quando o telefone já consta como enviado:
+### Comandos
+
+| Comando | Função |
+| --- | --- |
+| `npm start` | Valida e inicia o envio. |
+| `npm run check` | Valida arquivos e configuração sem enviar. |
+| `npm test` | Roda a suíte automatizada. |
+| `npm run start:force` | Reenvia ignorando o histórico de enviados. |
+| `npm run start:clear` | Limpa `logs/enviados.csv` antes de iniciar. |
+| `npm run sent:clear` | Alias para limpar enviados. |
+| `npm run start:reset` | Alias legado para limpar enviados. |
+
+Para reenviar mesmo quando o telefone consta como enviado:
 
 ```powershell
 npm run start:force
@@ -224,7 +276,7 @@ Os logs ficam em `logs/`:
 - `pulos.csv`: registros pulados com o motivo.
 - `avisos.csv`: avisos, como variáveis ausentes no template.
 
-Se a execução for interrompida, rode `npm start` novamente. O sistema consulta `logs/enviados.csv` e não reenvia para números já concluídos.
+Se a execução for interrompida, rode `npm start` novamente. O sistema consulta `logs/enviados.csv` e `logs/mensagens.json` para decidir se deve pular, reenviar por mudança de conteúdo ou reenviar por expiração do prazo.
 
 ## Testes
 

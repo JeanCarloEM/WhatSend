@@ -7,46 +7,51 @@
  *   Disparador Local de Mensagens WhatsApp
  *
  * Objetivo:
- *   Realizar o envio automatizado de mensagens personalizadas através do
- *   WhatsApp Web, utilizando dados provenientes de um arquivo CSV e um modelo
- *   de mensagem em Markdown.
+ *   Realizar envio automatizado de mensagens personalizadas pelo WhatsApp Web,
+ *   usando um CSV local de destinatários e um template Markdown local.
  *
  * Escopo:
- *   - Operação 100% local.
- *   - Sem dependência de serviços externos além do próprio WhatsApp Web.
- *   - Sem utilização da API Oficial da Meta.
+ *   - Operação local e sob demanda.
+ *   - Sem uso da API Oficial da Meta.
+ *   - Comunicação externa somente com WhatsApp Web e URLs de anexos declaradas
+ *     explicitamente no template.
  *   - Sessão persistida localmente.
- *   - Execução manual sob demanda.
+ *   - Auditoria local em arquivos dentro de ./logs.
+ *   - Compatibilidade com Windows, macOS e Linux quando Node.js, dependências e
+ *     navegador Chromium compatível estiverem disponíveis.
  *
  * =============================================================================
  * REGRAS DE NEGÓCIO
  * =============================================================================
  *
  * RN001 - Origem dos Dados
- *   Os destinatários devem ser carregados exclusivamente do arquivo:
+ *   Os destinatários devem ser carregados exclusivamente de:
  *
  *      ./clientes.csv
  *
- *   O arquivo deve conter obrigatoriamente:
+ *   O CSV deve conter obrigatoriamente as colunas:
  *
  *      nome
  *      telefone
  *      conta
  *
- *   Colunas adicionais devem ser disponibilizadas automaticamente para
- *   substituição de variáveis no template.
+ *   Colunas adicionais devem ficar disponíveis automaticamente como variáveis
+ *   no template.
  *
  * -----------------------------------------------------------------------------
  *
  * RN002 - Template de Mensagem
- *
- *   O modelo de mensagem deve ser carregado de:
+ *   O template deve ser carregado exclusivamente de:
  *
  *      ./texto.md
  *
- *   O conteúdo deve ser enviado exatamente como definido no arquivo.
+ *   O conteúdo textual deve ser preservado conforme definido no arquivo, após
+ *   substituição de variáveis e interpretação dos anexos Markdown.
  *
- *   Variáveis devem utilizar o padrão:
+ * -----------------------------------------------------------------------------
+ *
+ * RN003 - Variáveis do Template
+ *   Variáveis devem usar o padrão:
  *
  *      ${nome}
  *      ${telefone}
@@ -54,181 +59,237 @@
  *
  *   ou qualquer outra coluna existente no CSV.
  *
- * -----------------------------------------------------------------------------
- *
- * RN003 - Substituição de Variáveis
- *
- *   Toda variável encontrada no template deve ser substituída pelo valor da
- *   respectiva coluna do registro atual.
- *
  *   Caso a coluna não exista:
  *
  *      - Não lançar exceção.
  *      - Substituir por string vazia.
- *      - Registrar aviso em log.
+ *      - Registrar aviso em ./logs/avisos.csv.
  *
  * -----------------------------------------------------------------------------
  *
- * RN004 - Tratamento de Telefone
+ * RN004 - Formatação do Nome
+ *   Ao aplicar ${nome}, o valor deve ser formatado para mensagem:
  *
+ *      - Capitalizar as palavras.
+ *      - Manter no máximo duas palavras.
+ *      - Preservar nomes compostos com hífen.
+ *
+ * -----------------------------------------------------------------------------
+ *
+ * RN005 - Recursos Markdown Textuais
+ *   O template pode conter recursos textuais do Markdown aceitos pelo WhatsApp,
+ *   como listas, blockquote, itálico, destaque e emojis. O sistema não deve
+ *   sanitizar ou reescrever esse conteúdo textual além das variáveis previstas.
+ *
+ * -----------------------------------------------------------------------------
+ *
+ * RN006 - Anexos via Markdown
+ *   A notação:
+ *
+ *      ![](CAMINHO_OU_URL)
+ *
+ *   deve ser interpretada como anexo.
+ *
+ *   O caminho pode ser:
+ *
+ *      - Relativo ao diretório de texto.md.
+ *      - Absoluto.
+ *      - URL http/https.
+ *
+ *   Arquivos locais inexistentes devem falhar na pré-validação. URLs devem ser
+ *   baixadas para uma pasta temporária e reutilizadas quando a mesma URL aparecer
+ *   novamente.
+ *
+ * -----------------------------------------------------------------------------
+ *
+ * RN007 - Ordem e Legenda de Anexos
+ *   Quando um anexo estiver no início ou no final do template, o texto adjacente
+ *   deve ser enviado como legenda do próprio anexo sempre que compatível com o
+ *   WhatsApp Web.
+ *
+ *   Quando o anexo estiver no meio do texto, o sistema deve preservar a ordem do
+ *   template enviando as partes separadamente.
+ *
+ *   Imagens devem ser enviadas como mídia; outros arquivos, como PDF ou ZIP,
+ *   devem ser enviados como documento.
+ *
+ * -----------------------------------------------------------------------------
+ *
+ * RN008 - Tratamento de Telefone
  *   Antes de qualquer validação ou envio:
  *
- *      - Remover caracteres não numéricos.
- *      - Remover espaços.
- *      - Remover parênteses.
- *      - Remover hífens.
- *      - Remover barras.
- *      - Remover pontos.
- *
- *   O número final deve conter apenas dígitos.
+ *      - Remover todos os caracteres não numéricos.
+ *      - Manter apenas dígitos.
+ *      - Adicionar o código do Brasil, 55, quando ausente.
  *
  * -----------------------------------------------------------------------------
  *
- * RN005 - Padronização de País
- *
- *   Caso o número não possua código do país:
- *
- *      55
- *
- *   este deve ser automaticamente adicionado.
- *
- * -----------------------------------------------------------------------------
- *
- * RN006 - Validação de Existência
- *
- *   Nenhuma mensagem deve ser enviada sem validação prévia de existência do
- *   número no WhatsApp.
- *
- *   Deve ser utilizado:
+ * RN009 - Validação de Existência no WhatsApp
+ *   Nenhuma mensagem deve ser enviada sem validação prévia do número via:
  *
  *      client.getNumberId()
  *
- *   Números inexistentes devem ser registrados em log.
+ *   Números inexistentes ou inválidos devem ser registrados em log e não devem
+ *   interromper o lote.
  *
  * -----------------------------------------------------------------------------
  *
- * RN007 - Prevenção de Duplicidade
- *
- *   Um telefone já registrado como enviado não deve receber nova mensagem
- *   durante a mesma campanha.
- *
- *   O controle deve ser realizado através do arquivo:
+ * RN010 - Prevenção Inteligente de Reenvio
+ *   O controle de envio deve usar:
  *
  *      ./logs/enviados.csv
+ *      ./logs/mensagens.json
+ *
+ *   O sistema deve registrar telefone, hash do template nativo e data/hora.
+ *
+ *   Se a mensagem nativa atual for menos de 10% diferente de uma mensagem já
+ *   enviada para o mesmo telefone dentro da janela configurada, o registro deve
+ *   ser pulado.
+ *
+ *   Se a mensagem nativa atual diferir 10% ou mais, deve ser considerada nova
+ *   e pode ser enviada sem força manual.
+ *
+ *   Se a mensagem similar tiver sido enviada há mais de 48 horas, por padrão,
+ *   pode ser reenviada.
+ *
+ *   Os limites devem ser configuráveis via:
+ *
+ *      MESSAGE_DIFF_THRESHOLD_PERCENT
+ *      RESEND_AFTER_HOURS
  *
  * -----------------------------------------------------------------------------
  *
- * RN008 - Continuidade Operacional
+ * RN011 - Forçar ou Limpar Histórico
+ *   Deve existir opção para reenviar ignorando o histórico:
  *
- *   Em caso de interrupção inesperada:
+ *      --force-resend
+ *      --reenviar
  *
- *      - Encerramento do processo.
- *      - Falha do Windows.
- *      - Perda de conexão.
- *      - Reinicialização da máquina.
+ *   Deve existir opção para limpar o histórico de enviados:
  *
- *   A execução deve poder ser retomada sem reenvio dos registros já concluídos.
+ *      --clear-sent
+ *      --reset-sent
+ *      --reset-enviados
  *
- * -----------------------------------------------------------------------------
- *
- * RN009 - Isolamento de Falhas
- *
- *   Erros individuais não devem interromper o processamento do lote.
- *
- *   Cada destinatário deve ser tratado independentemente.
+ *   Essas opções não devem permitir envio para telefones inválidos ou números
+ *   inexistentes no WhatsApp.
  *
  * -----------------------------------------------------------------------------
  *
- * RN010 - Controle de Velocidade
- *
- *   Deve existir intervalo aleatório entre envios.
- *
- *   Objetivos:
- *
- *      - Simular comportamento humano.
- *      - Reduzir risco de bloqueios.
- *      - Evitar disparos em massa instantâneos.
+ * RN012 - Continuidade Operacional
+ *   Em caso de interrupção inesperada, queda do sistema, perda de conexão ou
+ *   reinicialização, a execução deve poder ser retomada sem reenviar mensagens
+ *   ainda bloqueadas pelo histórico inteligente.
  *
  * -----------------------------------------------------------------------------
  *
- * RN011 - Persistência de Sessão
+ * RN013 - Isolamento de Falhas
+ *   Erros individuais devem ser registrados e não devem interromper o lote.
  *
- *   A autenticação do WhatsApp deve permanecer armazenada localmente.
+ * -----------------------------------------------------------------------------
  *
- *   Diretório padrão:
+ * RN014 - Controle de Velocidade
+ *   Deve existir intervalo aleatório entre envios, configurável por:
+ *
+ *      MIN_DELAY_MS
+ *      MAX_DELAY_MS
+ *
+ *   Valores padrão:
+ *
+ *      8000 ms
+ *      20000 ms
+ *
+ * -----------------------------------------------------------------------------
+ *
+ * RN015 - Persistência de Sessão
+ *   A autenticação do WhatsApp deve permanecer armazenada localmente em:
  *
  *      ./.wwebjs_auth
  *
  * -----------------------------------------------------------------------------
  *
- * RN012 - Operação Local
- *
- *   Nenhum dado de clientes deve ser transmitido para sistemas terceiros,
- *   exceto para o próprio WhatsApp durante o envio da mensagem.
+ * RN016 - Operação Local e Privacidade
+ *   Dados de clientes não devem ser transmitidos para sistemas terceiros, exceto
+ *   para o próprio WhatsApp durante o envio e para URLs de anexos explicitamente
+ *   declaradas no template.
  *
  * -----------------------------------------------------------------------------
  *
- * RN013 - Integridade dos Dados
- *
+ * RN017 - Integridade dos Dados de Entrada
  *   O sistema não deve alterar:
  *
  *      clientes.csv
  *      texto.md
  *
- *   sob nenhuma circunstância.
+ *   durante validação ou envio.
  *
  * -----------------------------------------------------------------------------
  *
- * RN014 - Auditoria
- *
- *   Todo resultado deve possuir rastreabilidade.
+ * RN018 - Auditoria
+ *   Todo resultado deve possuir rastreabilidade local.
  *
  *   Arquivos mínimos:
  *
  *      ./logs/enviados.csv
  *      ./logs/erros.csv
+ *      ./logs/pulos.csv
+ *      ./logs/avisos.csv
+ *      ./logs/mensagens.json
  *
  * -----------------------------------------------------------------------------
  *
- * RN015 - Segurança Operacional
+ * RN019 - Saída de Console
+ *   O console deve exibir status compacto e legível, com progresso, enviados,
+ *   pulos, erros e avisos. Quando suportado pelo terminal, deve usar cores e
+ *   atualizar a linha de progresso sem inundar a tela.
  *
- *   O sistema deve falhar de forma segura.
+ *   Todo pulo deve apresentar motivo claro.
  *
- *   Em caso de:
+ * -----------------------------------------------------------------------------
  *
- *      - CSV inválido
- *      - Template ausente
- *      - Sessão corrompida
- *      - Estrutura de diretórios inválida
+ * RN020 - Pré-Validação Segura
+ *   O comando de checagem deve validar arquivos, estrutura de logs, template,
+ *   anexos locais, sessão e navegador antes de qualquer envio:
  *
- *   O processamento deve ser interrompido antes do primeiro envio.
+ *      npm run check
+ *
+ *   Em caso de falha, o processamento deve ser interrompido antes do primeiro
+ *   envio.
+ *
+ * -----------------------------------------------------------------------------
+ *
+ * RN021 - Navegador Compatível
+ *   O sistema deve usar navegador Chromium compatível, detectando
+ *   automaticamente Chrome, Chromium ou Edge em Windows, macOS e Linux, ou
+ *   aceitando configuração manual por:
+ *
+ *      PUPPETEER_EXECUTABLE_PATH
+ *      CHROME_EXECUTABLE_PATH
  *
  * =============================================================================
  * REQUISITOS NÃO FUNCIONAIS
  * =============================================================================
  *
- * RNF001
- *   Compatível com Windows 10 e Windows 11.
+ * RNF001 - Plataforma
+ *   Compatível com Windows, macOS e Linux, desde que Node.js LTS, dependências e
+ *   navegador Chromium compatível estejam disponíveis.
  *
- * RNF002
- *   Compatível com Node.js LTS.
+ * RNF002 - Execução
+ *   Compatível com Node.js LTS e CommonJS.
  *
- * RNF003
- *   Operação offline para todas as etapas exceto comunicação com WhatsApp.
+ * RNF003 - Offline Parcial
+ *   Operação offline para leitura, validação, renderização do template e logs,
+ *   exceto comunicação com WhatsApp Web e download de anexos remotos.
  *
- * RNF004
- *   Suportar milhares de registros sem carregamento excessivo de memória.
+ * RNF004 - Escala
+ *   Suportar lotes grandes com processamento independente por destinatário.
  *
- * RNF005
- *   Possibilitar futura implementação de:
+ * RNF005 - Manutenibilidade
+ *   As regras críticas devem possuir cobertura automatizada por node:test.
  *
- *      - Anexos
- *      - Imagens
- *      - PDFs
- *      - Múltiplos templates
- *      - Campanhas
- *      - Agendamento
- *      - Dry-run
+ * RNF006 - Extensibilidade
+ *   O desenho deve permitir evolução futura para múltiplos templates,
+ *   campanhas, anexos avançados, agendamento e dry-run.
  *
  * =============================================================================
  * FIM DO RCF
@@ -1154,7 +1215,7 @@ function resolveBrowserExecutablePath() {
     process.env.PUPPETEER_EXECUTABLE_PATH || process.env.CHROME_EXECUTABLE_PATH;
 
   if (configuredPath) {
-    const resolvedPath = path.resolve(configuredPath);
+    const resolvedPath = resolveConfiguredExecutablePath(configuredPath);
 
     if (!fs.existsSync(resolvedPath)) {
       throw new Error(`Navegador configurado não encontrado: ${resolvedPath}`);
@@ -1173,23 +1234,60 @@ function resolveBrowserExecutablePath() {
       candidatePaths.push(executablePath);
     }
   } catch {
-    // Continua procurando navegadores instalados no Windows.
+    // Continua procurando navegadores instalados na plataforma.
   }
 
-  candidatePaths.push(...getWindowsBrowserCandidates());
+  candidatePaths.push(...getInstalledBrowserCandidates());
+  candidatePaths.push(...getPathBrowserCandidates());
   candidatePaths.push(...findPuppeteerCacheBrowsers());
 
-  const executablePath = candidatePaths.find((candidatePath) => {
+  const executablePath = uniqueValues(candidatePaths).find((candidatePath) => {
     return candidatePath && fs.existsSync(candidatePath);
   });
 
   if (!executablePath) {
     throw new Error(
-      "Chrome/Edge não encontrado. Instale o Google Chrome, rode `npx puppeteer browsers install chrome`, ou configure PUPPETEER_EXECUTABLE_PATH no .env.",
+      "Chrome/Chromium/Edge não encontrado. Instale um navegador compatível, rode `npx puppeteer browsers install chrome`, ou configure PUPPETEER_EXECUTABLE_PATH no .env.",
     );
   }
 
   return executablePath;
+}
+
+function resolveConfiguredExecutablePath(configuredPath) {
+  const value = String(configuredPath).trim();
+
+  if (!value) {
+    return value;
+  }
+
+  const looksLikePath =
+    path.isAbsolute(value) ||
+    value.includes("/") ||
+    value.includes("\\") ||
+    value.startsWith(".");
+
+  if (looksLikePath) {
+    return path.resolve(value);
+  }
+
+  return findExecutableOnPath(value) || path.resolve(value);
+}
+
+function uniqueValues(values) {
+  return [...new Set(values.filter(Boolean))];
+}
+
+function getInstalledBrowserCandidates(platform = os.platform()) {
+  if (platform === "win32") {
+    return getWindowsBrowserCandidates();
+  }
+
+  if (platform === "darwin") {
+    return getMacBrowserCandidates();
+  }
+
+  return getLinuxBrowserCandidates();
 }
 
 function getWindowsBrowserCandidates() {
@@ -1201,12 +1299,96 @@ function getWindowsBrowserCandidates() {
 
   const relativePaths = [
     path.join("Google", "Chrome", "Application", "chrome.exe"),
+    path.join("Google", "Chrome Beta", "Application", "chrome.exe"),
+    path.join("Chromium", "Application", "chrome.exe"),
     path.join("Microsoft", "Edge", "Application", "msedge.exe"),
   ];
 
   return roots.flatMap((root) =>
     relativePaths.map((relativePath) => path.join(root, relativePath)),
   );
+}
+
+function getMacBrowserCandidates() {
+  const roots = [
+    "/Applications",
+    process.env.HOME ? path.join(process.env.HOME, "Applications") : undefined,
+  ].filter(Boolean);
+
+  const relativePaths = [
+    path.join("Google Chrome.app", "Contents", "MacOS", "Google Chrome"),
+    path.join("Google Chrome Beta.app", "Contents", "MacOS", "Google Chrome Beta"),
+    path.join("Chromium.app", "Contents", "MacOS", "Chromium"),
+    path.join("Microsoft Edge.app", "Contents", "MacOS", "Microsoft Edge"),
+  ];
+
+  return roots.flatMap((root) =>
+    relativePaths.map((relativePath) => path.join(root, relativePath)),
+  );
+}
+
+function getLinuxBrowserCandidates() {
+  return [
+    "/usr/bin/google-chrome",
+    "/usr/bin/google-chrome-stable",
+    "/usr/bin/chromium",
+    "/usr/bin/chromium-browser",
+    "/usr/bin/microsoft-edge",
+    "/usr/bin/microsoft-edge-stable",
+    "/usr/local/bin/google-chrome",
+    "/usr/local/bin/chromium",
+    "/snap/bin/chromium",
+  ];
+}
+
+function getPathBrowserCandidates() {
+  return uniqueValues(getBrowserExecutableNames().map(findExecutableOnPath));
+}
+
+function getBrowserExecutableNames(platform = os.platform()) {
+  const common = [
+    "google-chrome",
+    "google-chrome-stable",
+    "chromium",
+    "chromium-browser",
+    "microsoft-edge",
+    "microsoft-edge-stable",
+    "msedge",
+  ];
+
+  if (platform === "win32") {
+    return ["chrome.exe", "msedge.exe", "chromium.exe", ...common];
+  }
+
+  if (platform === "darwin") {
+    return ["Google Chrome", "Chromium", "Microsoft Edge", ...common];
+  }
+
+  return common;
+}
+
+function getPathDirectories() {
+  const pathValue = process.env.PATH || process.env.Path || process.env.path || "";
+  return pathValue.split(path.delimiter).filter(Boolean);
+}
+
+function findExecutableOnPath(name) {
+  const extensions =
+    os.platform() === "win32" && !path.extname(name)
+      ? (process.env.PATHEXT || ".EXE;.CMD;.BAT;.COM").split(";")
+      : [""];
+
+  for (const dir of getPathDirectories()) {
+    for (const ext of extensions) {
+      const candidate = path.join(dir, `${name}${ext}`);
+
+      if (fs.existsSync(candidate)) {
+        return candidate;
+      }
+    }
+  }
+
+  return undefined;
 }
 
 function findPuppeteerCacheBrowsers() {
@@ -1245,7 +1427,7 @@ function collectBrowserExecutables(dirPath, executables, depth) {
   for (const entry of entries) {
     const entryPath = path.join(dirPath, entry.name);
 
-    if (entry.isFile() && ["chrome.exe", "msedge.exe"].includes(entry.name)) {
+    if (entry.isFile() && isBrowserExecutableName(entry.name)) {
       executables.push(entryPath);
       continue;
     }
@@ -1254,6 +1436,19 @@ function collectBrowserExecutables(dirPath, executables, depth) {
       collectBrowserExecutables(entryPath, executables, depth + 1);
     }
   }
+}
+
+function isBrowserExecutableName(name) {
+  return [
+    "chrome",
+    "chrome.exe",
+    "chromium",
+    "chromium.exe",
+    "google chrome",
+    "google chrome for testing",
+    "microsoft edge",
+    "msedge.exe",
+  ].includes(String(name).toLowerCase());
 }
 
 function buildPuppeteerConfig() {
@@ -1309,7 +1504,7 @@ function validateRuntimeFiles(paths = PATHS, options = {}) {
       const executablePath = resolveBrowserExecutablePath();
 
       if (!executablePath) {
-        issues.push("Chrome/Edge não encontrado.");
+        issues.push("Chrome/Chromium/Edge não encontrado.");
       }
     } catch (err) {
       issues.push(err.message);
@@ -1541,6 +1736,11 @@ module.exports = {
   buildPuppeteerConfig,
   calculateDifferencePercent,
   findPuppeteerCacheBrowsers,
+  getBrowserExecutableNames,
+  getInstalledBrowserCandidates,
+  getLinuxBrowserCandidates,
+  getMacBrowserCandidates,
+  getPathBrowserCandidates,
   getSendDecision,
   getTemplateFingerprint,
   getWindowsBrowserCandidates,
