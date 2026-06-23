@@ -9,6 +9,8 @@ Aplicativo local em Node.js para enviar mensagens personalizadas pelo WhatsApp W
 
 O envio só acontece depois da pré-validação dos arquivos e da validação do número no WhatsApp via `client.getNumberId()`.
 
+Todos os nomes, telefones, contas e caminhos abaixo são meramente ilustrativos.
+
 ## Requisitos
 
 - Windows 10 ou Windows 11.
@@ -21,7 +23,7 @@ O envio só acontece depois da pré-validação dos arquivos e da validação do
 Na pasta do projeto:
 
 ```powershell
-cd C:\LOCAL\whatsapp
+cd C:\caminho\do\projeto
 npm install
 ```
 
@@ -45,15 +47,20 @@ O arquivo deve existir na raiz do projeto e conter obrigatoriamente as colunas:
 
 ```csv
 nome,telefone,conta
-Jean Carlo,17985648758,12345
+Pessoa Exemplo,11999999999,00000
 ```
 
 Colunas extras também podem ser usadas no template. Exemplo:
 
 ```csv
 nome,telefone,conta,agencia
-Jean Carlo,17985648758,12345,0001
+Pessoa Exemplo,11999999999,00000,0001
 ```
+
+Quando `${nome}` for usado na mensagem, o sistema formata o valor automaticamente:
+
+- `pessoa exemplo` vira `Pessoa Exemplo`.
+- `pessoa exemplo sobrenome extra` vira `Pessoa Exemplo`.
 
 ### `texto.md`
 
@@ -74,7 +81,7 @@ Se uma variável não existir no CSV, ela será substituída por vazio e registr
 O projeto tenta encontrar automaticamente Chrome ou Edge no Windows. Se precisar indicar o navegador manualmente, crie um arquivo `.env`:
 
 ```env
-PUPPETEER_EXECUTABLE_PATH=C:\Program Files\Google\Chrome\Application\chrome.exe
+PUPPETEER_EXECUTABLE_PATH=C:\caminho\para\chrome.exe
 ```
 
 Também é possível ajustar o intervalo aleatório entre envios:
@@ -99,6 +106,8 @@ npm start
 ```
 
 Na primeira execução, escaneie o QR Code exibido no terminal. Depois disso, a sessão fica salva em `.wwebjs_auth`.
+
+Durante o envio, o console exibe uma linha de status compacta com progresso, enviados, pulados, erros e avisos. A linha é atualizada no lugar para evitar excesso de mensagens na tela.
 
 ## Logs
 

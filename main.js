@@ -237,6 +237,7 @@
 
 const fs = require("fs");
 const path = require("path");
+const readline = require("readline");
 
 require("dotenv").config({ path: path.resolve(__dirname, ".env"), quiet: true });
 
@@ -261,6 +262,17 @@ const PATHS = Object.freeze({
 const MIN_DELAY_MS = readIntegerEnv("MIN_DELAY_MS", 8000);
 const MAX_DELAY_MS = readIntegerEnv("MAX_DELAY_MS", 20000);
 
+const COLORS = Object.freeze({
+  blue: "\x1b[34m",
+  bold: "\x1b[1m",
+  cyan: "\x1b[36m",
+  dim: "\x1b[2m",
+  green: "\x1b[32m",
+  red: "\x1b[31m",
+  reset: "\x1b[0m",
+  yellow: "\x1b[33m",
+});
+
 function readIntegerEnv(name, fallback) {
   const value = Number.parseInt(process.env[name], 10);
   return Number.isFinite(value) && value >= 0 ? value : fallback;
@@ -284,6 +296,28 @@ function sanitizePhone(phone, countryCode = DEFAULT_COUNTRY_CODE) {
   }
 
   return cleaned;
+}
+
+function formatNameForMessage(name) {
+  return String(name || "")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map(capitalizeNamePart)
+    .join(" ");
+}
+
+function capitalizeNamePart(part) {
+  return part
+    .split("-")
+    .map((piece) => {
+      const lower = piece.toLocaleLowerCase("pt-BR");
+      return lower.replace(/^\p{L}/u, (letter) =>
+        letter.toLocaleUpperCase("pt-BR"),
+      );
+    })
+    .join("-");
 }
 
 function readTextFile(filePath, label) {
@@ -359,8 +393,116 @@ function applyTemplate(template, data, options = {}) {
       return "";
     }
 
-    return data[key] ?? "";
+    const value = data[key] ?? "";
+    return key === "nome" ? formatNameForMessage(value) : value;
   });
+}
+
+function supportsStatusUi() {
+  return Boolean(process.stdout.isTTY && !process.env.NO_STATUS_UI);
+}
+
+function colorize(text, color) {
+  if (!supportsStatusUi()) {
+    return text;
+  }
+
+  return `${COLORS[color] || ""}${text}${COLORS.reset}`;
+}
+
+function progressBar(done, total, width = 18) {
+  const safeTotal = Math.max(total, 1);
+  const filled = Math.round((Math.min(done, safeTotal) / safeTotal) * width);
+  return `${"█".repeat(filled)}${"░".repeat(width - filled)}`;
+}
+
+function maskPhone(phone) {
+  const digits = String(phone || "");
+
+  if (digits.length <= 4) {
+    return digits || "sem telefone";
+  }
+
+  return `***${digits.slice(-4)}`;
+}
+
+function createStatusReporter(total) {
+  const interactive = supportsStatusUi();
+  const state = {
+    current: "Preparando envio",
+    errors: 0,
+    processed: 0,
+    sent: 0,
+    skipped: 0,
+    total,
+    warnings: 0,
+  };
+
+  function render() {
+    if (!interactive) {
+      return;
+    }
+
+    const line = [
+      colorize("Envio WhatsApp", "bold"),
+      colorize(progressBar(state.processed, state.total), "cyan"),
+      `${state.processed}/${state.total}`,
+      colorize(`OK ${state.sent}`, "green"),
+      colorize(`Pulos ${state.skipped}`, "yellow"),
+      colorize(`Erros ${state.errors}`, "red"),
+      colorize(`Avisos ${state.warnings}`, "blue"),
+      colorize(state.current, "dim"),
+    ].join("  ");
+
+    readline.clearLine(process.stdout, 0);
+    readline.cursorTo(process.stdout, 0);
+    process.stdout.write(line.slice(0, process.stdout.columns || line.length));
+  }
+
+  return {
+    current(message) {
+      state.current = message;
+      render();
+    },
+    error(message) {
+      state.errors += 1;
+      state.processed += 1;
+      state.current = message;
+      render();
+    },
+    finish() {
+      if (interactive) {
+        process.stdout.write("\n");
+      }
+
+      console.log(
+        [
+          colorize("Resumo:", "bold"),
+          colorize(`${state.sent} enviados`, "green"),
+          colorize(`${state.skipped} pulados`, "yellow"),
+          colorize(`${state.errors} erros`, "red"),
+          colorize(`${state.warnings} avisos`, "blue"),
+        ].join("  "),
+      );
+    },
+    sent(message) {
+      state.sent += 1;
+      state.processed += 1;
+      state.current = message;
+      render();
+    },
+    skip(message) {
+      state.skipped += 1;
+      state.processed += 1;
+      state.current = message;
+      render();
+    },
+    warning(message) {
+      state.warnings += 1;
+      state.current = message;
+      render();
+    },
+  };
 }
 
 function ensureDirectory(dirPath) {
@@ -593,11 +735,13 @@ async function processCampaign(client, paths = PATHS) {
   const enviados = loadAlreadySent(paths.sent);
   const template = loadTemplate(paths.template);
   const clientes = loadCsv(paths.csv);
+  const status = createStatusReporter(clientes.length);
 
   console.log(`Clientes encontrados: ${clientes.length}`);
 
   for (const cliente of clientes) {
     const telefone = sanitizePhone(cliente.telefone);
+    status.current(`Validando ${maskPhone(telefone)}`);
 
     try {
       if (!telefone) {
@@ -608,12 +752,12 @@ async function processCampaign(client, paths = PATHS) {
           new Date().toISOString(),
         ]);
 
-        console.log("Pulando registro sem telefone válido.");
+        status.error("Telefone inválido");
         continue;
       }
 
       if (enviados.has(telefone)) {
-        console.log(`Pulando ${telefone} (já enviado)`);
+        status.skip(`Já enviado ${maskPhone(telefone)}`);
         continue;
       }
 
@@ -627,7 +771,7 @@ async function processCampaign(client, paths = PATHS) {
           new Date().toISOString(),
         ]);
 
-        console.log(`${telefone} sem WhatsApp`);
+        status.error(`Sem WhatsApp ${maskPhone(telefone)}`);
         continue;
       }
 
@@ -644,7 +788,7 @@ async function processCampaign(client, paths = PATHS) {
           new Date().toISOString(),
         ]);
 
-        console.warn(`Variável ausente para ${telefone}: ${field}`);
+        status.warning(`Variável ausente: ${field}`);
       }
 
       await client.sendMessage(numberId._serialized, mensagem);
@@ -652,9 +796,11 @@ async function processCampaign(client, paths = PATHS) {
       appendLog(paths.sent, [telefone, new Date().toISOString()]);
       enviados.add(telefone);
 
-      console.log(`Enviado para ${telefone}`);
+      status.sent(`Enviado ${maskPhone(telefone)}`);
 
-      await sleep(randomDelay());
+      const delay = randomDelay();
+      status.current(`Aguardando ${Math.round(delay / 1000)}s`);
+      await sleep(delay);
     } catch (err) {
       appendLog(paths.errors, [
         telefone || cliente.telefone,
@@ -663,9 +809,11 @@ async function processCampaign(client, paths = PATHS) {
         new Date().toISOString(),
       ]);
 
-      console.error(`Erro em ${cliente.telefone}`, err.message);
+      status.error(`Erro ${maskPhone(telefone)}: ${err.message}`);
     }
   }
+
+  status.finish();
 }
 
 function createWhatsAppClient(paths = PATHS) {
@@ -738,6 +886,7 @@ module.exports = {
   buildPuppeteerConfig,
   findPuppeteerCacheBrowsers,
   getWindowsBrowserCandidates,
+  formatNameForMessage,
   loadAlreadySent,
   loadCsv,
   loadTemplate,

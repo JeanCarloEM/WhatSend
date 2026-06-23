@@ -9,6 +9,7 @@ const test = require("node:test");
 
 const {
   applyTemplate,
+  formatNameForMessage,
   loadAlreadySent,
   loadCsv,
   processCampaign,
@@ -48,6 +49,12 @@ test("normaliza telefone e adiciona código do Brasil quando necessário", () =>
   assert.equal(sanitizePhone(""), "");
 });
 
+test("capitaliza nome e limita em no máximo duas palavras", () => {
+  assert.equal(formatNameForMessage("maria eduarda silva extra"), "Maria Eduarda");
+  assert.equal(formatNameForMessage("JOÃO"), "João");
+  assert.equal(formatNameForMessage("ana-maria exemplo"), "Ana-Maria Exemplo");
+});
+
 test("exige as colunas obrigatórias do RCF no CSV", () => {
   const { paths } = createFixture({ csv: "Maria,19998240000\n" });
 
@@ -59,11 +66,11 @@ test("exige as colunas obrigatórias do RCF no CSV", () => {
 
 test("substitui variável ausente por vazio e permite registrar aviso", () => {
   const missing = [];
-  const result = applyTemplate("Olá ${nome}. ${inexistente}", { nome: "Ana" }, {
+  const result = applyTemplate("Olá ${nome}. ${inexistente}", { nome: "ana maria silva" }, {
     onMissingVariable: (field) => missing.push(field),
   });
 
-  assert.equal(result, "Olá Ana. ");
+  assert.equal(result, "Olá Ana Maria. ");
   assert.deepEqual(missing, ["inexistente"]);
 });
 
