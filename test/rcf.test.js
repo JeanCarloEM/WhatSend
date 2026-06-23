@@ -10,9 +10,12 @@ const test = require("node:test");
 
 const {
   applyTemplate,
+  buildSendPlan,
   formatNameForMessage,
+  getTemplateFingerprint,
   loadAlreadySent,
   loadCsv,
+  loadSentRecords,
   parseTemplateParts,
   processCampaign,
   resetSentLog,
@@ -29,6 +32,7 @@ function createFixture(files = {}) {
     logsDir: path.join(root, "logs"),
     sent: path.join(root, "logs", "enviados.csv"),
     errors: path.join(root, "logs", "erros.csv"),
+    messageCache: path.join(root, "logs", "mensagens.json"),
     skipped: path.join(root, "logs", "pulos.csv"),
     warnings: path.join(root, "logs", "avisos.csv"),
     auth: path.join(root, ".wwebjs_auth"),
@@ -90,6 +94,32 @@ test("interpreta notação markdown de anexo preservando a ordem", () => {
   ]);
 });
 
+test("combina anexo no início ou final com legenda", () => {
+  assert.deepEqual(
+    buildSendPlan(parseTemplateParts("Texto\n![](arquivo.pdf)")),
+    [
+      {
+        caption: "Texto",
+        source: "arquivo.pdf",
+        type: "media",
+        raw: "![](arquivo.pdf)",
+      },
+    ],
+  );
+
+  assert.deepEqual(
+    buildSendPlan(parseTemplateParts("![](arquivo.pdf)\nTexto")),
+    [
+      {
+        caption: "Texto",
+        source: "arquivo.pdf",
+        type: "media",
+        raw: "![](arquivo.pdf)",
+      },
+    ],
+  );
+});
+
 test("pré-validação cria arquivos de auditoria sem iniciar WhatsApp", () => {
   const { paths } = createFixture();
   const result = validateRuntimeFiles(paths, { checkBrowser: false });
@@ -104,15 +134,30 @@ test("pré-validação cria arquivos de auditoria sem iniciar WhatsApp", () => {
 test("carrega enviados ignorando o cabeçalho de auditoria", () => {
   const { paths } = createFixture();
   fs.mkdirSync(paths.logsDir, { recursive: true });
-  fs.writeFileSync(paths.sent, "telefone;data_hora\n5519998240000;2026-06-23\n");
+  fs.writeFileSync(
+    paths.sent,
+    "telefone;mensagem_hash;data_hora\n5519998240000;abc;2026-06-23\n",
+  );
 
   assert.deepEqual([...loadAlreadySent(paths.sent)], ["5519998240000"]);
+  assert.deepEqual(loadSentRecords(paths.sent), [
+    {
+      dataHora: "2026-06-23",
+      mensagemHash: "abc",
+      telefone: "5519998240000",
+    },
+  ]);
 });
 
 test("não envia duplicado e não revalida número já enviado", async () => {
   const { paths } = createFixture();
   fs.mkdirSync(paths.logsDir, { recursive: true });
-  fs.writeFileSync(paths.sent, "telefone;data_hora\n5519998240000;2026-06-23\n");
+  const template = fs.readFileSync(paths.template, "utf8");
+  const { hash } = getTemplateFingerprint(template);
+  fs.writeFileSync(
+    paths.sent,
+    `telefone;mensagem_hash;data_hora\n5519998240000;${hash};${new Date().toISOString()}\n`,
+  );
 
   const calls = [];
   const client = {
@@ -128,14 +173,19 @@ test("não envia duplicado e não revalida número já enviado", async () => {
   await processCampaign(client, paths);
 
   assert.deepEqual(calls, []);
-  assert.match(fs.readFileSync(paths.skipped, "utf8"), /JA_ENVIADO/);
-  assert.match(fs.readFileSync(paths.skipped, "utf8"), /--force-resend/);
+  assert.match(fs.readFileSync(paths.skipped, "utf8"), /JA_ENVIADO_MENSAGEM_SIMILAR/);
+  assert.match(fs.readFileSync(paths.skipped, "utf8"), /Mensagem similar/);
 });
 
 test("force resend ignora histórico de enviados nessa execução", async () => {
   const { paths } = createFixture();
   fs.mkdirSync(paths.logsDir, { recursive: true });
-  fs.writeFileSync(paths.sent, "telefone;data_hora\n5519998240000;2026-06-23\n");
+  const template = fs.readFileSync(paths.template, "utf8");
+  const { hash } = getTemplateFingerprint(template);
+  fs.writeFileSync(
+    paths.sent,
+    `telefone;mensagem_hash;data_hora\n5519998240000;${hash};${new Date().toISOString()}\n`,
+  );
 
   const calls = [];
   const client = {
@@ -159,11 +209,92 @@ test("force resend ignora histórico de enviados nessa execução", async () => 
 test("resetSentLog limpa a lista de enviados preservando cabeçalho", () => {
   const { paths } = createFixture();
   fs.mkdirSync(paths.logsDir, { recursive: true });
-  fs.writeFileSync(paths.sent, "telefone;data_hora\n5519998240000;2026-06-23\n");
+  fs.writeFileSync(
+    paths.sent,
+    "telefone;mensagem_hash;data_hora\n5519998240000;abc;2026-06-23\n",
+  );
 
   resetSentLog(paths.sent);
 
-  assert.equal(fs.readFileSync(paths.sent, "utf8"), "telefone;data_hora\n");
+  assert.equal(
+    fs.readFileSync(paths.sent, "utf8"),
+    "telefone;mensagem_hash;data_hora\n",
+  );
+});
+
+test("mensagem nativa diferente em mais de 10% permite novo envio", async () => {
+  const { paths } = createFixture({
+    template: "Mensagem totalmente nova para ${nome}.",
+  });
+  fs.mkdirSync(paths.logsDir, { recursive: true });
+  const previous = getTemplateFingerprint("Conteúdo anterior bem diferente.");
+
+  fs.writeFileSync(
+    paths.sent,
+    `telefone;mensagem_hash;data_hora\n5519998240000;${previous.hash};${new Date().toISOString()}\n`,
+  );
+  fs.writeFileSync(
+    paths.messageCache,
+    JSON.stringify({
+      messages: {
+        [previous.hash]: {
+          content: previous.content,
+          createdAt: new Date().toISOString(),
+          hash: previous.hash,
+        },
+      },
+      version: 1,
+    }),
+  );
+
+  const calls = [];
+  const client = {
+    async getNumberId(phone) {
+      calls.push(["getNumberId", phone]);
+      return { _serialized: `${phone}@c.us` };
+    },
+    async sendMessage(to, message) {
+      calls.push(["sendMessage", to, message]);
+    },
+  };
+
+  await processCampaign(client, paths);
+
+  assert.deepEqual(calls, [
+    ["getNumberId", "5519998240000"],
+    ["sendMessage", "5519998240000@c.us", "Mensagem totalmente nova para Maria."],
+  ]);
+});
+
+test("mensagem igual pode reenviar após o prazo configurado", async () => {
+  const { paths } = createFixture();
+  fs.mkdirSync(paths.logsDir, { recursive: true });
+  const template = fs.readFileSync(paths.template, "utf8");
+  const { hash } = getTemplateFingerprint(template);
+  const oldDate = new Date(Date.now() - 49 * 3600000).toISOString();
+
+  fs.writeFileSync(
+    paths.sent,
+    `telefone;mensagem_hash;data_hora\n5519998240000;${hash};${oldDate}\n`,
+  );
+
+  const calls = [];
+  const client = {
+    async getNumberId(phone) {
+      calls.push(["getNumberId", phone]);
+      return { _serialized: `${phone}@c.us` };
+    },
+    async sendMessage(to, message) {
+      calls.push(["sendMessage", to, message]);
+    },
+  };
+
+  await processCampaign(client, paths);
+
+  assert.deepEqual(calls, [
+    ["getNumberId", "5519998240000"],
+    ["sendMessage", "5519998240000@c.us", "Olá Maria, conta 12345. "],
+  ]);
 });
 
 test("valida existência no WhatsApp antes de enviar", async () => {
@@ -242,6 +373,66 @@ test("envia anexo local no ponto da notação markdown", async () => {
   ]);
   assert.equal(calls[1].mimetype, "application/pdf");
   assert.equal(calls[1].options.sendMediaAsDocument, true);
+});
+
+test("envia anexo final com texto como legenda da mesma mensagem", async () => {
+  const { paths } = createFixture();
+  const mediaPath = path.join(path.dirname(paths.template), "arquivo.pdf");
+  fs.writeFileSync(mediaPath, "conteúdo fictício", "utf8");
+
+  const calls = [];
+  const client = {
+    async sendMessage(to, content, options) {
+      calls.push({
+        filename: content && content.filename,
+        options,
+        text: typeof content === "string" ? content : undefined,
+        to,
+      });
+    },
+  };
+
+  await sendRenderedTemplate(
+    client,
+    "5511999999999@c.us",
+    "Texto da mensagem\n![](arquivo.pdf)",
+    paths,
+  );
+
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].filename, "arquivo.pdf");
+  assert.equal(calls[0].options.caption, "Texto da mensagem");
+  assert.equal(calls[0].options.sendMediaAsDocument, true);
+});
+
+test("envia anexo inicial com texto como legenda da mesma mensagem", async () => {
+  const { paths } = createFixture();
+  const mediaPath = path.join(path.dirname(paths.template), "imagem.png");
+  fs.writeFileSync(mediaPath, "conteúdo fictício", "utf8");
+
+  const calls = [];
+  const client = {
+    async sendMessage(to, content, options) {
+      calls.push({
+        filename: content && content.filename,
+        options,
+        text: typeof content === "string" ? content : undefined,
+        to,
+      });
+    },
+  };
+
+  await sendRenderedTemplate(
+    client,
+    "5511999999999@c.us",
+    "![](imagem.png)\nTexto da mensagem",
+    paths,
+  );
+
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].filename, "imagem.png");
+  assert.equal(calls[0].options.caption, "Texto da mensagem");
+  assert.equal(calls[0].options.sendMediaAsDocument, false);
 });
 
 test("baixa URL de anexo uma única vez e reutiliza o cache", async () => {

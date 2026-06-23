@@ -76,6 +76,33 @@ Relativo à sua conta ${conta}, podemos falar agora?
 
 Se uma variável não existir no CSV, ela será substituída por vazio e registrada em `logs/avisos.csv`.
 
+Exemplo completo e genérico de `texto.md`:
+
+```markdown
+![](./teste-img.png)
+Olá ${nome}! Tudo bem? 👋
+
+Este é um modelo genérico para demonstrar os recursos aceitos no `texto.md`.
+
+Aqui você pode usar variáveis do CSV, como:
+
+- Nome: ${nome}
+- Telefone: ${telefone}
+- Conta ou referência: ${conta}
+
+Você também pode destacar uma informação com *texto em destaque* e usar _texto em itálico_ quando quiser dar outro tom à mensagem.
+
+> Dica: revise os dados antes do envio e rode `npm run check` para validar a campanha.
+
+Exemplo de próximos passos:
+
+1. Conferir as informações principais ✅
+2. Responder esta mensagem se houver interesse 💬
+3. Ignorar caso o assunto não seja relevante 🙂
+
+Obrigado, ${nome}!
+```
+
 Anexos podem ser indicados com a notação Markdown:
 
 ```markdown
@@ -94,6 +121,16 @@ Arquivo remoto:
 
 O caminho pode ser relativo ao `texto.md`, absoluto ou uma URL `http`/`https`. URLs são baixadas para uma pasta temporária e reutilizadas quando o mesmo endereço aparecer novamente. Imagens são enviadas como mídia; outros tipos, como PDF ou ZIP, são enviados como documento.
 
+Se o anexo estiver no início ou no final do `texto.md`, o texto adjacente será enviado como legenda do próprio anexo, evitando uma mensagem de texto separada:
+
+```markdown
+Mensagem enviada como legenda do anexo.
+
+![](anexos/exemplo.pdf)
+```
+
+Quando o anexo estiver no meio do texto, o sistema envia as partes separadamente para preservar a ordem definida no arquivo.
+
 ### `.env` opcional
 
 O projeto tenta encontrar automaticamente Chrome ou Edge no Windows. Se precisar indicar o navegador manualmente, crie um arquivo `.env`:
@@ -108,6 +145,15 @@ Também é possível ajustar o intervalo aleatório entre envios:
 MIN_DELAY_MS=8000
 MAX_DELAY_MS=20000
 ```
+
+Também é possível ajustar a regra inteligente de reenvio:
+
+```env
+MESSAGE_DIFF_THRESHOLD_PERCENT=10
+RESEND_AFTER_HOURS=48
+```
+
+Por padrão, se o `texto.md` nativo mudar 10% ou mais em relação à versão já enviada para um telefone, o sistema considera uma nova mensagem e permite o envio. Se a mensagem for igual ou muito parecida, ela também pode ser reenviada automaticamente depois de 48 horas.
 
 ## Execução
 
@@ -144,6 +190,13 @@ node main.js --reenviar
 Para limpar a lista de enviados antes de iniciar uma nova campanha:
 
 ```powershell
+npm run start:clear
+```
+
+Também existem os aliases:
+
+```powershell
+npm run sent:clear
 npm run start:reset
 ```
 
@@ -153,7 +206,13 @@ Alias em português:
 node main.js --reset-enviados
 ```
 
-Essas opções só afetam o pulo por histórico de envio. Telefones inválidos ou números não encontrados no WhatsApp continuam sem envio.
+O sistema também evita reenvio de forma inteligente:
+
+- se a mesma mensagem, ou uma mensagem menos de 10% diferente, foi enviada para o telefone há menos de 48 horas, ele pula;
+- se o `texto.md` mudou 10% ou mais, ele considera uma mensagem nova e envia sem precisar forçar;
+- se passaram mais de 48 horas, ele permite reenviar mesmo que a mensagem seja igual.
+
+Esses limites podem ser ajustados no `.env`. Telefones inválidos ou números não encontrados no WhatsApp continuam sem envio.
 
 ## Logs
 
@@ -161,6 +220,7 @@ Os logs ficam em `logs/`:
 
 - `enviados.csv`: números já enviados, usado para evitar duplicidade.
 - `erros.csv`: falhas de envio, números inválidos ou números sem WhatsApp.
+- `mensagens.json`: cache local das versões nativas de `texto.md` usadas para comparar mudanças.
 - `pulos.csv`: registros pulados com o motivo.
 - `avisos.csv`: avisos, como variáveis ausentes no template.
 

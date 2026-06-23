@@ -259,6 +259,7 @@ const PATHS = Object.freeze({
   logsDir: path.resolve(ROOT_DIR, "logs"),
   sent: path.resolve(ROOT_DIR, "logs", "enviados.csv"),
   errors: path.resolve(ROOT_DIR, "logs", "erros.csv"),
+  messageCache: path.resolve(ROOT_DIR, "logs", "mensagens.json"),
   skipped: path.resolve(ROOT_DIR, "logs", "pulos.csv"),
   warnings: path.resolve(ROOT_DIR, "logs", "avisos.csv"),
   auth: path.resolve(ROOT_DIR, ".wwebjs_auth"),
@@ -267,6 +268,11 @@ const PATHS = Object.freeze({
 
 const MIN_DELAY_MS = readIntegerEnv("MIN_DELAY_MS", 8000);
 const MAX_DELAY_MS = readIntegerEnv("MAX_DELAY_MS", 20000);
+const MESSAGE_DIFF_THRESHOLD_PERCENT = readNumberEnv(
+  "MESSAGE_DIFF_THRESHOLD_PERCENT",
+  10,
+);
+const RESEND_AFTER_HOURS = readNumberEnv("RESEND_AFTER_HOURS", 48);
 
 const COLORS = Object.freeze({
   blue: "\x1b[34m",
@@ -281,6 +287,11 @@ const COLORS = Object.freeze({
 
 function readIntegerEnv(name, fallback) {
   const value = Number.parseInt(process.env[name], 10);
+  return Number.isFinite(value) && value >= 0 ? value : fallback;
+}
+
+function readNumberEnv(name, fallback) {
+  const value = Number.parseFloat(process.env[name]);
   return Number.isFinite(value) && value >= 0 ? value : fallback;
 }
 
@@ -451,6 +462,206 @@ function hashValue(value) {
   return crypto.createHash("sha256").update(value).digest("hex");
 }
 
+function normalizeTemplateForTracking(template) {
+  return String(template || "")
+    .replace(/\r\n/g, "\n")
+    .replace(/\r/g, "\n")
+    .trim();
+}
+
+function calculateDifferencePercent(a, b) {
+  const left = normalizeTemplateForTracking(a);
+  const right = normalizeTemplateForTracking(b);
+  const maxLength = Math.max(left.length, right.length);
+
+  if (maxLength === 0) {
+    return 0;
+  }
+
+  return (levenshteinDistance(left, right) / maxLength) * 100;
+}
+
+function levenshteinDistance(a, b) {
+  if (a === b) {
+    return 0;
+  }
+
+  if (a.length === 0) {
+    return b.length;
+  }
+
+  if (b.length === 0) {
+    return a.length;
+  }
+
+  let previous = Array.from({ length: b.length + 1 }, (_, index) => index);
+  let current = new Array(b.length + 1);
+
+  for (let i = 1; i <= a.length; i += 1) {
+    current[0] = i;
+
+    for (let j = 1; j <= b.length; j += 1) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      current[j] = Math.min(
+        current[j - 1] + 1,
+        previous[j] + 1,
+        previous[j - 1] + cost,
+      );
+    }
+
+    [previous, current] = [current, previous];
+  }
+
+  return previous[b.length];
+}
+
+function getTemplateFingerprint(template) {
+  const content = normalizeTemplateForTracking(template);
+
+  return {
+    content,
+    hash: hashValue(content),
+  };
+}
+
+function loadMessageCache(filePath = PATHS.messageCache) {
+  if (!fs.existsSync(filePath)) {
+    return { messages: {}, version: 1 };
+  }
+
+  try {
+    const parsed = JSON.parse(fs.readFileSync(filePath, "utf8"));
+
+    return {
+      messages: parsed.messages && typeof parsed.messages === "object"
+        ? parsed.messages
+        : {},
+      version: 1,
+    };
+  } catch {
+    return { messages: {}, version: 1 };
+  }
+}
+
+function saveMessageCache(cache, filePath = PATHS.messageCache) {
+  ensureDirectory(path.dirname(filePath));
+  fs.writeFileSync(
+    filePath,
+    `${JSON.stringify({ messages: cache.messages, version: 1 }, null, 2)}\n`,
+    "utf8",
+  );
+}
+
+function registerTemplateInCache(template, paths = PATHS) {
+  const fingerprint = getTemplateFingerprint(template);
+  const cache = loadMessageCache(paths.messageCache);
+
+  if (!cache.messages[fingerprint.hash]) {
+    cache.messages[fingerprint.hash] = {
+      content: fingerprint.content,
+      createdAt: new Date().toISOString(),
+      hash: fingerprint.hash,
+    };
+    saveMessageCache(cache, paths.messageCache);
+  }
+
+  return {
+    cache,
+    ...fingerprint,
+  };
+}
+
+function parseDateMs(value) {
+  const timestamp = Date.parse(value);
+  return Number.isFinite(timestamp) ? timestamp : undefined;
+}
+
+function formatAgeHours(ageMs) {
+  return (ageMs / 3600000).toFixed(1);
+}
+
+function getSendDecision(telefone, sentRecords, messageContext, options = {}) {
+  const now = options.now || new Date();
+  const resendAfterMs =
+    (options.resendAfterHours ?? RESEND_AFTER_HOURS) * 3600000;
+  const resendAfterHours = options.resendAfterHours ?? RESEND_AFTER_HOURS;
+  const differenceThresholdPercent =
+    options.messageDiffThresholdPercent ?? MESSAGE_DIFF_THRESHOLD_PERCENT;
+
+  const records = sentRecords.filter((record) => record.telefone === telefone);
+
+  if (records.length === 0) {
+    return { shouldSend: true, reason: "Nenhum envio anterior para este telefone." };
+  }
+
+  let lastDifferentRecent;
+  let lastExpired;
+
+  for (const record of records) {
+    const sentAtMs = parseDateMs(record.dataHora);
+    const ageMs = sentAtMs === undefined ? 0 : now.getTime() - sentAtMs;
+    const expired = sentAtMs !== undefined && ageMs > resendAfterMs;
+
+    if (expired) {
+      lastExpired = { ageMs, record };
+      continue;
+    }
+
+    if (!record.mensagemHash) {
+      return {
+        code: "JA_ENVIADO_LEGADO",
+        shouldSend: false,
+        reason:
+          "Telefone já consta em logs/enviados.csv em formato antigo; use --force-resend, --reset-sent ou aguarde o prazo de reenvio.",
+      };
+    }
+
+    const previousContent =
+      messageContext.cache.messages[record.mensagemHash]?.content;
+
+    if (!previousContent) {
+      return {
+        code: "JA_ENVIADO_SEM_CACHE",
+        shouldSend: false,
+        reason:
+          "Telefone já consta como enviado, mas o cache da versão anterior não foi encontrado; use --force-resend ou --reset-sent.",
+      };
+    }
+
+    const differencePercent =
+      record.mensagemHash === messageContext.hash
+        ? 0
+        : calculateDifferencePercent(messageContext.content, previousContent);
+
+    if (differencePercent < differenceThresholdPercent) {
+      return {
+        code: "JA_ENVIADO_MENSAGEM_SIMILAR",
+        differencePercent,
+        shouldSend: false,
+        reason: `Mensagem similar já enviada há ${formatAgeHours(ageMs)}h (${differencePercent.toFixed(1)}% diferente; limite ${differenceThresholdPercent}%).`,
+      };
+    }
+
+    lastDifferentRecent = { differencePercent, record };
+  }
+
+  if (lastDifferentRecent) {
+    return {
+      shouldSend: true,
+      reason: `Mensagem atual é ${lastDifferentRecent.differencePercent.toFixed(1)}% diferente da enviada anteriormente.`,
+    };
+  }
+
+  if (lastExpired) {
+    return {
+      shouldSend: true,
+      reason: `Último envio similar passou do prazo configurado (${formatAgeHours(lastExpired.ageMs)}h > ${resendAfterHours}h).`,
+    };
+  }
+
+  return { shouldSend: true, reason: "Nenhum envio bloqueante encontrado." };
+}
+
 function extensionFromContentType(contentType) {
   const type = String(contentType || "").split(";")[0].trim().toLowerCase();
   const map = {
@@ -597,6 +808,61 @@ function shouldSendAsDocument(media) {
   return !String(media.mimetype || "").startsWith("image/");
 }
 
+function normalizeCaption(value) {
+  return String(value || "").trim();
+}
+
+function buildSendPlan(parts) {
+  const plan = [];
+  const mediaCaptions = new Map();
+  const consumedText = new Set();
+  const firstTextIndex = parts.findIndex((part) => part.type === "text");
+  const lastTextIndex = parts.findLastIndex((part) => part.type === "text");
+
+  if (
+    firstTextIndex > 0 &&
+    parts.slice(0, firstTextIndex).every((part) => part.type === "media")
+  ) {
+    mediaCaptions.set(
+      firstTextIndex - 1,
+      normalizeCaption(parts[firstTextIndex].value),
+    );
+    consumedText.add(firstTextIndex);
+  }
+
+  if (
+    lastTextIndex >= 0 &&
+    lastTextIndex < parts.length - 1 &&
+    !consumedText.has(lastTextIndex) &&
+    parts.slice(lastTextIndex + 1).every((part) => part.type === "media")
+  ) {
+    mediaCaptions.set(
+      lastTextIndex + 1,
+      normalizeCaption(parts[lastTextIndex].value),
+    );
+    consumedText.add(lastTextIndex);
+  }
+
+  for (let index = 0; index < parts.length; index += 1) {
+    const part = parts[index];
+
+    if (part.type === "text") {
+      if (!consumedText.has(index)) {
+        plan.push(part);
+      }
+
+      continue;
+    }
+
+    plan.push({
+      ...part,
+      ...(mediaCaptions.has(index) ? { caption: mediaCaptions.get(index) } : {}),
+    });
+  }
+
+  return plan;
+}
+
 function validateTemplateMediaReferences(template, paths = PATHS) {
   const issues = [];
 
@@ -616,7 +882,7 @@ function validateTemplateMediaReferences(template, paths = PATHS) {
 }
 
 async function sendRenderedTemplate(client, chatId, renderedTemplate, paths = PATHS) {
-  const parts = parseTemplateParts(renderedTemplate);
+  const parts = buildSendPlan(parseTemplateParts(renderedTemplate));
   const downloadCache = new Map();
 
   for (const part of parts) {
@@ -627,9 +893,15 @@ async function sendRenderedTemplate(client, chatId, renderedTemplate, paths = PA
 
     const filePath = await resolveMediaPath(part.source, paths, downloadCache);
     const media = MessageMedia.fromFilePath(filePath);
-    await client.sendMessage(chatId, media, {
+    const options = {
       sendMediaAsDocument: shouldSendAsDocument(media),
-    });
+    };
+
+    if (part.caption) {
+      options.caption = part.caption;
+    }
+
+    await client.sendMessage(chatId, media, options);
   }
 }
 
@@ -759,9 +1031,25 @@ function ensureLogFile(filePath, header) {
   }
 }
 
+function ensureSentLogFile(filePath) {
+  const header = "telefone;mensagem_hash;data_hora";
+
+  if (!fs.existsSync(filePath)) {
+    fs.writeFileSync(filePath, `${header}\n`, "utf8");
+    return;
+  }
+
+  const lines = fs.readFileSync(filePath, "utf8").split("\n");
+
+  if (lines[0] !== header) {
+    lines[0] = header;
+    fs.writeFileSync(filePath, lines.join("\n"), "utf8");
+  }
+}
+
 function initLogFiles(paths = PATHS) {
   ensureDirectory(paths.logsDir);
-  ensureLogFile(paths.sent, "telefone;data_hora");
+  ensureSentLogFile(paths.sent);
   ensureLogFile(paths.errors, "telefone;codigo;detalhe;data_hora");
   ensureLogFile(paths.skipped, "telefone;codigo;detalhe;data_hora");
   ensureLogFile(paths.warnings, "telefone;codigo;detalhe;data_hora");
@@ -782,25 +1070,49 @@ function appendLog(filePath, values) {
 }
 
 function loadAlreadySent(filePath = PATHS.sent) {
+  return new Set(loadSentRecords(filePath).map((record) => record.telefone));
+}
+
+function loadSentRecords(filePath = PATHS.sent) {
   if (!fs.existsSync(filePath)) {
-    return new Set();
+    return [];
   }
 
-  const lines = fs
+  return fs
     .readFileSync(filePath, "utf8")
     .split("\n")
     .map((line) => line.trim())
+    .filter(Boolean)
+    .filter((line) => !line.startsWith("telefone;"))
+    .map(parseSentRecord)
     .filter(Boolean);
+}
 
-  return new Set(
-    lines
-      .map((line) => line.split(";")[0])
-      .filter((telefone) => telefone && telefone !== "telefone"),
-  );
+function parseSentRecord(line) {
+  const parts = line.split(";");
+  const telefone = parts[0];
+
+  if (!telefone) {
+    return undefined;
+  }
+
+  if (parts.length >= 3) {
+    return {
+      dataHora: parts[2],
+      mensagemHash: parts[1],
+      telefone,
+    };
+  }
+
+  return {
+    dataHora: parts[1],
+    mensagemHash: undefined,
+    telefone,
+  };
 }
 
 function resetSentLog(filePath = PATHS.sent) {
-  fs.writeFileSync(filePath, "telefone;data_hora\n", "utf8");
+  fs.writeFileSync(filePath, "telefone;mensagem_hash;data_hora\n", "utf8");
 }
 
 function parseExecutionOptions(argv = process.argv.slice(2)) {
@@ -816,6 +1128,8 @@ function parseExecutionOptions(argv = process.argv.slice(2)) {
     resetSent:
       args.has("--reset-sent") ||
       args.has("--reset-enviados") ||
+      args.has("--clear-sent") ||
+      args.has("--clear-enviados") ||
       args.has("--limpar-enviados"),
   };
 }
@@ -829,6 +1143,7 @@ Opções:
   --check             Valida arquivos e configuração sem enviar.
   --force-resend      Ignora logs/enviados.csv nesta execução e reenvia.
   --reset-sent        Limpa logs/enviados.csv antes de iniciar.
+  --clear-sent        Alias de --reset-sent.
   --reenviar          Alias de --force-resend.
   --reset-enviados    Alias de --reset-sent.
   --help              Mostra esta ajuda.`);
@@ -1015,8 +1330,9 @@ function validateRuntimeFiles(paths = PATHS, options = {}) {
 
 async function processCampaign(client, paths = PATHS, options = {}) {
   const forceResend = Boolean(options.forceResend);
-  const enviados = loadAlreadySent(paths.sent);
+  const sentRecords = loadSentRecords(paths.sent);
   const template = loadTemplate(paths.template);
+  const messageContext = registerTemplateInCache(template, paths);
   const clientes = loadCsv(paths.csv);
   const status = createStatusReporter(clientes.length);
 
@@ -1042,27 +1358,36 @@ async function processCampaign(client, paths = PATHS, options = {}) {
         continue;
       }
 
-      if (!forceResend && enviados.has(telefone)) {
-        const reason =
-          "Telefone já consta em logs/enviados.csv; use --force-resend para reenviar ou --reset-sent para limpar a lista.";
+      const sendDecision = getSendDecision(
+        telefone,
+        sentRecords,
+        messageContext,
+        options,
+      );
 
+      if (!forceResend && !sendDecision.shouldSend) {
         appendLog(paths.skipped, [
           telefone,
-          "JA_ENVIADO",
-          reason,
+          sendDecision.code || "JA_ENVIADO",
+          sendDecision.reason,
           new Date().toISOString(),
         ]);
 
-        status.event(`Pulando ${maskPhone(telefone)}: ${reason}`, "yellow");
+        status.event(
+          `Pulando ${maskPhone(telefone)}: ${sendDecision.reason}`,
+          "yellow",
+        );
         status.skip(`Já enviado ${maskPhone(telefone)}`);
         continue;
       }
 
-      if (forceResend && enviados.has(telefone)) {
+      if (forceResend && sentRecords.some((record) => record.telefone === telefone)) {
         status.event(
           `Reenviando ${maskPhone(telefone)}: --force-resend ativo.`,
           "yellow",
         );
+      } else if (sendDecision.reason && sendDecision.reason !== "Nenhum envio anterior para este telefone.") {
+        status.event(`Enviando ${maskPhone(telefone)}: ${sendDecision.reason}`, "yellow");
       }
 
       const numberId = await client.getNumberId(telefone);
@@ -1100,8 +1425,14 @@ async function processCampaign(client, paths = PATHS, options = {}) {
 
       await sendRenderedTemplate(client, numberId._serialized, mensagem, paths);
 
-      appendLog(paths.sent, [telefone, new Date().toISOString()]);
-      enviados.add(telefone);
+      const sentAt = new Date().toISOString();
+
+      appendLog(paths.sent, [telefone, messageContext.hash, sentAt]);
+      sentRecords.push({
+        dataHora: sentAt,
+        mensagemHash: messageContext.hash,
+        telefone,
+      });
 
       status.sent(`Enviado ${maskPhone(telefone)}`);
 
@@ -1206,12 +1537,18 @@ module.exports = {
   PATHS,
   REQUIRED_COLUMNS,
   applyTemplate,
+  buildSendPlan,
   buildPuppeteerConfig,
+  calculateDifferencePercent,
   findPuppeteerCacheBrowsers,
+  getSendDecision,
+  getTemplateFingerprint,
   getWindowsBrowserCandidates,
   formatNameForMessage,
+  loadSentRecords,
   parseExecutionOptions,
   parseTemplateParts,
+  registerTemplateInCache,
   resolveMediaPath,
   resetSentLog,
   sendRenderedTemplate,
