@@ -26,6 +26,7 @@ O projeto segue um RCF local com estas regras principais:
 - interpreta `![](CAMINHO_OU_URL)` como anexo local ou remoto;
 - baixa anexos remotos uma única vez para cache temporário;
 - envia anexos no início ou final com o texto como legenda quando possível;
+- envia `.ogg` de áudio como mensagem de voz separada;
 - valida o número no WhatsApp com `client.getNumberId()` antes do envio;
 - evita reenvio com base no telefone, versão nativa da mensagem e prazo configurável;
 - permite forçar reenvio ou limpar histórico sem burlar validação de telefone;
@@ -179,6 +180,18 @@ Arquivo remoto:
 ```
 
 O caminho pode ser relativo ao arquivo de mensagem em uso, absoluto ou uma URL `http`/`https`. URLs são baixadas para uma pasta temporária e reutilizadas quando o mesmo endereço aparecer novamente. Imagens são enviadas como mídia; outros tipos, como PDF ou ZIP, são enviados como documento.
+
+Arquivos `.ogg` são inspecionados. Quando o arquivo for um contêiner OGG apenas de áudio, como Opus ou Vorbis, ele será enviado como mensagem de voz separada no ponto exato em que apareceu no Markdown:
+
+```markdown
+Texto antes do áudio.
+
+![](audios/exemplo.ogg)
+
+Texto depois do áudio.
+```
+
+Nesse caso, o `.ogg` não absorve o texto adjacente como legenda. Se o `.ogg` não for identificado como apenas áudio, ele segue como anexo comum.
 
 Se o anexo estiver no início ou no final do `texto.md`, o texto adjacente será enviado como legenda do próprio anexo, evitando uma mensagem de texto separada:
 

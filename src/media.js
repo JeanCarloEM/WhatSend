@@ -8,6 +8,19 @@ const { PATHS } = require("./config");
 const { hashValue } = require("./utils");
 const { parseTemplateParts } = require("./template");
 
+const CAPTION_POSITION = Symbol("captionPosition");
+const AUDIO_OGG_MARKERS = [
+  Buffer.from("OpusHead", "ascii"),
+  Buffer.from([0x01, 0x76, 0x6f, 0x72, 0x62, 0x69, 0x73]),
+  Buffer.from("Speex   ", "ascii"),
+  Buffer.from("fLaC", "ascii"),
+];
+const NON_AUDIO_OGG_MARKERS = [
+  Buffer.from("theora", "ascii"),
+  Buffer.from("fishead", "ascii"),
+  Buffer.from("video", "ascii"),
+];
+
 function isUrl(value) {
   return /^https?:\/\//i.test(value);
 }
@@ -21,6 +34,8 @@ function extensionFromContentType(contentType) {
     "image/jpeg": ".jpg",
     "image/png": ".png",
     "image/webp": ".webp",
+    "audio/ogg": ".ogg",
+    "audio/opus": ".ogg",
     "text/plain": ".txt",
   };
 
@@ -158,6 +173,55 @@ function shouldSendAsDocument(media) {
   return !String(media.mimetype || "").startsWith("image/");
 }
 
+function isOggSource(source) {
+  if (!source) {
+    return false;
+  }
+
+  try {
+    const value = isUrl(source) ? new URL(source).pathname : source;
+    return path.extname(value).toLocaleLowerCase("pt-BR") === ".ogg";
+  } catch {
+    return path.extname(String(source)).toLocaleLowerCase("pt-BR") === ".ogg";
+  }
+}
+
+function isOggAudioOnly(filePath) {
+  if (path.extname(filePath).toLocaleLowerCase("pt-BR") !== ".ogg") {
+    return false;
+  }
+
+  const buffer = readFilePrefix(filePath, 256 * 1024);
+
+  if (buffer.length < 4 || buffer.subarray(0, 4).toString("ascii") !== "OggS") {
+    return false;
+  }
+
+  if (NON_AUDIO_OGG_MARKERS.some((marker) => bufferIncludes(buffer, marker))) {
+    return false;
+  }
+
+  return AUDIO_OGG_MARKERS.some((marker) => bufferIncludes(buffer, marker));
+}
+
+function readFilePrefix(filePath, maxBytes) {
+  const fd = fs.openSync(filePath, "r");
+
+  try {
+    const stat = fs.fstatSync(fd);
+    const size = Math.min(stat.size, maxBytes);
+    const buffer = Buffer.alloc(size);
+    const bytesRead = fs.readSync(fd, buffer, 0, size, 0);
+    return buffer.subarray(0, bytesRead);
+  } finally {
+    fs.closeSync(fd);
+  }
+}
+
+function bufferIncludes(buffer, marker) {
+  return buffer.indexOf(marker) !== -1;
+}
+
 function normalizeCaption(value) {
   return String(value || "").trim();
 }
@@ -171,12 +235,14 @@ function buildSendPlan(parts) {
 
   if (
     firstTextIndex > 0 &&
-    parts.slice(0, firstTextIndex).every((part) => part.type === "media")
+    parts
+      .slice(0, firstTextIndex)
+      .every((part) => part.type === "media" && !isOggSource(part.source))
   ) {
-    mediaCaptions.set(
-      firstTextIndex - 1,
-      normalizeCaption(parts[firstTextIndex].value),
-    );
+    mediaCaptions.set(firstTextIndex - 1, {
+      position: "after",
+      value: normalizeCaption(parts[firstTextIndex].value),
+    });
     consumedText.add(firstTextIndex);
   }
 
@@ -184,12 +250,14 @@ function buildSendPlan(parts) {
     lastTextIndex >= 0 &&
     lastTextIndex < parts.length - 1 &&
     !consumedText.has(lastTextIndex) &&
-    parts.slice(lastTextIndex + 1).every((part) => part.type === "media")
+    parts
+      .slice(lastTextIndex + 1)
+      .every((part) => part.type === "media" && !isOggSource(part.source))
   ) {
-    mediaCaptions.set(
-      lastTextIndex + 1,
-      normalizeCaption(parts[lastTextIndex].value),
-    );
+    mediaCaptions.set(lastTextIndex + 1, {
+      position: "before",
+      value: normalizeCaption(parts[lastTextIndex].value),
+    });
     consumedText.add(lastTextIndex);
   }
 
@@ -204,10 +272,20 @@ function buildSendPlan(parts) {
       continue;
     }
 
-    plan.push({
+    const plannedPart = {
       ...part,
-      ...(mediaCaptions.has(index) ? { caption: mediaCaptions.get(index) } : {}),
-    });
+      ...(mediaCaptions.has(index)
+        ? { caption: mediaCaptions.get(index).value }
+        : {}),
+    };
+
+    if (mediaCaptions.has(index)) {
+      Object.defineProperty(plannedPart, CAPTION_POSITION, {
+        value: mediaCaptions.get(index).position,
+      });
+    }
+
+    plan.push(plannedPart);
   }
 
   return plan;
@@ -243,6 +321,12 @@ async function sendRenderedTemplate(client, chatId, renderedTemplate, paths = PA
 
     const filePath = await resolveMediaPath(part.source, paths, downloadCache);
     const media = MessageMedia.fromFilePath(filePath);
+
+    if (isOggAudioOnly(filePath)) {
+      await sendOggVoiceMessage(client, chatId, media, part);
+      continue;
+    }
+
     const options = {
       sendMediaAsDocument: shouldSendAsDocument(media),
     };
@@ -255,9 +339,29 @@ async function sendRenderedTemplate(client, chatId, renderedTemplate, paths = PA
   }
 }
 
+async function sendOggVoiceMessage(client, chatId, media, part) {
+  const caption = normalizeCaption(part.caption);
+  const captionPosition = part[CAPTION_POSITION];
+
+  if (caption && captionPosition === "before") {
+    await client.sendMessage(chatId, caption);
+  }
+
+  await client.sendMessage(chatId, media, {
+    sendAudioAsVoice: true,
+    sendMediaAsDocument: false,
+  });
+
+  if (caption && captionPosition === "after") {
+    await client.sendMessage(chatId, caption);
+  }
+}
+
 module.exports = {
   buildSendPlan,
   downloadMediaUrl,
+  isOggAudioOnly,
+  isOggSource,
   isUrl,
   resolveMediaPath,
   sendRenderedTemplate,

@@ -26,6 +26,7 @@ const {
   getTemplateFingerprint,
   getWhatsAppClientId,
   getWindowsBrowserCandidates,
+  isOggAudioOnly,
   loadAlreadySent,
   loadClientes,
   loadCsv,
@@ -103,6 +104,24 @@ function withEnv(values, fn) {
       }
     }
   }
+}
+
+function createFakeOggAudio() {
+  return Buffer.concat([
+    Buffer.from("OggS", "ascii"),
+    Buffer.alloc(24, 0),
+    Buffer.from("OpusHead", "ascii"),
+    Buffer.from("audio ficticio", "ascii"),
+  ]);
+}
+
+function createFakeOggVideo() {
+  return Buffer.concat([
+    Buffer.from("OggS", "ascii"),
+    Buffer.alloc(24, 0),
+    Buffer.from("theora", "ascii"),
+    Buffer.from("video ficticio", "ascii"),
+  ]);
 }
 
 function loadComplexExpressionFixture() {
@@ -891,6 +910,113 @@ test("envia anexo inicial com texto como legenda da mesma mensagem", async () =>
   assert.equal(calls[0].filename, "imagem.png");
   assert.equal(calls[0].options.caption, "Texto da mensagem");
   assert.equal(calls[0].options.sendMediaAsDocument, false);
+});
+
+test("detecta OGG apenas de áudio", () => {
+  const { paths } = createFixture();
+  const audioPath = path.join(path.dirname(paths.template), "audio.ogg");
+  const videoPath = path.join(path.dirname(paths.template), "video.ogg");
+  const invalidPath = path.join(path.dirname(paths.template), "texto.ogg");
+
+  fs.writeFileSync(audioPath, createFakeOggAudio());
+  fs.writeFileSync(videoPath, createFakeOggVideo());
+  fs.writeFileSync(invalidPath, "conteúdo sem ogg", "utf8");
+
+  assert.equal(isOggAudioOnly(audioPath), true);
+  assert.equal(isOggAudioOnly(videoPath), false);
+  assert.equal(isOggAudioOnly(invalidPath), false);
+});
+
+test("envia OGG de áudio como mensagem de voz separada no ponto da notação", async () => {
+  const { paths } = createFixture();
+  const mediaPath = path.join(path.dirname(paths.template), "audio.ogg");
+  fs.writeFileSync(mediaPath, createFakeOggAudio());
+
+  const calls = [];
+  const client = {
+    async sendMessage(to, content, options) {
+      calls.push({
+        filename: content && content.filename,
+        options,
+        text: typeof content === "string" ? content : undefined,
+        to,
+      });
+    },
+  };
+
+  await sendRenderedTemplate(
+    client,
+    "5511999999999@c.us",
+    "Antes\n![](audio.ogg)\nDepois",
+    paths,
+  );
+
+  assert.deepEqual(calls.map((call) => call.text || call.filename), [
+    "Antes\n",
+    "audio.ogg",
+    "\nDepois",
+  ]);
+  assert.deepEqual(calls[1].options, {
+    sendAudioAsVoice: true,
+    sendMediaAsDocument: false,
+  });
+});
+
+test("não usa legenda automática para OGG de áudio no início ou final", async () => {
+  const { paths } = createFixture();
+  const mediaPath = path.join(path.dirname(paths.template), "audio.ogg");
+  fs.writeFileSync(mediaPath, createFakeOggAudio());
+
+  const calls = [];
+  const client = {
+    async sendMessage(to, content, options) {
+      calls.push({
+        filename: content && content.filename,
+        options,
+        text: typeof content === "string" ? content : undefined,
+        to,
+      });
+    },
+  };
+
+  await sendRenderedTemplate(
+    client,
+    "5511999999999@c.us",
+    "Texto da mensagem\n![](audio.ogg)",
+    paths,
+  );
+
+  assert.deepEqual(calls.map((call) => call.text || call.filename), [
+    "Texto da mensagem\n",
+    "audio.ogg",
+  ]);
+  assert.equal(calls[1].options.sendAudioAsVoice, true);
+  assert.equal(calls[1].options.caption, undefined);
+});
+
+test("OGG que não é apenas áudio continua como documento", async () => {
+  const { paths } = createFixture();
+  const mediaPath = path.join(path.dirname(paths.template), "video.ogg");
+  fs.writeFileSync(mediaPath, createFakeOggVideo());
+
+  const calls = [];
+  const client = {
+    async sendMessage(to, content, options) {
+      calls.push({
+        filename: content && content.filename,
+        options,
+        text: typeof content === "string" ? content : undefined,
+        to,
+      });
+    },
+  };
+
+  await sendRenderedTemplate(client, "5511999999999@c.us", "![](video.ogg)", paths);
+
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].filename, "video.ogg");
+  assert.equal(calls[0].options.sendMediaAsDocument, true);
+  assert.equal(calls[0].options.sendAudioAsVoice, undefined);
 });
 
 test("baixa URL de anexo uma única vez e reutiliza o cache", async () => {

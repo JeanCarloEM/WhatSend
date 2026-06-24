@@ -154,6 +154,11 @@
  *   Imagens devem ser enviadas como mídia; outros arquivos, como PDF ou ZIP,
  *   devem ser enviados como documento.
  *
+ *   Arquivos .ogg devem ser inspecionados. Se forem contêiner OGG apenas de
+ *   áudio, devem ser enviados como mensagem de voz separada no ponto exato da
+ *   notação Markdown, usando recurso de áudio/voz do WhatsApp Web. Nesses casos,
+ *   não devem absorver texto adjacente como legenda.
+ *
  * -----------------------------------------------------------------------------
  *
  * RN008 - Tratamento de Telefone
