@@ -21,7 +21,11 @@ function readListOptionValue(argv, index) {
   const operator = stripWrappingQuotes(argv[index + 2] || "");
   const third = argv[index + 3];
 
-  if ((operator === "=" || operator === "!=") && third && !third.startsWith("--")) {
+  if (
+    ["=", "!=", "<", ">", "<=", ">="].includes(operator) &&
+    third &&
+    !third.startsWith("--")
+  ) {
     return {
       nextIndex: index + 3,
       value: `${first}${operator}${third}`,

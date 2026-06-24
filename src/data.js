@@ -4,6 +4,12 @@ const { parse } = require("csv-parse/sync");
 
 const { PATHS, REQUIRED_COLUMNS } = require("./config");
 const {
+  collectReferencedFields,
+  evaluateFilterExpression,
+  expressionLooksLikeFilter,
+  parseExpression,
+} = require("./expression");
+const {
   buildCaseInsensitiveDataMap,
   getRecordValue,
   normalizeFieldName,
@@ -86,24 +92,48 @@ function applyListFilter(clientes, filter) {
     return clientes;
   }
 
-  const hasColumn = clientes.some((cliente) =>
-    buildCaseInsensitiveDataMap(cliente).has(normalizeFieldName(filter.field)),
-  );
+  if (filter.field) {
+    const hasColumn = clientes.some((cliente) =>
+      buildCaseInsensitiveDataMap(cliente).has(normalizeFieldName(filter.field)),
+    );
 
-  if (!hasColumn) {
-    throw new Error(`Filtro de lista inválido: coluna não encontrada: ${filter.field}.`);
-  }
-
-  return clientes.filter((cliente) => {
-    const value = String(getRecordValue(cliente, filter.field) ?? "").trim();
-    const expectedValue = String(filter.expectedValue ?? "").trim();
-
-    if (filter.operator === "!=") {
-      return value !== expectedValue;
+    if (!hasColumn) {
+      throw new Error(`Filtro de lista inválido: coluna não encontrada: ${filter.field}.`);
     }
 
-    return value === expectedValue;
-  });
+    return clientes.filter((cliente) => {
+      const value = String(getRecordValue(cliente, filter.field) ?? "").trim();
+      const expectedValue = String(filter.expectedValue ?? "").trim();
+
+      if (filter.operator === "!=") {
+        return value !== expectedValue;
+      }
+
+      return value === expectedValue;
+    });
+  }
+
+  const ast = parseExpression(filter.expression);
+  validateListFilterColumns(clientes, ast);
+
+  return clientes.filter((cliente) => evaluateFilterExpression(ast, cliente));
+}
+
+function validateListFilterColumns(clientes, ast) {
+  const identifiers = collectReferencedFields(ast);
+  const availableColumns = new Set();
+
+  for (const cliente of clientes) {
+    for (const key of buildCaseInsensitiveDataMap(cliente).keys()) {
+      availableColumns.add(key);
+    }
+  }
+
+  for (const column of identifiers) {
+    if (!availableColumns.has(normalizeFieldName(column))) {
+      throw new Error(`Filtro de lista inválido: coluna não encontrada: ${column}.`);
+    }
+  }
 }
 
 function resolveModelTemplatePath(templateName, paths = PATHS) {
@@ -138,8 +168,32 @@ function resolveModelTemplatePath(templateName, paths = PATHS) {
   return path.resolve(modelsDir, `${modelBaseName}.md`);
 }
 
-function splitFilterExpression(value) {
+function isListFilterExpression(value) {
+  try {
+    return expressionLooksLikeFilter(stripWrappingQuotes(value));
+  } catch (_) {
+    return false;
+  }
+}
+
+function parseListFilter(value) {
   const expression = stripWrappingQuotes(value);
+
+  if (!isListFilterExpression(expression)) {
+    return null;
+  }
+
+  const legacyFilter = parseLegacyListFilter(expression);
+
+  if (legacyFilter) {
+    return legacyFilter;
+  }
+
+  parseExpression(expression);
+  return { expression };
+}
+
+function parseLegacyListFilter(expression) {
   let quote = "";
 
   for (let index = 0; index < expression.length; index += 1) {
@@ -159,38 +213,25 @@ function splitFilterExpression(value) {
     }
 
     if (char === "!" && expression[index + 1] === "=") {
-      return {
-        field: expression.slice(0, index),
-        operator: "!=",
-        value: expression.slice(index + 2),
-      };
+      return buildLegacyListFilter(expression, index, "!=");
     }
 
     if (char === "=") {
-      return {
-        field: expression.slice(0, index),
-        operator: "=",
-        value: expression.slice(index + 1),
-      };
+      return buildLegacyListFilter(expression, index, "=");
     }
   }
 
   return null;
 }
 
-function isListFilterExpression(value) {
-  return Boolean(splitFilterExpression(value));
-}
-
-function parseListFilter(value) {
-  const parts = splitFilterExpression(value);
-
-  if (!parts) {
+function buildLegacyListFilter(expression, index, operator) {
+  if (/[()<>+\-*/]|\|\||&&|\^\^|\$\./u.test(expression)) {
     return null;
   }
 
-  const field = stripWrappingQuotes(parts.field);
-  const expectedValue = stripWrappingQuotes(parts.value);
+  const operatorLength = operator.length;
+  const field = stripWrappingQuotes(expression.slice(0, index));
+  const expectedValue = stripWrappingQuotes(expression.slice(index + operatorLength));
 
   if (!field) {
     throw new Error("Filtro de lista inválido. Informe a coluna antes do operador.");
@@ -198,8 +239,9 @@ function parseListFilter(value) {
 
   return {
     expectedValue,
+    expression,
     field,
-    operator: parts.operator,
+    operator,
   };
 }
 

@@ -14,6 +14,8 @@ const {
   buildSendPlan,
   buildPuppeteerConfig,
   createStatusReporter,
+  evaluateExpression,
+  expressionResultToBoolean,
   formatBrowserStartupError,
   formatNameForMessage,
   getBrowserExecutableNames,
@@ -29,6 +31,7 @@ const {
   loadCsv,
   loadSentRecords,
   parseExecutionOptions,
+  parseExpression,
   parseTemplateParts,
   resolveExecutionPaths,
   resolveListCsvPath,
@@ -352,11 +355,7 @@ test("interpreta parâmetro de lista com = ou != como filtro sobre clientes.csv"
   const negativePaths = resolveExecutionPaths(paths, { listArg: "'status'!='inativo'" });
 
   assert.equal(filteredPaths.csv, paths.csv);
-  assert.deepEqual(filteredPaths.listFilter, {
-    expectedValue: "ativo",
-    field: "STATUS",
-    operator: "=",
-  });
+  assert.equal(filteredPaths.listFilter.expression, '"STATUS"="ativo"');
   assert.deepEqual(loadClientes(filteredPaths).map((cliente) => cliente.nome), ["Maria"]);
   assert.deepEqual(loadClientes(negativePaths).map((cliente) => cliente.nome), ["Maria"]);
 });
@@ -368,12 +367,75 @@ test("filtra clientes por coluna insensível a maiúsculas e minúsculas", () =>
   ];
 
   assert.deepEqual(
-    applyListFilter(clientes, { expectedValue: "ativo", field: "status", operator: "=" }),
+    applyListFilter(clientes, { ast: parseExpression("status=ativo"), expression: "status=ativo" }),
     [clientes[0]],
   );
   assert.deepEqual(
-    applyListFilter(clientes, { expectedValue: "ativo", field: "STATUS", operator: "!=" }),
+    applyListFilter(clientes, { ast: parseExpression("STATUS!=ativo"), expression: "STATUS!=ativo" }),
     [clientes[1]],
+  );
+});
+
+test("filtra clientes com operadores lógicos, comparação numérica e funções", () => {
+  const { paths } = createFixture({
+    csv: [
+      "nome,telefone,status,valor,conta,tipo",
+      "Maria,19998240000,ativo,\"10,50\",123,VIP",
+      "João,19998240001,inativo,7,,Comum",
+      "Ana,19998240002,válido,20,456,Comum",
+      "Bia,19998240003,cancelado,20,789,Comum",
+    ].join("\n"),
+  });
+  const selected = resolveExecutionPaths(paths, {
+    listArg: '((status=true && valor>=10,5) || tipo=VIP) && !$.vazio(conta)',
+  });
+
+  assert.deepEqual(loadClientes(selected).map((cliente) => cliente.nome), ["Maria", "Ana"]);
+});
+
+test("suporta XOR, negação e coluna explícita no filtro", () => {
+  const clientes = [
+    { nome: "Maria", valor: "3", status: "ativo" },
+    { nome: "João", valor: "8", status: "ativo" },
+    { nome: "Ana", valor: "8", status: "inativo" },
+  ];
+  const filter = {
+    ast: parseExpression("($.istrue(status) ^^ ($valor>=5)) && !(3>$valor)"),
+    expression: "($.istrue(status) ^^ ($valor>=5)) && !(3>$valor)",
+  };
+
+  assert.deepEqual(applyListFilter(clientes, filter), [clientes[2]]);
+});
+
+test("avalia funções de tipo e conversão booleana/númerica", () => {
+  const data = {
+    ativo: "vigente",
+    inteiro: "10",
+    texto: "ABC",
+    valor: "1.234,50",
+  };
+
+  assert.equal(expressionResultToBoolean(evaluateExpression("$.isbool(ativo)", data)), true);
+  assert.equal(expressionResultToBoolean(evaluateExpression("$.istrue(ativo)", data)), true);
+  assert.equal(expressionResultToBoolean(evaluateExpression("$.isint(inteiro)", data)), true);
+  assert.equal(expressionResultToBoolean(evaluateExpression("$.isfloat(valor)", data)), true);
+  assert.equal(expressionResultToBoolean(evaluateExpression("$.istring(texto)", data)), true);
+});
+
+test("permite matemática em filtros e no template", () => {
+  const clientes = [
+    { nome: "Maria", taxa: "2", valor: "10,5" },
+    { nome: "João", taxa: "1", valor: "4" },
+  ];
+  const filter = {
+    ast: parseExpression("(valor + taxa * 2)>=14,5"),
+    expression: "(valor + taxa * 2)>=14,5",
+  };
+
+  assert.deepEqual(applyListFilter(clientes, filter), [clientes[0]]);
+  assert.equal(
+    applyTemplate("Total: ${(valor+taxa)*2}", clientes[0]),
+    "Total: 25",
   );
 });
 

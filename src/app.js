@@ -30,9 +30,10 @@ async function main() {
     }
 
     if (executionPaths.listFilter) {
-      console.log(
-        `Filtro de lista: ${executionPaths.listFilter.field}${executionPaths.listFilter.operator}${executionPaths.listFilter.expectedValue}`,
-      );
+      const filterDescription =
+        executionPaths.listFilter.expression ||
+        `${executionPaths.listFilter.field}${executionPaths.listFilter.operator}${executionPaths.listFilter.expectedValue}`;
+      console.log(`Filtro de lista: ${filterDescription}`);
     } else if (options.listArg) {
       console.log(
         `Lista selecionada: ${path.relative(ROOT_DIR, executionPaths.csv)}`,

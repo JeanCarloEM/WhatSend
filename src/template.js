@@ -1,4 +1,9 @@
 const {
+  evaluateExpression,
+  isSimpleIdentifierExpression,
+  parseExpression,
+} = require("./expression");
+const {
   buildCaseInsensitiveDataMap,
   formatNameForMessage,
   normalizeFieldName,
@@ -9,25 +14,65 @@ function applyTemplate(template, data, options = {}) {
   const dataMap = buildCaseInsensitiveDataMap(data);
 
   return replaceDayPeriodMarkers(
-    String(template || "").replace(/\$\{([^}]+)\}/g, (_, field) => {
-      const key = String(field).trim();
-      const normalizedKey = normalizeFieldName(key);
-      const record = dataMap.get(normalizedKey);
+    String(template || "").replace(/\$\{([^}]+)\}/g, (_, expression) => {
+      const key = String(expression).trim();
+      let ast;
 
-      if (!record) {
-        if (!missingVariables.has(key) && options.onMissingVariable) {
-          options.onMissingVariable(key);
-        }
-
-        missingVariables.add(key);
+      try {
+        ast = parseExpression(key);
+      } catch (err) {
+        notifyMissingTemplateVariable(key, missingVariables, options);
         return "";
       }
 
-      const value = record.value ?? "";
-      return normalizedKey === "nome" ? formatNameForMessage(value) : value;
+      if (isSimpleIdentifierExpression(ast)) {
+        const normalizedKey = normalizeFieldName(key.replace(/^\$/, ""));
+        const record = dataMap.get(normalizedKey);
+
+        if (!record) {
+          notifyMissingTemplateVariable(key, missingVariables, options);
+          return "";
+        }
+
+        const value = record.value ?? "";
+        return normalizedKey === "nome" ? formatNameForMessage(value) : value;
+      }
+
+      try {
+        const result = evaluateExpression(ast, data, {
+          identifierMode: "field",
+          onMissingField: (field) =>
+            notifyMissingTemplateVariable(field, missingVariables, options),
+        });
+
+        return expressionResultToString(result.value);
+      } catch (err) {
+        notifyMissingTemplateVariable(key, missingVariables, options);
+        return "";
+      }
     }),
     options.now || new Date(),
   );
+}
+
+function expressionResultToString(value) {
+  if (value === null || value === undefined) {
+    return "";
+  }
+
+  if (typeof value === "number") {
+    return Number.isInteger(value) ? String(value) : String(Number(value.toFixed(10)));
+  }
+
+  return String(value);
+}
+
+function notifyMissingTemplateVariable(field, missingVariables, options = {}) {
+  if (!missingVariables.has(field) && options.onMissingVariable) {
+    options.onMissingVariable(field);
+  }
+
+  missingVariables.add(field);
 }
 
 function replaceDayPeriodMarkers(template, now = new Date()) {
