@@ -17,10 +17,15 @@ const GUI_RUNTIME_DIR = path.join(ROOT_DIR, ".runtime", "gui");
 const MAX_JSON_BODY_BYTES = 15 * 1024 * 1024;
 
 function registerGuiClientHandlers(client, basePaths = PATHS, baseOptions = {}) {
-  let serverPromise;
+  const serverInfo = baseOptions.guiServerInfo;
+  const state = serverInfo ? serverInfo.state : createGuiState();
 
   client.on("qr", (qr) => {
-    console.clear();
+    state.status = "autenticando";
+    pushGuiLog(state, {
+      message: "QR Code recebido. Escaneie no WhatsApp Web para continuar.",
+      type: "warning",
+    });
     console.log("Escaneie o QR Code no navegador do WhatsApp Web.");
     try {
       require("qrcode-terminal").generate(qr, { small: true });
@@ -29,29 +34,50 @@ function registerGuiClientHandlers(client, basePaths = PATHS, baseOptions = {}) 
     }
   });
 
-  client.on("ready", async () => {
-    console.log("WhatsApp conectado. Iniciando interface local...");
+  client.on("loading_screen", (percent) => {
+    state.status = "carregando_whatsapp";
+    pushGuiLog(state, {
+      message: `WhatsApp Web carregando${percent ? `: ${percent}%` : "."}`,
+      type: "info",
+    });
+  });
 
-    try {
-      if (!serverPromise) {
-        serverPromise = startGuiServer(client, basePaths, baseOptions);
-      }
+  client.on("authenticated", () => {
+    state.status = "autenticado";
+    pushGuiLog(state, {
+      message: "Sessão autenticada. Aguardando WhatsApp ficar pronto.",
+      type: "info",
+    });
+  });
 
-      const serverInfo = await serverPromise;
-      await openGuiInBrowser(client, serverInfo.url);
-      console.log(`Interface local disponível em ${serverInfo.url}`);
-    } catch (err) {
-      console.error("Falha ao iniciar a interface:", err.message);
-      process.exitCode = 1;
-    }
+  client.on("ready", () => {
+    state.status = "conectado";
+    state.whatsappReady = true;
+    pushGuiLog(state, {
+      message: "WhatsApp conectado. A execução já pode ser configurada.",
+      type: "sent",
+    });
+    console.log("WhatsApp conectado.");
   });
 
   client.on("auth_failure", (msg) => {
+    state.status = "falha_autenticacao";
+    state.lastError = String(msg || "Falha de autenticação.");
+    pushGuiLog(state, {
+      message: `Falha de autenticação: ${state.lastError}`,
+      type: "error",
+    });
     console.error("Falha de autenticação:", msg);
     process.exitCode = 1;
   });
 
   client.on("disconnected", (reason) => {
+    state.status = "desconectado";
+    state.whatsappReady = false;
+    pushGuiLog(state, {
+      message: `WhatsApp desconectado: ${reason}`,
+      type: "error",
+    });
     console.error("Desconectado:", reason);
   });
 }
@@ -92,7 +118,8 @@ function createGuiState() {
     lastError: "",
     log: [],
     startedAt: null,
-    status: "aguardando",
+    status: "iniciando_whatsapp",
+    whatsappReady: false,
   };
 }
 
@@ -131,6 +158,14 @@ async function routeGuiRequest(req, res, context) {
     if (context.state.busy) {
       sendJson(res, 409, {
         error: "Já existe um processamento em andamento.",
+        ok: false,
+      });
+      return;
+    }
+
+    if (!context.state.whatsappReady) {
+      sendJson(res, 409, {
+        error: "Aguarde o WhatsApp conectar antes de executar.",
         ok: false,
       });
       return;
@@ -211,6 +246,7 @@ async function runGuiCampaign(payload, context) {
   state.busy = false;
   state.finishedAt = new Date().toISOString();
   state.status = "concluido";
+  state.whatsappReady = true;
 }
 
 function materializeGuiExecutionPaths(payload, basePaths = PATHS) {
@@ -413,13 +449,72 @@ async function openGuiInBrowser(client, url) {
     try {
       const page = await client.pupBrowser.newPage();
       await page.goto(url, { waitUntil: "domcontentloaded" });
-      return;
+      return "controlled";
     } catch (_) {
       // Se a aba no browser controlado falhar, tenta o navegador padrão.
     }
   }
 
   openSystemBrowser(url);
+  return "system";
+}
+
+function openGuiWhenBrowserIsAvailable(client, url, state, options = {}) {
+  const startedAt = Date.now();
+  const timeoutMs = options.timeoutMs || 20000;
+  const intervalMs = options.intervalMs || 250;
+
+  pushGuiLog(state, {
+    message: "Interface local iniciada. Abrindo junto ao navegador do WhatsApp quando possível.",
+    type: "info",
+  });
+
+  const timer = setInterval(async () => {
+    if (state.guiOpened) {
+      clearInterval(timer);
+      return;
+    }
+
+    if (client && client.pupBrowser) {
+      state.guiOpened = true;
+      clearInterval(timer);
+
+      try {
+        const target = await openGuiInBrowser(client, url);
+        pushGuiLog(state, {
+          message:
+            target === "controlled"
+              ? "Interface aberta no mesmo navegador controlado pelo WhatsApp."
+              : "Interface aberta no navegador padrão.",
+          type: target === "controlled" ? "info" : "warning",
+        });
+      } catch (err) {
+        state.guiOpened = false;
+        pushGuiLog(state, {
+          message: `Não foi possível abrir no navegador controlado: ${err.message}`,
+          type: "warning",
+        });
+      }
+
+      return;
+    }
+
+    if (Date.now() - startedAt >= timeoutMs) {
+      state.guiOpened = true;
+      clearInterval(timer);
+      openSystemBrowser(url);
+      pushGuiLog(state, {
+        message: "Interface aberta no navegador padrão. O navegador do WhatsApp ainda não estava disponível.",
+        type: "warning",
+      });
+    }
+  }, intervalMs);
+
+  if (typeof timer.unref === "function") {
+    timer.unref();
+  }
+
+  return timer;
 }
 
 function openSystemBrowser(url) {
@@ -670,7 +765,7 @@ function renderGuiHtml() {
     <header>
       <div>
         <h1>Disparador WhatsApp</h1>
-        <p>WhatsApp conectado. Configure a execução local e acompanhe o andamento.</p>
+        <p>Acompanhe a conexão do WhatsApp e configure a execução local.</p>
       </div>
       <div class="status-pill" id="statusPill">Aguardando</div>
     </header>
@@ -802,8 +897,9 @@ function renderGuiHtml() {
     }
 
     function renderStatus(state) {
-      statusPill.textContent = state.busy ? "Executando" : (state.status || "Aguardando");
-      button.disabled = Boolean(state.busy);
+      const ready = Boolean(state.whatsappReady);
+      statusPill.textContent = state.busy ? "Executando" : statusLabel(state.status, ready);
+      button.disabled = Boolean(state.busy) || !ready;
 
       log.innerHTML = "";
       for (const item of state.log || []) {
@@ -819,6 +915,23 @@ function renderGuiHtml() {
         log.append(row);
       }
       log.scrollTop = log.scrollHeight;
+    }
+
+    function statusLabel(status, ready) {
+      if (ready && status === "conectado") return "WhatsApp conectado";
+      const labels = {
+        autenticado: "Sessão autenticada",
+        autenticando: "Autenticando",
+        carregando_whatsapp: "Carregando WhatsApp",
+        concluido: "Concluído",
+        desconectado: "Desconectado",
+        erro: "Erro",
+        executando: "Executando",
+        falha_autenticacao: "Falha de autenticação",
+        iniciando_whatsapp: "Iniciando WhatsApp",
+        validando: "Validando",
+      };
+      return labels[status] || "Aguardando";
     }
 
     async function refreshStatus() {
@@ -860,6 +973,7 @@ function renderGuiHtml() {
 
 module.exports = {
   materializeGuiExecutionPaths,
+  openGuiWhenBrowserIsAvailable,
   registerGuiClientHandlers,
   startGuiServer,
   validateGuiPayload,

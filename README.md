@@ -422,7 +422,9 @@ Em macOS/Linux:
 sh ./start.sh
 ```
 
-O navegador será aberto para autenticação do WhatsApp. Quando o WhatsApp estiver conectado, o sistema abrirá uma página local em `127.0.0.1` para configurar:
+A interface local sobe no início do fluxo e tenta abrir como uma aba no mesmo navegador controlado pelo WhatsApp Web. Se isso não for possível, ela abre no navegador padrão e informa o fallback no andamento.
+
+A tela mostra o status de carregamento/autenticação do WhatsApp e só libera o botão "Executar" depois que o WhatsApp estiver conectado. Nela é possível configurar:
 
 - modelo por textarea;
 - modelo por arquivo `.md`;

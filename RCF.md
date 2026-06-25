@@ -219,7 +219,9 @@ Deve existir uma camada de UX no navegador para coletar parâmetros antes fornec
 
 A GUI deve ser servida por servidor HTTP leve local, sem transmitir dados para serviços terceiros.
 
-A autenticação do WhatsApp deve ocorrer primeiro. Após a conexão bem-sucedida, a aplicação deve abrir uma página local para seleção dos parâmetros de envio.
+A interface local deve ser iniciada no começo do fluxo para exibir status de autenticação e carregamento do WhatsApp. O envio só pode ser liberado após o WhatsApp ficar pronto.
+
+Quando possível, a GUI deve ser aberta como aba no mesmo navegador controlado pelo WhatsApp Web. Se o navegador controlado ainda não estiver disponível ou não permitir nova aba, a GUI pode ser aberta no navegador padrão, registrando esse fallback de forma clara.
 
 A GUI deve oferecer:
 

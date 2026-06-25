@@ -7,7 +7,11 @@ const { resetSentLog } = require("./logs");
 const { formatBrowserStartupError } = require("./browser");
 const { validateRuntimeFiles } = require("./campaign");
 const { createWhatsAppClient, registerClientHandlers } = require("./whatsapp");
-const { registerGuiClientHandlers } = require("./gui");
+const {
+  openGuiWhenBrowserIsAvailable,
+  registerGuiClientHandlers,
+  startGuiServer,
+} = require("./gui");
 
 async function main() {
   try {
@@ -20,7 +24,13 @@ async function main() {
 
     if (options.gui) {
       const client = createWhatsAppClient(PATHS);
-      registerGuiClientHandlers(client, PATHS, options);
+      const guiServerInfo = await startGuiServer(client, PATHS, options);
+      console.log(`Interface local disponível em ${guiServerInfo.url}`);
+      openGuiWhenBrowserIsAvailable(client, guiServerInfo.url, guiServerInfo.state);
+      registerGuiClientHandlers(client, PATHS, {
+        ...options,
+        guiServerInfo,
+      });
       await client.initialize();
       return;
     }
