@@ -43,7 +43,10 @@ function parseExecutionOptions(argv = process.argv.slice(2)) {
     gui: false,
     help: false,
     listArg: undefined,
+    newSessionName: undefined,
     resetSent: false,
+    renameSession: undefined,
+    session: undefined,
     templateName: undefined,
   };
 
@@ -71,6 +74,38 @@ function parseExecutionOptions(argv = process.argv.slice(2)) {
 
     if (["--help", "-h"].includes(arg)) {
       options.help = true;
+      continue;
+    }
+
+    if (arg.startsWith("--session=") || arg.startsWith("--sessao=")) {
+      options.session = arg.slice(arg.indexOf("=") + 1);
+      continue;
+    }
+
+    if (["--session", "--sessao"].includes(arg)) {
+      const result = readOptionValue(argv, index);
+      options.session = result.value;
+      index = result.nextIndex;
+      continue;
+    }
+
+    if (arg.startsWith("--new-session=") || arg.startsWith("--nova-sessao=")) {
+      options.newSessionName = arg.slice(arg.indexOf("=") + 1);
+      continue;
+    }
+
+    if (["--new-session", "--nova-sessao"].includes(arg)) {
+      const result = readOptionValue(argv, index);
+      options.newSessionName = result.value;
+      index = result.nextIndex;
+      continue;
+    }
+
+    if (["--rename-session", "--renomear-sessao"].includes(arg)) {
+      const from = readOptionValue(argv, index);
+      const to = readOptionValue(argv, from.nextIndex);
+      options.renameSession = { from: from.value, to: to.value };
+      index = to.nextIndex;
       continue;
     }
 
@@ -168,6 +203,10 @@ Opções:
   --check             Valida arquivos e configuração sem enviar.
   --gui               Abre a interface gráfica local após autenticar.
   --force-resend      Ignora logs/enviados.csv nesta execução e reenvia.
+  --session VALOR     Usa uma sessão pelo nome, id ou últimos dígitos do telefone.
+  --new-session NOME  Cria uma nova sessão e força nova autenticação.
+  --rename-session ANTIGO NOVO
+                      Renomeia uma sessão salva e encerra.
   --lista VALOR       Usa ./listas/VALOR.csv ou filtra clientes.csv se contiver = ou !=.
   --modelo VALOR      Usa ./modelos/VALOR.md.
   --reset-sent        Limpa logs/enviados.csv antes de iniciar.

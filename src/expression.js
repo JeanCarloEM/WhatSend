@@ -519,8 +519,26 @@ function evaluateFunction(node, context) {
           value.trim() !== "" &&
           !parseSmartNumber(value).ok,
       };
+    case "round":
+      return { value: Math.round(toMathNumber(value)) };
+    case "ceil":
+      return { value: Math.ceil(toMathNumber(value)) };
+    case "floor":
+      return { value: Math.floor(toMathNumber(value)) };
+    case "int":
+      return { value: Math.trunc(toMathNumber(value)) };
+    case "moeda":
+      return { value: formatCurrencyValue(value) };
+    case "numero":
+      return { value: formatIntegerValue(value) };
+    case "decimal":
+      return { value: formatDecimalValue(value) };
+    case "digito1":
+      return { value: formatCheckDigitValue(value, 1) };
+    case "digito2":
+      return { value: formatCheckDigitValue(value, 2) };
     default:
-      throw new ExpressionError(`Função lógica desconhecida: $.${node.name}().`);
+      throw new ExpressionError(`Função desconhecida: $.${node.name}().`);
   }
 }
 
@@ -627,6 +645,12 @@ function toMathNumber(value) {
     return numberValue.value;
   }
 
+  const cleanedNumber = parseFormattedNumber(value);
+
+  if (cleanedNumber.ok) {
+    return cleanedNumber.value;
+  }
+
   return Number.NaN;
 }
 
@@ -695,6 +719,76 @@ function parseSmartNumber(value) {
   return Number.isFinite(number)
     ? { ok: true, raw, value: number }
     : { ok: false, raw, value: undefined };
+}
+
+function parseFormattedNumber(value) {
+  if (typeof value === "number") {
+    return parseSmartNumber(value);
+  }
+
+  let raw = String(value ?? "")
+    .trim()
+    .replace(/[^\d.,+-]/gu, "");
+
+  if (!raw || !/\d/u.test(raw)) {
+    return { ok: false, raw, value: undefined };
+  }
+
+  const sign = raw.startsWith("-") ? "-" : "";
+  raw = raw.replace(/^[+-]/u, "");
+
+  const parsed = parseSmartNumber(`${sign}${raw}`);
+  return parsed.ok ? parsed : { ok: false, raw, value: undefined };
+}
+
+function formatCurrencyValue(value) {
+  const number = toMathNumber(value);
+  return Number.isFinite(number)
+    ? number.toLocaleString("pt-BR", {
+        currency: "BRL",
+        maximumFractionDigits: 2,
+        minimumFractionDigits: 2,
+        style: "currency",
+      })
+    : "";
+}
+
+function formatIntegerValue(value) {
+  const number = Math.trunc(toMathNumber(value));
+  return Number.isFinite(number)
+    ? number.toLocaleString("pt-BR", {
+        maximumFractionDigits: 0,
+        minimumFractionDigits: 0,
+      })
+    : "";
+}
+
+function formatDecimalValue(value) {
+  const number = toMathNumber(value);
+  return Number.isFinite(number)
+    ? number.toLocaleString("pt-BR", {
+        maximumFractionDigits: 2,
+        minimumFractionDigits: 2,
+      })
+    : "";
+}
+
+function formatCheckDigitValue(value, digits) {
+  const cleaned = String(value ?? "").replace(/\D/gu, "");
+
+  if (cleaned.length <= digits) {
+    return cleaned;
+  }
+
+  const body = cleaned.slice(0, -digits).replace(/^0+(?=\d)/u, "");
+  const checkDigits = cleaned.slice(-digits);
+  const grouped = groupThousands(body || "0");
+
+  return `${grouped}-${checkDigits}`;
+}
+
+function groupThousands(value) {
+  return String(value || "").replace(/\B(?=(\d{3})+(?!\d))/gu, ".");
 }
 
 function looksLikeFloatText(value) {
@@ -892,6 +986,7 @@ module.exports = {
   expressionLooksLikeFilter,
   isSimpleIdentifierExpression,
   parseBooleanValue,
+  parseFormattedNumber,
   parseExpression,
   parseSmartNumber,
   toBoolean,

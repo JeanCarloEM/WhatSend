@@ -42,10 +42,12 @@ const {
   processCampaign,
   resetSentLog,
   sendRenderedTemplate,
+  splitTemplateVariants,
   toBoolean,
   sanitizePhone,
   validateGuiPayload,
   validateRuntimeFiles,
+  resolveSessionByIdentifier,
 } = require("../main");
 
 const COMPLEX_CLIENTS_CSV = path.join(__dirname, "clientes-complexos.csv");
@@ -526,10 +528,59 @@ test("permite matemática em filtros e no template", () => {
   };
 
   assert.deepEqual(applyListFilter(clientes, filter), [clientes[0]]);
+  assert.equal(applyTemplate("Total: ${(valor+taxa)*2}", clientes[0]), "Total: 25");
+});
+
+test("formata resultados numéricos de template no padrão brasileiro", () => {
+  assert.equal(applyTemplate("Resultado: ${10 / 3}", {}), "Resultado: 3,33");
+  assert.equal(applyTemplate("Resultado: ${100 * 0.157}", {}), "Resultado: 15,70");
+  assert.equal(applyTemplate("Resultado: ${1234.567}", {}), "Resultado: 1234,57");
+  assert.equal(applyTemplate("Resultado: ${10 / 2}", {}), "Resultado: 5");
+});
+
+test("funções numéricas e bancárias formatam valores de forma determinística", () => {
+  const data = {
+    conta: "00123456",
+    quantidade: "1234567",
+    valor: "1.234,567",
+  };
+
+  assert.equal(applyTemplate("${$.round(10.5)}", data), "11");
+  assert.equal(applyTemplate("${$.ceil(10.1)}", data), "11");
+  assert.equal(applyTemplate("${$.floor(10.9)}", data), "10");
+  assert.equal(applyTemplate("${$.int(-10.9)}", data), "-10");
   assert.equal(
-    applyTemplate("Total: ${(valor+taxa)*2}", clientes[0]),
-    "Total: 25",
+    applyTemplate("${$.moeda(1000 * 1.15)}", data).replace(/\s/u, " "),
+    "R$ 1.150,00",
   );
+  assert.equal(applyTemplate("${$.decimal(${valor})}", data), "1.234,57");
+  assert.equal(applyTemplate("${$.numero(${quantidade})}", data), "1.234.567");
+  assert.equal(applyTemplate("${$.digito2(${conta})}", data), "1.234-56");
+});
+
+test("divide múltiplos modelos válidos por separador ^^^", () => {
+  const blockA = "A".repeat(96);
+  const blockB = "B".repeat(100);
+
+  assert.deepEqual(splitTemplateVariants(`${blockA}\n\n^^^\n\n${blockB}`), [
+    blockA,
+    blockB,
+  ]);
+  assert.deepEqual(splitTemplateVariants("curto\n^^^\noutro curto"), [
+    "curto\n^^^\noutro curto",
+  ]);
+});
+
+test("resolve sessão por nome ou últimos dígitos e rejeita ambiguidade", () => {
+  const sessions = [
+    { displayName: "Comercial (1234)", id: "comercial", name: "Comercial", phone: "551199991234" },
+    { displayName: "Financeiro (5678)", id: "financeiro", name: "Financeiro", phone: "551188885678" },
+    { displayName: "Suporte (1234)", id: "suporte", name: "Suporte", phone: "552197771234" },
+  ];
+
+  assert.equal(resolveSessionByIdentifier("financeiro", sessions).id, "financeiro");
+  assert.equal(resolveSessionByIdentifier("5678", sessions).id, "financeiro");
+  assert.throws(() => resolveSessionByIdentifier("1234", sessions), /Sessão ambígua/);
 });
 
 test("parser avalia filtros complexos contra fixture versionada", () => {

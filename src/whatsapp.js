@@ -4,12 +4,13 @@ const { Client, LocalAuth } = require("whatsapp-web.js");
 const { PATHS } = require("./config");
 const { buildPuppeteerConfig, getWhatsAppClientId } = require("./browser");
 const { processCampaign } = require("./campaign");
+const { updateSessionPhone } = require("./sessions");
 
 function createWhatsAppClient(paths = PATHS) {
   return new Client({
     authStrategy: new LocalAuth({
       dataPath: paths.auth,
-      clientId: getWhatsAppClientId(),
+      clientId: paths.sessionClientId || getWhatsAppClientId(),
     }),
 
     puppeteer: buildPuppeteerConfig(),
@@ -25,6 +26,7 @@ function registerClientHandlers(client, paths = PATHS, options = {}) {
 
   client.on("ready", async () => {
     console.log("WhatsApp conectado.");
+    updateSessionPhone(paths.activeSession, readClientPhone(client));
 
     try {
       await processCampaign(client, paths, options);
@@ -45,7 +47,18 @@ function registerClientHandlers(client, paths = PATHS, options = {}) {
   });
 }
 
+function readClientPhone(client) {
+  const wid =
+    client &&
+    client.info &&
+    client.info.wid &&
+    (client.info.wid.user || client.info.wid._serialized);
+
+  return String(wid || "").replace(/\D/g, "");
+}
+
 module.exports = {
   createWhatsAppClient,
+  readClientPhone,
   registerClientHandlers,
 };

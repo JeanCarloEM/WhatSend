@@ -5,11 +5,14 @@ const os = require("os");
 const path = require("path");
 
 const { PATHS, ROOT_DIR } = require("./config");
+const { AUTHOR, DISCLAIMER, LICENSE_LOCAL_PATH, LICENSE_NAME, LICENSE_URL } = require("./notice");
 const { loadCsv } = require("./data");
 const { initLogFiles, resetSentLog } = require("./logs");
 const { parseExpression } = require("./expression");
 const { processCampaign, validateRuntimeFiles } = require("./campaign");
 const { parseListFilter } = require("./data");
+const { listSessions, updateSessionPhone } = require("./sessions");
+const { readClientPhone } = require("./whatsapp");
 
 const GUI_HOST = "127.0.0.1";
 const GUI_PORT = Number.parseInt(process.env.GUI_PORT || "3137", 10);
@@ -18,7 +21,7 @@ const MAX_JSON_BODY_BYTES = 15 * 1024 * 1024;
 
 function registerGuiClientHandlers(client, basePaths = PATHS, baseOptions = {}) {
   const serverInfo = baseOptions.guiServerInfo;
-  const state = serverInfo ? serverInfo.state : createGuiState();
+  const state = serverInfo ? serverInfo.state : createGuiState(basePaths);
 
   client.on("qr", (qr) => {
     state.status = "autenticando";
@@ -53,6 +56,8 @@ function registerGuiClientHandlers(client, basePaths = PATHS, baseOptions = {}) 
   client.on("ready", () => {
     state.status = "conectado";
     state.whatsappReady = true;
+    updateSessionPhone(basePaths.activeSession, readClientPhone(client));
+    state.sessions = listSessions(basePaths);
     pushGuiLog(state, {
       message: "WhatsApp conectado. A execução já pode ser configurada.",
       type: "sent",
@@ -83,7 +88,7 @@ function registerGuiClientHandlers(client, basePaths = PATHS, baseOptions = {}) 
 }
 
 function startGuiServer(client, basePaths = PATHS, baseOptions = {}) {
-  const state = createGuiState();
+  const state = createGuiState(basePaths);
   const server = http.createServer((req, res) => {
     routeGuiRequest(req, res, {
       baseOptions,
@@ -111,14 +116,16 @@ function startGuiServer(client, basePaths = PATHS, baseOptions = {}) {
   });
 }
 
-function createGuiState() {
+function createGuiState(paths = PATHS) {
   return {
+    activeSession: paths.activeSession || null,
     busy: false,
     finishedAt: null,
     lastError: "",
     log: [],
     startedAt: null,
     status: "iniciando_whatsapp",
+    sessions: listSessions(paths),
     whatsappReady: false,
   };
 }
@@ -128,6 +135,11 @@ async function routeGuiRequest(req, res, context) {
 
   if (req.method === "GET" && url.pathname === "/") {
     sendHtml(res, renderGuiHtml());
+    return;
+  }
+
+  if (req.method === "GET" && url.pathname === "/license") {
+    sendText(res, readOptionalFile(path.join(ROOT_DIR, "LICENSE")) || "LICENSE não encontrada.");
     return;
   }
 
@@ -436,6 +448,14 @@ function sendHtml(res, html) {
   res.end(html);
 }
 
+function sendText(res, text) {
+  res.writeHead(200, {
+    "Cache-Control": "no-store",
+    "Content-Type": "text/plain; charset=utf-8",
+  });
+  res.end(text);
+}
+
 function sendJson(res, statusCode, payload) {
   res.writeHead(statusCode, {
     "Cache-Control": "no-store",
@@ -630,7 +650,8 @@ function renderGuiHtml() {
 
     textarea,
     input[type="text"],
-    input[type="file"] {
+    input[type="file"],
+    select {
       width: 100%;
       border: 1px solid var(--line);
       border-radius: 8px;
@@ -773,6 +794,20 @@ function renderGuiHtml() {
     <div class="layout">
       <form id="runForm">
         <section>
+          <h2>Sessão</h2>
+          <label for="sessionSelect">WhatsApp</label>
+          <select id="sessionSelect" disabled></select>
+          <div class="hint">A sessão é selecionada antes da abertura do WhatsApp. Para alternar, execute com --session ou crie uma nova sessão com --new-session.</div>
+        </section>
+
+        <section>
+          <h2>Licença</h2>
+          <p><strong>Autor:</strong> ${AUTHOR}</p>
+          <p><strong>Licença:</strong> <a href="/license" target="_blank" rel="noreferrer">${LICENSE_NAME}</a> <span class="hint">(${LICENSE_LOCAL_PATH}; <a href="${LICENSE_URL}" target="_blank" rel="noreferrer">${LICENSE_URL}</a>)</span></p>
+          <div class="hint">${DISCLAIMER}</div>
+        </section>
+
+        <section>
           <h2>Modelo de mensagem</h2>
           <label for="templateText">Texto do modelo</label>
           <textarea id="templateText" spellcheck="false" placeholder="$diatarde$, \${nome}.&#10;&#10;Seu valor atualizado é \${(valor+taxa)}."></textarea>
@@ -828,6 +863,7 @@ function renderGuiHtml() {
     const message = document.getElementById("message");
     const log = document.getElementById("log");
     const statusPill = document.getElementById("statusPill");
+    const sessionSelect = document.getElementById("sessionSelect");
     let pollTimer = null;
 
     function showMessage(text, type) {
@@ -900,6 +936,7 @@ function renderGuiHtml() {
       const ready = Boolean(state.whatsappReady);
       statusPill.textContent = state.busy ? "Executando" : statusLabel(state.status, ready);
       button.disabled = Boolean(state.busy) || !ready;
+      renderSessions(state);
 
       log.innerHTML = "";
       for (const item of state.log || []) {
@@ -915,6 +952,20 @@ function renderGuiHtml() {
         log.append(row);
       }
       log.scrollTop = log.scrollHeight;
+    }
+
+    function renderSessions(state) {
+      const sessions = state.sessions || [];
+      const active = state.activeSession && state.activeSession.id;
+      sessionSelect.innerHTML = "";
+      for (const session of sessions) {
+        const option = document.createElement("option");
+        option.value = session.id;
+        option.textContent = session.displayName;
+        option.selected = session.id === active;
+        sessionSelect.append(option);
+      }
+      sessionSelect.disabled = true;
     }
 
     function statusLabel(status, ready) {

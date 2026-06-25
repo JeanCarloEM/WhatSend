@@ -244,6 +244,34 @@ Os scripts devem detectar ambiente, verificar dependências, instalar apenas o q
 
 Quando Node.js estiver ausente, o script deve orientar ou tentar instalação automática por gerenciador de pacotes disponível na plataforma. Quando a instalação automática não for compatível com o ambiente, deve falhar com instrução clara.
 
+Os scripts devem verificar navegador compatível. Se Chrome, Edge ou Chromium não forem encontrados, devem tentar instalar automaticamente um Chrome compatível via instalador do Puppeteer.
+
+### RN024 - Sessões de WhatsApp
+
+O sistema deve suportar múltiplas sessões independentes de WhatsApp por `LocalAuth`, com nome amigável, persistência local e seleção por `--session`.
+
+Quando houver apenas uma sessão, ela deve ser selecionada automaticamente. Quando houver múltiplas sessões e nenhuma for informada na CLI, deve ser exibido menu obrigatório. Identificação por nome deve ser insensível a maiúsculas/minúsculas; identificação por telefone pode usar os últimos dígitos desde que o resultado seja único.
+
+Sessões nomeadas devem usar logs separados em `./logs/sessions/NOME_DA_SESSAO/`. A sessão padrão preserva os logs legados em `./logs/`.
+
+### RN025 - Múltiplos Modelos
+
+Um template pode conter múltiplos modelos separados por linha contendo ao menos três caracteres `^`, com espaços ou tabulações opcionais.
+
+O separador só é válido se existir texto antes e depois dele e se todos os blocos, após `trim()`, possuírem tamanho mínimo configurável por `TEMPLATE_VARIANT_MIN_LENGTH`, padrão `96`.
+
+Quando houver múltiplos modelos válidos, a distribuição deve ser circular entre destinatários. Quando houver apenas um modelo válido, o comportamento permanece igual ao fluxo anterior.
+
+### RN026 - Cálculos e Formatação
+
+Resultados numéricos em `${...}` devem usar padrão brasileiro: inteiros sem casas decimais; decimais arredondados para 2 casas e separador `,`.
+
+O mecanismo de expressões deve oferecer as funções `$.round()`, `$.ceil()`, `$.floor()`, `$.int()`, `$.moeda()`, `$.digito1()`, `$.digito2()`, `$.numero()` e `$.decimal()`, aceitando colunas, números formatados, expressões e funções aninhadas.
+
+### RN027 - Atualização
+
+Devem existir scripts de atualização no root para Windows e macOS/Linux, capazes de atualizar o repositório por `git pull --ff-only`, atualizar dependências npm para versões estáveis recentes e revalidar navegador compatível.
+
 ## Requisitos Não Funcionais
 
 ### RNF001 - Plataforma

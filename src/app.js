@@ -2,11 +2,17 @@ const path = require("path");
 
 const { PATHS, ROOT_DIR } = require("./config");
 const { parseExecutionOptions, printHelp } = require("./cli");
+const { printStartupNotice } = require("./notice");
 const { resolveExecutionPaths } = require("./data");
 const { resetSentLog } = require("./logs");
 const { formatBrowserStartupError } = require("./browser");
 const { validateRuntimeFiles } = require("./campaign");
 const { createWhatsAppClient, registerClientHandlers } = require("./whatsapp");
+const {
+  applySessionToPaths,
+  renameSession,
+  selectSessionForExecution,
+} = require("./sessions");
 const {
   openGuiWhenBrowserIsAvailable,
   registerGuiClientHandlers,
@@ -22,12 +28,27 @@ async function main() {
       return;
     }
 
+    printStartupNotice();
+
+    if (options.renameSession) {
+      const renamed = renameSession(
+        options.renameSession.from,
+        options.renameSession.to,
+      );
+      console.log(`Sessão renomeada: ${renamed.displayName}`);
+      return;
+    }
+
+    const selectedSession = await selectSessionForExecution(options, PATHS);
+    const sessionPaths = applySessionToPaths(PATHS, selectedSession);
+    console.log(`Sessão selecionada: ${selectedSession.displayName}`);
+
     if (options.gui) {
-      const client = createWhatsAppClient(PATHS);
-      const guiServerInfo = await startGuiServer(client, PATHS, options);
+      const client = createWhatsAppClient(sessionPaths);
+      const guiServerInfo = await startGuiServer(client, sessionPaths, options);
       console.log(`Interface local disponível em ${guiServerInfo.url}`);
       openGuiWhenBrowserIsAvailable(client, guiServerInfo.url, guiServerInfo.state);
-      registerGuiClientHandlers(client, PATHS, {
+      registerGuiClientHandlers(client, sessionPaths, {
         ...options,
         guiServerInfo,
       });
@@ -35,7 +56,7 @@ async function main() {
       return;
     }
 
-    const executionPaths = resolveExecutionPaths(PATHS, options);
+    const executionPaths = resolveExecutionPaths(sessionPaths, options);
     const validation = validateRuntimeFiles(executionPaths);
     console.log(
       `Pré-validação RCF concluída. Clientes: ${validation.clientesCount}.`,

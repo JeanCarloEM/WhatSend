@@ -53,6 +53,7 @@ const PATHS = Object.freeze({
 const MIN_DELAY_MS = readIntegerEnv("MIN_DELAY_MS", 8000);
 const MAX_DELAY_MS = readIntegerEnv("MAX_DELAY_MS", 20000);
 const MESSAGE_DIFF_THRESHOLD_PERCENT = readNumberEnv("MESSAGE_DIFF_THRESHOLD_PERCENT", 10);
+const TEMPLATE_VARIANT_MIN_LENGTH = readIntegerEnv("TEMPLATE_VARIANT_MIN_LENGTH", 96);
 const RESEND_AFTER_HOURS = readNumberEnv("RESEND_AFTER_HOURS", 48);
 
 const COLORS = Object.freeze({
@@ -76,6 +77,7 @@ module.exports = {
   REQUIRED_COLUMNS,
   RESEND_AFTER_HOURS,
   ROOT_DIR,
+  TEMPLATE_VARIANT_MIN_LENGTH,
   isTruthyEnv,
   readFirstEnv,
   readIntegerEnv,

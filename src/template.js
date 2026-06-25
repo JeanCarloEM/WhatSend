@@ -1,4 +1,7 @@
 const {
+  TEMPLATE_VARIANT_MIN_LENGTH,
+} = require("./config");
+const {
   evaluateExpression,
   isSimpleIdentifierExpression,
   parseExpression,
@@ -14,8 +17,8 @@ function applyTemplate(template, data, options = {}) {
   const dataMap = buildCaseInsensitiveDataMap(data);
 
   return replaceDayPeriodMarkers(
-    String(template || "").replace(/\$\{([^}]+)\}/g, (_, expression) => {
-      const key = String(expression).trim();
+    replaceTemplateExpressions(String(template || ""), (expression) => {
+      const key = normalizeNestedTemplateExpression(String(expression).trim());
       let ast;
 
       try {
@@ -55,6 +58,57 @@ function applyTemplate(template, data, options = {}) {
   );
 }
 
+function replaceTemplateExpressions(template, callback) {
+  let result = "";
+  let index = 0;
+
+  while (index < template.length) {
+    if (template[index] !== "$" || template[index + 1] !== "{") {
+      result += template[index];
+      index += 1;
+      continue;
+    }
+
+    const start = index;
+    index += 2;
+    let depth = 1;
+    let expression = "";
+
+    while (index < template.length) {
+      if (template[index] === "$" && template[index + 1] === "{") {
+        depth += 1;
+        expression += "${";
+        index += 2;
+        continue;
+      }
+
+      if (template[index] === "}") {
+        depth -= 1;
+
+        if (depth === 0) {
+          index += 1;
+          result += callback(expression);
+          break;
+        }
+      }
+
+      expression += template[index];
+      index += 1;
+    }
+
+    if (depth !== 0) {
+      result += template.slice(start);
+      break;
+    }
+  }
+
+  return result;
+}
+
+function normalizeNestedTemplateExpression(expression) {
+  return String(expression || "").replace(/\$\{([^{}]+)\}/g, "($1)");
+}
+
 function expressionResultToString(value) {
   if (value === null || value === undefined) {
     return "";
@@ -65,7 +119,15 @@ function expressionResultToString(value) {
       return "";
     }
 
-    return Number.isInteger(value) ? String(value) : String(Number(value.toFixed(10)));
+    if (Number.isInteger(value)) {
+      return String(value);
+    }
+
+    return value.toLocaleString("pt-BR", {
+      maximumFractionDigits: 2,
+      minimumFractionDigits: 2,
+      useGrouping: false,
+    });
   }
 
   return String(value);
@@ -137,8 +199,24 @@ function normalizeMediaSource(source) {
     .trim();
 }
 
+function splitTemplateVariants(template, minLength = TEMPLATE_VARIANT_MIN_LENGTH) {
+  const source = String(template || "");
+  const parts = source.split(/^[ \t]*\^{3,}[ \t]*$/gmu);
+
+  if (parts.length <= 1) {
+    return [source];
+  }
+
+  const trimmed = parts.map((part) => part.trim());
+  const valid = trimmed.every((part) => part.length >= minLength);
+
+  return valid ? trimmed : [source];
+}
+
 module.exports = {
   applyTemplate,
+  replaceTemplateExpressions,
   normalizeMediaSource,
   parseTemplateParts,
+  splitTemplateVariants,
 };

@@ -2,7 +2,7 @@ const fs = require("fs");
 
 const { PATHS } = require("./config");
 const { loadClientes, loadTemplate } = require("./data");
-const { applyTemplate } = require("./template");
+const { applyTemplate, splitTemplateVariants } = require("./template");
 const { validateTemplateMediaReferences, sendRenderedTemplate } = require("./media");
 const { initLogFiles, appendLog, loadSentRecords } = require("./logs");
 const { registerTemplateInCache, getSendDecision } = require("./tracking");
@@ -77,7 +77,10 @@ async function processCampaign(client, paths = PATHS, options = {}) {
   const forceResend = Boolean(options.forceResend);
   const sentRecords = loadSentRecords(paths.sent);
   const template = loadTemplate(paths.template);
-  const messageContext = registerTemplateInCache(template, paths);
+  const templateVariants = splitTemplateVariants(template);
+  const messageContexts = templateVariants.map((variant) =>
+    registerTemplateInCache(variant, paths),
+  );
   const clientes = loadClientes(paths);
   const status = createStatusReporter(clientes.length);
 
@@ -102,6 +105,10 @@ async function processCampaign(client, paths = PATHS, options = {}) {
     });
 
     try {
+      const templateIndex = index % templateVariants.length;
+      const selectedTemplate = templateVariants[templateIndex];
+      const messageContext = messageContexts[templateIndex];
+
       if (!telefone) {
         const reason = "Telefone vazio ou sem dígitos.";
 
@@ -187,7 +194,7 @@ async function processCampaign(client, paths = PATHS, options = {}) {
       }
 
       const missingVariables = new Set();
-      const mensagem = applyTemplate(template, cliente, {
+      const mensagem = applyTemplate(selectedTemplate, cliente, {
         onMissingVariable: (field) => missingVariables.add(field),
       });
 

@@ -65,6 +65,8 @@ sh ./start.sh
 
 Esses scripts verificam Node.js e npm, tentam instalar Node.js LTS quando ele estiver ausente, instalam dependências do projeto apenas quando necessário e iniciam a interface gráfica.
 
+Eles também verificam Chrome, Chromium ou Edge. Se nenhum navegador compatível for encontrado, tentam instalar automaticamente um Chrome compatível via Puppeteer.
+
 ### Instalação manual
 
 Na pasta do projeto:
@@ -134,6 +136,19 @@ Saldo estimado: ${(credito-debito)/parcelas}
 ```
 
 As operações aceitas são `+`, `-`, `*`, `/` e parênteses. Números podem usar `.` ou `,` como separador decimal.
+
+Resultados decimais calculados são formatados no padrão brasileiro, com arredondamento para 2 casas:
+
+```markdown
+${10 / 3}
+${100 * 0.157}
+${$.moeda(1000 * 1.15)}
+${$.decimal(valor)}
+${$.numero(quantidade)}
+${$.digito2(conta)}
+```
+
+Funções disponíveis: `$.round()`, `$.ceil()`, `$.floor()`, `$.int()`, `$.moeda()`, `$.digito1()`, `$.digito2()`, `$.numero()` e `$.decimal()`.
 
 O marcador `$diatarde$` é substituído no momento do envio:
 
@@ -236,6 +251,18 @@ modelos/faturamento.md
 ```
 
 As mesmas regras de `texto.md` se aplicam ao modelo selecionado: variáveis, `$diatarde$`, anexos, URLs, logs e controle inteligente de reenvio. Quando o modelo usar `./` ou `.\` em anexos, o caminho é resolvido a partir da pasta onde o próprio modelo está.
+
+Um mesmo arquivo também pode conter múltiplos modelos separados por uma linha com `^^^`. Quando todos os blocos tiverem tamanho mínimo válido, o envio usa distribuição circular entre os destinatários.
+
+```markdown
+Texto modelo A com pelo menos o tamanho mínimo configurado.
+
+^^^
+
+Texto modelo B com pelo menos o tamanho mínimo configurado.
+```
+
+O tamanho mínimo padrão de cada bloco é `96` caracteres e pode ser alterado por `TEMPLATE_VARIANT_MIN_LENGTH`.
 
 ### Listas em `listas/`
 
@@ -394,6 +421,29 @@ CONNECT_EXISTING_BROWSER=true
 
 Uma janela comum do Chrome, Chromium ou Edge aberta sem depuração remota não pode ser controlada pelo Puppeteer.
 
+## Sessões
+
+A sessão padrão continua funcionando sem configuração. Para criar uma sessão nova:
+
+```powershell
+node main.js --new-session Comercial --gui
+```
+
+Para escolher uma sessão:
+
+```powershell
+node main.js --session Comercial --gui
+node main.js --session 1234 --gui
+```
+
+Se houver múltiplas sessões e nenhuma for informada, a CLI mostra um menu obrigatório. Sessões nomeadas usam logs em `logs/sessions/NOME/`; a sessão padrão mantém `logs/`.
+
+Para renomear:
+
+```powershell
+node main.js --rename-session Comercial Financeiro
+```
+
 ## Execução
 
 Faça uma validação antes de enviar:
@@ -458,6 +508,7 @@ Quando um registro é pulado, o console mostra o motivo. O caso mais comum é o 
 | `.\start.cmd` | Prepara dependências e inicia a GUI no Windows. |
 | `sh ./start.sh` | Prepara dependências e inicia a GUI no macOS/Linux. |
 | `npm run start:gui` | Autentica e abre a interface gráfica local. |
+| `npm run browser:ensure` | Verifica navegador compatível e instala Chrome via Puppeteer se necessário. |
 | `npm start` | Valida e inicia o envio via CLI. |
 | `npm start -- faturamento` | Usa `modelos/faturamento.md` no lugar de `texto.md`. |
 | `node main.js --lista base_exemplo` | Usa `listas/base_exemplo.csv` no lugar de `clientes.csv`. |
@@ -471,6 +522,8 @@ Quando um registro é pulado, o console mostra o motivo. O caso mais comum é o 
 | `npm run start:clear` | Limpa `logs/enviados.csv` antes de iniciar. |
 | `npm run sent:clear` | Alias para limpar enviados. |
 | `npm run start:reset` | Alias legado para limpar enviados. |
+| `.\atualizar.cmd` | Atualiza repositório, dependências e navegador no Windows. |
+| `sh ./atualizar.sh` | Atualiza repositório, dependências e navegador no macOS/Linux. |
 
 Para reenviar mesmo quando o telefone consta como enviado:
 

@@ -97,13 +97,13 @@
       "name": "math expression in template",
       "rowName": "Ana Alpha",
       "template": "Olá ${nome}. Total: ${(valor+bonus)/parcelas}.",
-      "expectedText": "Olá Ana Alpha. Total: 444.8333333333."
+      "expectedText": "Olá Ana Alpha. Total: 444,83."
     },
     {
       "name": "case insensitive columns and arithmetic",
       "rowName": "Eva Epsilon",
       "template": "Saldo ${NOME}: ${(VALOR+BONUS)-SALDO}.",
-      "expectedText": "Saldo Eva Epsilon: 949.99."
+      "expectedText": "Saldo Eva Epsilon: 949,99."
     }
   ],
   "invalidFilterCases": [
@@ -120,7 +120,7 @@
     {
       "name": "unknown function",
       "expression": "$.desconhecida(valor)",
-      "expectedErrorPattern": "Função lógica desconhecida"
+      "expectedErrorPattern": "Função desconhecida"
     }
   ]
 }

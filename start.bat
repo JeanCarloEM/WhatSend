@@ -52,4 +52,11 @@ if errorlevel 1 (
   exit /b 1
 )
 
+echo Verificando navegador compativel...
+call node scripts\ensure-browser.js
+if errorlevel 1 (
+  echo Falha ao preparar navegador compativel.
+  exit /b 1
+)
+
 call npm run start:gui -- %*

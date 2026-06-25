@@ -9,6 +9,8 @@ module.exports = {
   ...require("./gui"),
   ...require("./logs"),
   ...require("./media"),
+  ...require("./notice"),
+  ...require("./sessions"),
   ...require("./status"),
   ...require("./template"),
   ...require("./tracking"),

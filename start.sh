@@ -59,4 +59,7 @@ else
   fi
 fi
 
+echo "Verificando navegador compativel..."
+node scripts/ensure-browser.js
+
 npm run start:gui -- "$@"

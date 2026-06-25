@@ -1,6 +1,7 @@
 node_modules
 logs
 .wwebjs*
+.wwebjs_sessions.json
 .runtime/
 clientes.csv
 texto.md
