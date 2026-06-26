@@ -9,6 +9,7 @@ const path = require("node:path");
 const test = require("node:test");
 
 const {
+  analyzeGuiTemplateMedia,
   applyListFilter,
   applyTemplate,
   buildSendPlan,
@@ -41,6 +42,7 @@ const {
   parseExecutionOptions,
   parseExpression,
   parseTemplateParts,
+  resolveLocalMediaPath,
   resolveExecutionPaths,
   resolveCheckInputPath,
   resolveListCsvPath,
@@ -53,6 +55,7 @@ const {
   toBoolean,
   sanitizePhone,
   validateGuiPayload,
+  validateGuiTemplateBaseDir,
   validateRuntimeFiles,
   resolveSessionByIdentifier,
   removeSession,
@@ -70,6 +73,7 @@ const COMPLEX_EXPECTED_JSON = path.join(__dirname, "expressions-complexas.expect
 function createFixture(files = {}) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "whatsapp-rcf-"));
   const paths = {
+    root,
     csv: path.join(root, "clientes.csv"),
     template: path.join(root, "texto.md"),
     listsDir: path.join(root, "listas"),
@@ -543,6 +547,87 @@ test("GUI materializa entradas temporárias sem alterar arquivos padrão", () =>
   assert.equal(applyTemplate(fs.readFileSync(guiPaths.template, "utf8"), { nome: "tela exemplo" }), "Mensagem da tela Tela Exemplo");
 });
 
+test("GUI usa diretório do arquivo de modelo informado como base dos anexos", () => {
+  const { root, paths } = createFixture();
+  const sourceDir = path.join(root, "campanhas", "junho");
+  const sourceTemplatePath = path.join(sourceDir, "modelo.md");
+  const mediaPath = path.join(sourceDir, "rendefacil-lilhian.ogg");
+
+  fs.mkdirSync(sourceDir, { recursive: true });
+  fs.writeFileSync(sourceTemplatePath, "Olá\n![](rendefacil-lilhian.ogg)", "utf8");
+  fs.writeFileSync(mediaPath, createFakeOggAudio());
+
+  const guiPaths = materializeGuiExecutionPaths(
+    {
+      templateFile: {
+        content: "Olá\n![](rendefacil-lilhian.ogg)",
+        name: sourceTemplatePath,
+        path: sourceTemplatePath,
+      },
+    },
+    paths,
+  );
+
+  assert.equal(guiPaths.templateBaseDir, sourceDir);
+  assert.doesNotThrow(() => validateRuntimeFiles(guiPaths, { checkBrowser: false }));
+});
+
+test("GUI pré-analisa anexos do modelo e aceita pasta de referência", () => {
+  const { root, paths } = createFixture();
+  const referenceDir = path.join(root, "referencias");
+  const mediaPath = path.join(referenceDir, "rendefacil-lilhian.ogg");
+  const templateFile = {
+    content: "Olá\n![](./rendefacil-lilhian.ogg)",
+    name: "modelo.md",
+    path: "modelo.md",
+  };
+
+  fs.mkdirSync(referenceDir, { recursive: true });
+
+  const missing = analyzeGuiTemplateMedia({ templateFile }, paths);
+  assert.equal(missing.ok, true);
+  assert.equal(missing.localMediaCount, 1);
+  assert.equal(missing.needsTemplateBaseDir, true);
+  assert.match(missing.mediaIssues.join("\n"), /Anexo não encontrado/);
+
+  fs.writeFileSync(mediaPath, createFakeOggAudio());
+
+  const resolved = analyzeGuiTemplateMedia(
+    {
+      templateBaseDir: referenceDir,
+      templateFile,
+    },
+    paths,
+  );
+
+  assert.equal(resolved.ok, true);
+  assert.equal(resolved.localMediaCount, 1);
+  assert.deepEqual(resolved.mediaIssues, []);
+  assert.equal(resolved.needsTemplateBaseDir, false);
+});
+
+test("GUI valida pasta de referência dos anexos como diretório local existente", () => {
+  const { root } = createFixture();
+  const errors = [];
+  const filePath = path.join(root, "arquivo.txt");
+  fs.writeFileSync(filePath, "x", "utf8");
+
+  assert.equal(validateGuiTemplateBaseDir(root, errors), root);
+  assert.deepEqual(errors, []);
+
+  const missingErrors = [];
+  assert.equal(validateGuiTemplateBaseDir(path.join(root, "nao-existe"), missingErrors), "");
+  assert.match(missingErrors.join("\n"), /não encontrada/);
+
+  const fileErrors = [];
+  assert.equal(validateGuiTemplateBaseDir(filePath, fileErrors), "");
+  assert.match(fileErrors.join("\n"), /não é um diretório/);
+
+  const urlErrors = [];
+  assert.equal(validateGuiTemplateBaseDir("https://exemplo.test/anexos", urlErrors), "");
+  assert.match(urlErrors.join("\n"), /não URL/);
+});
+
 test("resolve modelo opcional dentro de ./modelos", () => {
   const { paths } = createFixture();
 
@@ -556,6 +641,62 @@ test("resolve modelo opcional dentro de ./modelos", () => {
     path.join(paths.modelsDir, "faturamento.md"),
   );
   assert.throws(() => resolveModelTemplatePath("../segredo", paths), /Modelo inválido/);
+});
+
+test("anexos relativos usam a pasta do modelo como referência primária", () => {
+  const { root, paths } = createFixture();
+  const modelDir = path.join(root, "modelos", "campanha");
+  const templatePath = path.join(modelDir, "mensagem.md");
+  const mediaPath = path.join(modelDir, "rendefacil-lilhian.ogg");
+
+  fs.mkdirSync(modelDir, { recursive: true });
+  fs.writeFileSync(templatePath, "Olá\n![](rendefacil-lilhian.ogg)", "utf8");
+  fs.writeFileSync(mediaPath, createFakeOggAudio());
+
+  const executionPaths = {
+    ...paths,
+    template: templatePath,
+    templateBaseDir: modelDir,
+  };
+
+  assert.equal(
+    resolveLocalMediaPath(
+      "rendefacil-lilhian.ogg",
+      executionPaths.template,
+      executionPaths.templateBaseDir,
+      [executionPaths.root],
+    ),
+    mediaPath,
+  );
+  assert.doesNotThrow(() => validateRuntimeFiles(executionPaths, { checkBrowser: false }));
+});
+
+test("anexos relativos com ./ podem cair para a raiz quando não estão ao lado do modelo", () => {
+  const { root, paths } = createFixture();
+  const modelDir = path.join(root, "modelos", "campanha");
+  const templatePath = path.join(modelDir, "mensagem.md");
+  const mediaPath = path.join(root, "rendefacil-lilhian.ogg");
+
+  fs.mkdirSync(modelDir, { recursive: true });
+  fs.writeFileSync(templatePath, "Olá\n![](./rendefacil-lilhian.ogg)", "utf8");
+  fs.writeFileSync(mediaPath, createFakeOggAudio());
+
+  const executionPaths = {
+    ...paths,
+    template: templatePath,
+    templateBaseDir: modelDir,
+  };
+
+  assert.equal(
+    resolveLocalMediaPath(
+      "./rendefacil-lilhian.ogg",
+      executionPaths.template,
+      executionPaths.templateBaseDir,
+      [executionPaths.root],
+    ),
+    mediaPath,
+  );
+  assert.doesNotThrow(() => validateRuntimeFiles(executionPaths, { checkBrowser: false }));
 });
 
 test("permite CSV e template por path somente para npm run check", () => {

@@ -95,6 +95,8 @@ A notação `![](CAMINHO_OU_URL)` deve ser interpretada como anexo.
 
 O caminho pode ser relativo ao diretório do template em uso, absoluto ou URL `http/https`.
 
+Para caminhos relativos, com ou sem `./` ou `.\`, o diretório do template em uso deve ser a referência primária. Se o arquivo não existir nessa referência, o sistema deve tentar a raiz do projeto antes de falhar. Caminhos absolutos devem ser preservados como referência direta.
+
 Arquivos locais inexistentes devem falhar na pré-validação. URLs devem ser baixadas para uma pasta temporária e reutilizadas quando a mesma URL aparecer novamente.
 
 ### RN007 - Ordem e Legenda de Anexos
@@ -245,6 +247,8 @@ A GUI deve ser servida por servidor HTTP leve local, sem transmitir dados para s
 A interface local deve ser iniciada no começo do fluxo para exibir status de autenticação e carregamento do WhatsApp. O envio só pode ser liberado após o WhatsApp ficar pronto.
 
 Quando possível, a GUI deve ser aberta como aba no mesmo navegador controlado pelo WhatsApp Web. Se o navegador controlado ainda não estiver disponível ou não permitir nova aba, a GUI pode ser aberta no navegador padrão, registrando esse fallback de forma clara.
+
+Ao selecionar um arquivo `.md`, a GUI deve executar pré-análise assíncrona dos anexos locais referenciados no modelo, sem iniciar envio e sem bloquear a interface. Se algum anexo não for localizado, a tela deve exibir aviso curto em vermelho próximo ao seletor do arquivo e disponibilizar campo para informar a pasta local de referência dos anexos. Essa pasta deve ser validada como diretório local existente antes da execução.
 
 Se a porta local configurada para a GUI estiver ocupada, o servidor deve tentar automaticamente portas próximas antes de falhar, registrando a porta efetivamente usada.
 

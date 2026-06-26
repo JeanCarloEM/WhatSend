@@ -4,7 +4,7 @@ const https = require("https");
 const path = require("path");
 const { MessageMedia } = require("whatsapp-web.js");
 
-const { PATHS } = require("./config");
+const { PATHS, ROOT_DIR } = require("./config");
 const { hashValue } = require("./utils");
 const { parseTemplateParts } = require("./template");
 
@@ -65,20 +65,65 @@ function findCachedDownload(cacheDir, url) {
   return entry ? path.join(cacheDir, entry.name) : undefined;
 }
 
-function resolveLocalMediaPath(source, templatePath, baseDir) {
-  const filePath = path.isAbsolute(source)
-    ? source
-    : path.resolve(baseDir || path.dirname(templatePath), source);
+function resolveLocalMediaPath(source, templatePath, baseDir, fallbackDirs = [ROOT_DIR]) {
+  const candidates = buildLocalMediaCandidates(source, templatePath, baseDir, fallbackDirs);
 
-  if (!fs.existsSync(filePath)) {
-    throw new Error(`Anexo não encontrado: ${source}`);
+  for (const filePath of candidates) {
+    if (!fs.existsSync(filePath)) {
+      continue;
+    }
+
+    if (!fs.statSync(filePath).isFile()) {
+      throw new Error(`Anexo não é um arquivo: ${source}`);
+    }
+
+    return filePath;
   }
 
-  if (!fs.statSync(filePath).isFile()) {
-    throw new Error(`Anexo não é um arquivo: ${source}`);
+  throw new Error(
+    `Anexo não encontrado: ${source}. Locais verificados: ${candidates.join("; ")}`,
+  );
+}
+
+function buildLocalMediaCandidates(source, templatePath, baseDir, fallbackDirs = [ROOT_DIR]) {
+  const rawSource = String(source || "").trim();
+
+  if (path.isAbsolute(rawSource)) {
+    return [path.normalize(rawSource)];
   }
 
-  return filePath;
+  const dirs = [
+    baseDir,
+    templatePath ? path.dirname(templatePath) : "",
+    ...fallbackDirs,
+  ];
+  const uniqueDirs = [];
+  const seen = new Set();
+
+  for (const dir of dirs) {
+    if (!dir) {
+      continue;
+    }
+
+    const normalized = path.resolve(dir);
+    const key = process.platform === "win32"
+      ? normalized.toLocaleLowerCase("pt-BR")
+      : normalized;
+
+    if (!seen.has(key)) {
+      seen.add(key);
+      uniqueDirs.push(normalized);
+    }
+  }
+
+  return uniqueDirs.map((dir) => path.resolve(dir, rawSource));
+}
+
+function getMediaFallbackDirs(paths = PATHS) {
+  return [
+    paths.root,
+    ROOT_DIR,
+  ].filter(Boolean);
 }
 
 async function resolveMediaPath(source, paths = PATHS, downloadCache = new Map()) {
@@ -87,7 +132,12 @@ async function resolveMediaPath(source, paths = PATHS, downloadCache = new Map()
   }
 
   if (!isUrl(source)) {
-    return resolveLocalMediaPath(source, paths.template, paths.templateBaseDir);
+    return resolveLocalMediaPath(
+      source,
+      paths.template,
+      paths.templateBaseDir,
+      getMediaFallbackDirs(paths),
+    );
   }
 
   if (downloadCache.has(source)) {
@@ -300,7 +350,12 @@ function validateTemplateMediaReferences(template, paths = PATHS) {
     }
 
     try {
-      resolveLocalMediaPath(part.source, paths.template, paths.templateBaseDir);
+      resolveLocalMediaPath(
+        part.source,
+        paths.template,
+        paths.templateBaseDir,
+        getMediaFallbackDirs(paths),
+      );
     } catch (err) {
       issues.push(err.message);
     }
@@ -358,11 +413,14 @@ async function sendOggVoiceMessage(client, chatId, media, part) {
 }
 
 module.exports = {
+  buildLocalMediaCandidates,
   buildSendPlan,
   downloadMediaUrl,
+  getMediaFallbackDirs,
   isOggAudioOnly,
   isOggSource,
   isUrl,
+  resolveLocalMediaPath,
   resolveMediaPath,
   sendRenderedTemplate,
   validateTemplateMediaReferences,

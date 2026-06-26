@@ -121,6 +121,8 @@ Seu valor atualizado e ${$.moeda(valor)}.
 ![](anexos/exemplo.pdf)
 ```
 
+Anexos em `![](arquivo.pdf)` ou `![](./arquivo.pdf)` são buscados primeiro a partir da pasta do modelo `.md` em uso; se não forem encontrados ali, o sistema tenta a raiz do projeto. Caminhos absolutos e URLs `http/https` também são aceitos.
+
 Demonstracao de sintaxe textual:
 
 | Marcacao crua | Resultado visual esperado no WhatsApp |
@@ -152,6 +154,8 @@ A interface local abre no inicio do fluxo, mostra autenticacao/carregamento do W
 - anexar CSV opcional;
 - forcar reenvio ou limpar historico de enviados;
 - acompanhar andamento sem inundar a tela.
+
+Ao selecionar um `.md`, a GUI analisa anexos locais em segundo plano. Se algum não for localizado, aparece um aviso ao lado do seletor e um campo para informar a pasta de referência dos anexos.
 
 ## CLI
 

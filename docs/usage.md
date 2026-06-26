@@ -106,6 +106,10 @@ O caminho pode ser:
 - absoluto;
 - URL `http` ou `https`.
 
+Quando o caminho for relativo, com ou sem `./` ou `.\`, a busca usa primeiro a pasta do `.md` selecionado. Se o arquivo não existir ali, o sistema faz uma segunda tentativa na raiz do projeto. Na GUI, isso funciona com o diretório real do `.md` quando ele estiver disponível; uploads feitos pelo navegador podem ocultar esse caminho por segurança, então o fallback para a raiz do projeto continua disponível.
+
+Na GUI, ao escolher um arquivo `.md`, os anexos locais são analisados em segundo plano. Se algum não for localizado, a própria seção do arquivo exibe um alerta e abre um campo para informar a pasta local de referência dos anexos. O campo aceita apenas diretório local existente; URLs ou caminhos inexistentes são rejeitados antes do envio.
+
 URLs sao baixadas uma vez para cache temporario e reutilizadas quando a mesma URL aparece novamente. Arquivos locais inexistentes falham na pre-validacao.
 
 Quando o anexo aparece no inicio ou fim do modelo, o texto adjacente pode ser enviado como legenda do proprio anexo quando o WhatsApp Web permitir. Quando aparece no meio, a ordem do modelo e preservada com partes separadas.

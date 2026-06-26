@@ -16,8 +16,9 @@ const {
 const { loadCsv, normalizeTextContent } = require("./data");
 const { initLogFiles, resetSentLog } = require("./logs");
 const { processCampaign, validateRuntimeFiles } = require("./campaign");
+const { isUrl, validateTemplateMediaReferences } = require("./media");
 const { parseListFilter } = require("./data");
-const { inspectTemplateSyntax } = require("./template");
+const { inspectTemplateSyntax, parseTemplateParts } = require("./template");
 const {
   createSession,
   listSessions,
@@ -350,6 +351,13 @@ async function routeGuiRequest(req, res, context) {
     return;
   }
 
+  if (req.method === "POST" && url.pathname === "/api/template/analyze") {
+    const payload = await readJsonBody(req);
+    const result = analyzeGuiTemplateMedia(payload, context.basePaths);
+    sendJson(res, result.ok ? 200 : 400, result);
+    return;
+  }
+
   if (req.method === "POST" && url.pathname === "/api/run") {
     const payload = await readJsonBody(req);
     const validation = validateGuiPayload(payload, context.basePaths);
@@ -480,6 +488,7 @@ function materializeGuiExecutionPaths(payload, basePaths = PATHS) {
     : "";
 
   if (templateText.trim() || templateFileContent.trim()) {
+    const explicitTemplateBaseDir = resolveGuiTemplateBaseDir(payload.templateBaseDir);
     const templatePath = path.join(GUI_RUNTIME_DIR, "template.md");
     fs.writeFileSync(
       templatePath,
@@ -487,7 +496,19 @@ function materializeGuiExecutionPaths(payload, basePaths = PATHS) {
       "utf8",
     );
     paths.template = templatePath;
-    paths.templateBaseDir = ROOT_DIR;
+
+    if (explicitTemplateBaseDir) {
+      paths.templateBaseDir = explicitTemplateBaseDir;
+    } else if (templateText.trim()) {
+      paths.templateBaseDir = ROOT_DIR;
+    } else {
+      const providedTemplatePath = resolveGuiProvidedFilePath(payload.templateFile);
+      if (providedTemplatePath) {
+        paths.templateBaseDir = path.dirname(providedTemplatePath);
+      } else {
+        delete paths.templateBaseDir;
+      }
+    }
   }
 
   if (payload.csvFile && String(payload.csvFile.content || "").trim()) {
@@ -511,6 +532,7 @@ function validateGuiPayload(payload = {}, basePaths = PATHS) {
   const templateFile = payload.templateFile || null;
   const csvFile = payload.csvFile || null;
   const filter = String(payload.filter || "").trim();
+  validateGuiTemplateBaseDir(payload.templateBaseDir, errors);
 
   if (templateText.trim() && templateFile && String(templateFile.content || "").trim()) {
     errors.push("Use apenas uma fonte de modelo: textarea ou arquivo .md.");
@@ -565,6 +587,59 @@ function validateGuiPayload(payload = {}, basePaths = PATHS) {
       };
 }
 
+function analyzeGuiTemplateMedia(payload = {}, basePaths = PATHS) {
+  const errors = [];
+  const templateText = String(payload.templateText || "");
+  const templateFile = payload.templateFile || null;
+  const templateFileContent = templateFile ? String(templateFile.content || "") : "";
+  const templateCandidate =
+    templateText.trim() ||
+    templateFileContent.trim() ||
+    "";
+  const explicitTemplateBaseDir = validateGuiTemplateBaseDir(
+    payload.templateBaseDir,
+    errors,
+  );
+
+  if (!templateCandidate.trim()) {
+    return {
+      errors,
+      mediaIssues: [],
+      ok: errors.length === 0,
+    };
+  }
+
+  const providedTemplatePath = resolveGuiProvidedFilePath(templateFile);
+  const templatePath = providedTemplatePath || path.join(GUI_RUNTIME_DIR, "template.md");
+  const templateBaseDir =
+    explicitTemplateBaseDir ||
+    (templateText.trim()
+      ? ROOT_DIR
+      : providedTemplatePath
+        ? path.dirname(providedTemplatePath)
+        : undefined);
+  const mediaIssues = validateTemplateMediaReferences(
+    normalizeTextContent(templateCandidate),
+    {
+      ...basePaths,
+      root: basePaths.root || ROOT_DIR,
+      template: templatePath,
+      ...(templateBaseDir ? { templateBaseDir } : {}),
+    },
+  );
+  const localMediaCount = parseTemplateParts(templateCandidate)
+    .filter((part) => part.type === "media" && !isUrl(part.source))
+    .length;
+
+  return {
+    errors,
+    localMediaCount,
+    mediaIssues,
+    ok: errors.length === 0,
+    needsTemplateBaseDir: mediaIssues.length > 0 && !explicitTemplateBaseDir,
+  };
+}
+
 function validateNamedTextFile(file, extension, label, errors) {
   const name = String(file.name || "").trim();
   const content = String(file.content || "");
@@ -581,6 +656,77 @@ function validateNamedTextFile(file, extension, label, errors) {
   if (!content.trim()) {
     errors.push(`${label}: arquivo vazio.`);
   }
+}
+
+function resolveGuiProvidedFilePath(file) {
+  if (!file) {
+    return "";
+  }
+
+  for (const key of ["path", "fullPath", "name"]) {
+    const rawPath = String(file[key] || "").trim();
+
+    if (!rawPath || /^([a-z]:)?[\\/]+fakepath[\\/]/iu.test(rawPath)) {
+      continue;
+    }
+
+    if (path.isAbsolute(rawPath)) {
+      return path.normalize(rawPath);
+    }
+
+    if (rawPath.includes("/") || rawPath.includes("\\")) {
+      return path.resolve(ROOT_DIR, rawPath);
+    }
+  }
+
+  return "";
+}
+
+function resolveGuiTemplateBaseDir(value) {
+  const rawValue = String(value || "")
+    .trim()
+    .replace(/^["'](.+)["']$/, "$1")
+    .trim();
+
+  if (!rawValue) {
+    return "";
+  }
+
+  return path.isAbsolute(rawValue)
+    ? path.normalize(rawValue)
+    : path.resolve(ROOT_DIR, rawValue);
+}
+
+function validateGuiTemplateBaseDir(value, errors = []) {
+  const rawValue = String(value || "").trim();
+
+  if (!rawValue) {
+    return "";
+  }
+
+  if (rawValue.includes("\0")) {
+    errors.push("Pasta de referência dos anexos inválida.");
+    return "";
+  }
+
+  if (/^[a-z][a-z0-9+.-]*:\/\//iu.test(rawValue)) {
+    errors.push("Pasta de referência dos anexos deve ser um diretório local, não URL.");
+    return "";
+  }
+
+  const resolvedPath = resolveGuiTemplateBaseDir(rawValue);
+
+  if (!fs.existsSync(resolvedPath)) {
+    errors.push(`Pasta de referência dos anexos não encontrada: ${resolvedPath}`);
+    return "";
+  }
+
+  if (!fs.statSync(resolvedPath).isDirectory()) {
+    errors.push(`Pasta de referência dos anexos não é um diretório: ${resolvedPath}`);
+    return "";
+  }
+
+  return resolvedPath;
 }
 
 function readOptionalFile(filePath) {
@@ -947,6 +1093,44 @@ function renderGuiHtml() {
       color: var(--text);
     }
 
+    .field-message {
+      border-radius: 8px;
+      display: none;
+      font-size: 13px;
+      margin-top: 8px;
+      padding: 9px 10px;
+    }
+
+    .field-message.error {
+      display: block;
+      background: #fff1f0;
+      border: 1px solid #fecdca;
+      color: var(--danger);
+    }
+
+    .field-message.ok {
+      display: block;
+      background: #ecfdf3;
+      border: 1px solid #abefc6;
+      color: var(--ok);
+    }
+
+    .field-message.info {
+      display: block;
+      background: #eff8ff;
+      border: 1px solid #b2ddff;
+      color: #175cd3;
+    }
+
+    .template-base-dir {
+      display: none;
+      margin-top: 10px;
+    }
+
+    .template-base-dir.visible {
+      display: block;
+    }
+
     .syntax-demo {
       border: 1px solid var(--line);
       border-radius: 8px;
@@ -1174,7 +1358,7 @@ function renderGuiHtml() {
           <h2>Modelo de mensagem</h2>
           <label for="templateText">Texto do modelo</label>
           <textarea id="templateText" spellcheck="false" placeholder="$diatarde$, \${nome}.&#10;&#10;Seu valor atualizado é \${(valor+taxa)}."></textarea>
-          <div class="hint">\${campo} aceita colunas/expressões. Pode usar emoji, listas 1., 2., - e *, e marcação textual com o marcador colado na palavra.</div>
+          <div class="hint">\${campo} aceita colunas/expressões. Pode usar emoji, listas 1., 2., - e *, e marcação textual com o marcador colado na palavra. Anexos em ![](arquivo.pdf) usam a pasta do modelo quando disponível; se o navegador ocultar a pasta, use a raiz do projeto ou fullpath.</div>
           <div class="syntax-demo" aria-label="Demonstração de sintaxe textual">
             <div>*negrito exemplo*</div>
             <div><strong>negrito exemplo</strong></div>
@@ -1251,6 +1435,12 @@ function renderGuiHtml() {
           <div style="height:14px"></div>
           <label for="templateFile">Ou arquivo .md</label>
           <input id="templateFile" type="file" accept=".md,text/markdown,text/plain">
+          <div id="templateMediaStatus" class="field-message"></div>
+          <div id="templateBaseDirBox" class="template-base-dir">
+            <label for="templateBaseDir">Pasta de referência dos anexos</label>
+            <input id="templateBaseDir" type="text" placeholder="C:/LOCAL/whatsapp/anexos">
+            <div class="hint">Use quando o navegador não conseguir informar a pasta real do .md. Deve ser um diretório local existente.</div>
+          </div>
         </section>
 
         <section>
@@ -1303,9 +1493,15 @@ function renderGuiHtml() {
     const newSessionButton = document.getElementById("newSessionButton");
     const renameSessionButton = document.getElementById("renameSessionButton");
     const removeSessionButton = document.getElementById("removeSessionButton");
+    const templateFileInput = document.getElementById("templateFile");
+    const templateBaseDirInput = document.getElementById("templateBaseDir");
+    const templateBaseDirBox = document.getElementById("templateBaseDirBox");
+    const templateMediaStatus = document.getElementById("templateMediaStatus");
     let activeSessionId = "";
     let lastSessionCount = 0;
     let pollTimer = null;
+    let templateAnalysisTimer = null;
+    let templateAnalysisToken = 0;
 
     function showMessage(text, type) {
       message.textContent = text;
@@ -1317,6 +1513,23 @@ function renderGuiHtml() {
       message.className = "message";
     }
 
+    function setTemplateMediaStatus(text, type) {
+      templateMediaStatus.textContent = text || "";
+      templateMediaStatus.className = text ? "field-message " + type : "field-message";
+    }
+
+    function setTemplateBaseDirVisible(visible) {
+      templateBaseDirBox.classList.toggle("visible", Boolean(visible));
+    }
+
+    function resetTemplateMediaAnalysis() {
+      templateAnalysisToken += 1;
+      setTemplateMediaStatus("", "");
+      if (!templateBaseDirInput.value.trim()) {
+        setTemplateBaseDirVisible(false);
+      }
+    }
+
     function readFile(input) {
       const file = input.files && input.files[0];
       if (!file) return Promise.resolve(null);
@@ -1324,6 +1537,7 @@ function renderGuiHtml() {
       return file.arrayBuffer().then((buffer) => ({
         content: decodeUploadedText(buffer),
         name: file.name,
+        path: file.path || file.webkitRelativePath || file.name,
       }));
     }
 
@@ -1380,6 +1594,56 @@ function renderGuiHtml() {
       return errors;
     }
 
+    function scheduleTemplateMediaAnalysis() {
+      window.clearTimeout(templateAnalysisTimer);
+      templateAnalysisTimer = window.setTimeout(() => {
+        analyzeTemplateMedia().catch((err) => {
+          setTemplateBaseDirVisible(true);
+          setTemplateMediaStatus(err.message, "error");
+        });
+      }, 350);
+    }
+
+    async function analyzeTemplateMedia() {
+      const token = ++templateAnalysisToken;
+      const templateFile = await readFile(templateFileInput);
+
+      if (token !== templateAnalysisToken) return;
+
+      if (!templateFile || !String(templateFile.content || "").trim()) {
+        resetTemplateMediaAnalysis();
+        return;
+      }
+
+      setTemplateMediaStatus("Analisando anexos do modelo...", "info");
+
+      const result = await postJson("/api/template/analyze", {
+        templateBaseDir: templateBaseDirInput.value,
+        templateFile,
+        templateText: "",
+      });
+
+      if (token !== templateAnalysisToken) return;
+
+      if (result.mediaIssues && result.mediaIssues.length) {
+        setTemplateBaseDirVisible(true);
+        setTemplateMediaStatus(
+          "Anexo não localizado. Informe a pasta de referência dos anexos ou use fullpath no modelo.",
+          "error",
+        );
+        return;
+      }
+
+      if (result.localMediaCount > 0) {
+        setTemplateMediaStatus("Anexos locais localizados.", "ok");
+        setTemplateBaseDirVisible(Boolean(templateBaseDirInput.value.trim()));
+        return;
+      }
+
+      setTemplateMediaStatus("", "");
+      setTemplateBaseDirVisible(Boolean(templateBaseDirInput.value.trim()));
+    }
+
     function formatSyntaxIssue(issue, index) {
       const location = "Linha " + issue.line + ", coluna " + issue.column;
       const snippet = issue.snippet ? "\\nTrecho: " + issue.snippet : "";
@@ -1402,7 +1666,8 @@ function renderGuiHtml() {
         filter: document.getElementById("filter").value,
         forceResend: document.getElementById("forceResend").checked,
         resetSent: document.getElementById("resetSent").checked,
-        templateFile: await readFile(document.getElementById("templateFile")),
+        templateBaseDir: templateBaseDirInput.value,
+        templateFile: await readFile(templateFileInput),
         templateText: document.getElementById("templateText").value,
       };
     }
@@ -1526,6 +1791,24 @@ function renderGuiHtml() {
       }
     });
 
+    templateFileInput.addEventListener("change", () => {
+      if (!templateFileInput.files || !templateFileInput.files.length) {
+        resetTemplateMediaAnalysis();
+        return;
+      }
+
+      scheduleTemplateMediaAnalysis();
+    });
+
+    templateBaseDirInput.addEventListener("input", () => {
+      if (!templateFileInput.files || !templateFileInput.files.length) {
+        setTemplateBaseDirVisible(Boolean(templateBaseDirInput.value.trim()));
+        return;
+      }
+
+      scheduleTemplateMediaAnalysis();
+    });
+
     sessionSelect.addEventListener("change", async () => {
       const sessionId = sessionSelect.value;
       if (!sessionId || sessionId === activeSessionId) return;
@@ -1609,9 +1892,13 @@ function renderGuiHtml() {
 }
 
 module.exports = {
+  analyzeGuiTemplateMedia,
   materializeGuiExecutionPaths,
   openGuiWhenBrowserIsAvailable,
   registerGuiClientHandlers,
+  resolveGuiProvidedFilePath,
+  resolveGuiTemplateBaseDir,
   startGuiServer,
   validateGuiPayload,
+  validateGuiTemplateBaseDir,
 };

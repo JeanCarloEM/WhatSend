@@ -546,15 +546,18 @@ function resolveExecutionPaths(paths = PATHS, options = {}) {
   };
   const listSelection = resolveListSelection(options.listArg, basePaths);
 
+  const template =
+    checkTemplatePath
+      ? checkTemplatePath
+      : options.templateName
+        ? resolveModelTemplatePath(options.templateName, basePaths)
+        : basePaths.template;
+
   return {
     ...basePaths,
     ...listSelection,
-    template:
-      checkTemplatePath
-        ? checkTemplatePath
-        : options.templateName
-          ? resolveModelTemplatePath(options.templateName, basePaths)
-          : basePaths.template,
+    template,
+    templateBaseDir: path.dirname(template),
   };
 }
 
