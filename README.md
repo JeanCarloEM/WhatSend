@@ -1,595 +1,221 @@
 # WhatSender
 
-Aplicativo local em Node.js para enviar mensagens personalizadas pelo WhatsApp Web usando:
+[![CI](https://github.com/JeanCarloEM/whats/actions/workflows/ci.yml/badge.svg)](https://github.com/JeanCarloEM/whats/actions/workflows/ci.yml)
+[![License: MPL-2.0](https://img.shields.io/badge/License-MPL--2.0-brightgreen.svg)](LICENSE)
+[![Node.js](https://img.shields.io/badge/Node.js-LTS-339933.svg)](https://nodejs.org/)
+[![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-blue.svg)](#requisitos)
 
-- `clientes.csv` como base de destinatários.
-- `texto.md` como modelo da mensagem.
-- interface gráfica local no navegador para configurar a execução.
-- sessão local persistida em `.wwebjs_auth`.
-- logs locais em `logs/`.
+Aplicativo local em Node.js para enviar mensagens personalizadas pelo WhatsApp Web usando CSV, modelo Markdown, interface grafica local, sessoes persistidas e logs auditaveis.
 
-O envio só acontece depois da pré-validação dos arquivos e da validação do número no WhatsApp via `client.getNumberId()`.
+Todos os nomes, telefones, contas, caminhos e URLs deste README sao exemplos ficticios.
 
-Todos os nomes, telefones, contas e caminhos abaixo são meramente ilustrativos.
+## Sumario
 
-## RCF Implementado
+- [Visao geral](#visao-geral)
+- [Requisitos](#requisitos)
+- [Instalacao](#instalacao)
+- [Uso rapido](#uso-rapido)
+- [Arquivos de entrada](#arquivos-de-entrada)
+- [GUI](#gui)
+- [CLI](#cli)
+- [Sessoes](#sessoes)
+- [Logs e reenvio](#logs-e-reenvio)
+- [Testes](#testes)
+- [Documentacao](#documentacao)
+- [Licenca e disclaimer](#licenca-e-disclaimer)
 
-O contrato funcional completo está em [RCF.md](RCF.md). Em resumo, o projeto:
+## Visao geral
 
-- usa `clientes.csv` e `texto.md`, ou arquivos em `listas/` e `modelos/`, como entradas da campanha;
-- oferece GUI local para coletar modelo, CSV, filtro e opções de execução;
-- valida CSV, template, logs, anexos locais, sessão e navegador antes de enviar;
-- substitui variáveis `${coluna}` a partir das colunas do CSV sem diferenciar maiúsculas e minúsculas;
-- permite expressões matemáticas simples dentro de `${...}`;
-- exige apenas `nome` e `telefone`; outras colunas são opcionais;
-- formata `${nome}` com capitalização e no máximo duas palavras;
-- permite filtros de lista com comparadores, operadores lógicos, funções e matemática;
-- substitui `$diatarde$` por `bom dia` ou `boa tarde` conforme o horário do envio;
-- interpreta `![](CAMINHO_OU_URL)` como anexo local ou remoto;
-- baixa anexos remotos uma única vez para cache temporário;
-- envia anexos no início ou final com o texto como legenda quando possível;
-- envia `.ogg` de áudio como mensagem de voz separada;
-- valida o número no WhatsApp com `client.getNumberId()` antes do envio;
-- evita reenvio com base no telefone, versão nativa da mensagem e prazo configurável;
-- permite forçar reenvio ou limpar histórico sem burlar validação de telefone;
-- registra enviados, erros, pulos, avisos e versões de mensagem em `logs/`;
-- mantém status compacto e colorido no console durante o processamento;
-- permite sessão alternativa por `WA_CLIENT_ID`;
-- permite conectar a navegador já aberto quando ele foi iniciado com depuração remota;
-- roda em Windows, macOS e Linux quando há Node.js LTS e navegador Chromium compatível.
+O WhatSender usa `clientes.csv` como base de destinatarios e `texto.md` como modelo padrao. Antes de enviar, valida arquivos, anexos, logs, navegador e numeros do WhatsApp com `client.getNumberId()`.
+
+Principais recursos:
+
+- GUI local para configurar modelo, CSV, filtro, sessao e reenvio.
+- CLI preservada para automacao.
+- Variaveis `${campo}` insensiveis a maiusculas/minusculas.
+- Apenas `nome` e `telefone` obrigatorios no CSV.
+- Expressoes matematicas e filtros logicos com funcoes.
+- Anexos via Markdown `![](CAMINHO_OU_URL)`, incluindo URL com cache temporario.
+- `.ogg` apenas de audio enviado como mensagem de voz.
+- Controle inteligente de reenvio por telefone, conteudo nativo e tempo.
+- Compatibilidade com Windows, macOS e Linux quando as dependencias tambem forem compativeis.
+
+O contrato funcional completo fica em [RCF.md](RCF.md).
 
 ## Requisitos
 
-- Windows, macOS ou Linux.
 - Node.js LTS.
-- Google Chrome, Chromium ou Microsoft Edge instalado.
-- WhatsApp ativo no celular para escanear o QR Code na primeira execução.
+- npm.
+- Google Chrome, Chromium ou Microsoft Edge.
+- WhatsApp ativo no celular para autenticar a primeira sessao.
 
-As dependências usadas pelo projeto (`csv-parse`, `dotenv`, `qrcode-terminal`, `puppeteer-core` e `whatsapp-web.js`) são bibliotecas Node compatíveis com as principais plataformas. A automação do WhatsApp Web depende de um navegador Chromium compatível disponível no sistema.
+Os inicializadores tentam preparar dependencias e navegador automaticamente. Se nao houver Chrome, Chromium ou Edge, o projeto tenta instalar um Chrome compativel via Puppeteer.
 
-## Instalação
+## Instalacao
 
-### Modo recomendado
+Windows:
 
 ```powershell
-cd C:\caminho\do\projeto
+cd C:\caminho\ficticio\whatsender
 .\start.cmd
 ```
 
-Em macOS/Linux:
+macOS/Linux:
 
 ```bash
-cd /caminho/do/projeto
+cd /caminho/ficticio/whatsender
 sh ./start.sh
 ```
 
-Esses scripts verificam Node.js e npm, tentam instalar Node.js LTS quando ele estiver ausente, instalam dependências do projeto apenas quando necessário e iniciam a interface gráfica.
-
-Eles também verificam Chrome, Chromium ou Edge. Se nenhum navegador compatível for encontrado, tentam instalar automaticamente um Chrome compatível via Puppeteer.
-
-### Instalação manual
-
-Na pasta do projeto:
+Instalacao manual:
 
 ```powershell
 npm install
-```
-
-Valide a instalação sem iniciar envio:
-
-```powershell
+npm run browser:ensure
 npm run check
 ```
 
-Se estiver tudo certo, a saída será parecida com:
+`npm run check` exige os arquivos operacionais (`clientes.csv` e `texto.md`) e nao envia mensagens.
 
-```text
-Pré-validação RCF concluída. Clientes: 1.
-```
+## Uso rapido
 
-## Arquivos de Configuração
+1. Crie `clientes.csv` na raiz.
+2. Crie `texto.md` na raiz ou escolha um modelo em `modelos/`.
+3. Rode `npm run check`.
+4. Abra a GUI com `npm run start:gui` ou use `.\start.cmd`.
+5. Escaneie o QR Code quando solicitado.
+6. Execute o envio pela GUI ou por `npm start`.
 
-### `clientes.csv`
+## Arquivos de entrada
 
-O arquivo deve existir na raiz do projeto e conter obrigatoriamente apenas as colunas `nome` e `telefone`:
+`clientes.csv` minimo:
 
 ```csv
 nome,telefone
 Pessoa Exemplo,11999999999
 ```
 
-Colunas extras também podem ser usadas no template. Exemplo:
+Colunas extras sao opcionais e podem ser usadas em `${campo}`:
 
 ```csv
-nome,telefone,conta,agencia
-Pessoa Exemplo,11999999999,00000,0001
+nome,telefone,valor,status
+Pessoa Exemplo,11999999999,"120,50",ativo
 ```
 
-Os nomes das colunas obrigatórias são insensíveis a maiúsculas e minúsculas. Assim, `Nome` e `Telefone` também são aceitos.
-
-Quando `${nome}` for usado na mensagem, o sistema formata o valor automaticamente:
-
-- `pessoa exemplo` vira `Pessoa Exemplo`.
-- `pessoa exemplo sobrenome extra` vira `Pessoa Exemplo`.
-
-### `texto.md`
-
-O arquivo deve existir na raiz do projeto e contém a mensagem enviada.
-
-Variáveis usam o formato `${nome}`, `${telefone}`, `${conta}` ou qualquer outra coluna do CSV:
+`texto.md` exemplo:
 
 ```markdown
-Boa tarde ${nome}!
+$diatarde$, ${nome}.
 
-Relativo à sua conta ${conta}, podemos falar agora?
-```
+Seu valor atualizado e ${$.moeda(valor)}.
 
-O nome da variável dentro de `${}` é insensível a maiúsculas e minúsculas. Assim, `${nome}`, `${NOME}` e `${NoMe}` usam a mesma coluna `nome`.
-
-Se uma variável não existir no CSV, ela será substituída por vazio e registrada em `logs/avisos.csv`.
-
-Também é possível usar conta simples dentro de `${...}`. As colunas são resolvidas sem diferenciar maiúsculas e minúsculas:
-
-```markdown
-Valor atualizado: ${(valor+taxa)*2}
-Saldo estimado: ${(credito-debito)/parcelas}
-```
-
-As operações aceitas são `+`, `-`, `*`, `/` e parênteses. Números podem usar `.` ou `,` como separador decimal.
-
-Resultados decimais calculados são formatados no padrão brasileiro, com arredondamento para 2 casas:
-
-```markdown
-${10 / 3}
-${100 * 0.157}
-${$.moeda(1000 * 1.15)}
-${$.decimal(valor)}
-${$.numero(quantidade)}
-${$.digito2(conta)}
-```
-
-Funções disponíveis: `$.round()`, `$.ceil()`, `$.floor()`, `$.int()`, `$.moeda()`, `$.digito1()`, `$.digito2()`, `$.numero()` e `$.decimal()`.
-
-O marcador `$diatarde$` é substituído no momento do envio:
-
-- antes das 12h: `bom dia`;
-- a partir das 12h: `boa tarde`.
-
-Se o marcador estiver no início da frase ou logo após um ponto, mesmo com espaços no meio, o texto começa com maiúscula:
-
-```markdown
-$diatarde$, ${NOME}!
-
-Retornamos sobre a conta ${CONTA}. $diatarde$, podemos seguir?
-```
-
-Exemplo completo e genérico de `texto.md`:
-
-```markdown
-![](./teste-img.png)
-Olá ${nome}! Tudo bem? 👋
-
-Este é um modelo genérico para demonstrar os recursos aceitos no `texto.md`.
-
-Aqui você pode usar variáveis do CSV, como:
-
-- Nome: ${nome}
-- Telefone: ${telefone}
-- Conta ou referência: ${conta}
-
-Você também pode destacar uma informação com *texto em destaque* e usar _texto em itálico_ quando quiser dar outro tom à mensagem.
-
-> Dica: revise os dados antes do envio e rode `npm run check` para validar a campanha.
-
-Exemplo de próximos passos:
-
-1. Conferir as informações principais ✅
-2. Responder esta mensagem se houver interesse 💬
-3. Ignorar caso o assunto não seja relevante 🙂
-
-Obrigado, ${nome}!
-```
-
-Anexos podem ser indicados com a notação Markdown:
-
-```markdown
-Segue a imagem:
-
-![](anexos/exemplo.png)
-
-Segue também o documento:
-
-![](C:\caminho\ficticio\arquivo.pdf)
-
-Arquivo remoto:
-
-![](https://exemplo.invalid/arquivo.zip)
-```
-
-O caminho pode ser relativo ao arquivo de mensagem em uso, absoluto ou uma URL `http`/`https`. URLs são baixadas para uma pasta temporária e reutilizadas quando o mesmo endereço aparecer novamente. Imagens são enviadas como mídia; outros tipos, como PDF ou ZIP, são enviados como documento.
-
-Arquivos `.ogg` são inspecionados. Quando o arquivo for um contêiner OGG apenas de áudio, como Opus ou Vorbis, ele será enviado como mensagem de voz separada no ponto exato em que apareceu no Markdown:
-
-```markdown
-Texto antes do áudio.
-
-![](audios/exemplo.ogg)
-
-Texto depois do áudio.
-```
-
-Nesse caso, o `.ogg` não absorve o texto adjacente como legenda. Se o `.ogg` não for identificado como apenas áudio, ele segue como anexo comum.
-
-Se o anexo estiver no início ou no final do `texto.md`, o texto adjacente será enviado como legenda do próprio anexo, evitando uma mensagem de texto separada:
-
-```markdown
-Mensagem enviada como legenda do anexo.
+*Importante:* responda esta mensagem para confirmar.
 
 ![](anexos/exemplo.pdf)
 ```
 
-Quando o anexo estiver no meio do texto, o sistema envia as partes separadamente para preservar a ordem definida no arquivo.
+Demonstracao de sintaxe textual:
 
-### Modelos em `modelos/`
+| Marcacao crua | Resultado visual esperado no WhatsApp |
+| --- | --- |
+| `*negrito exemplo*` | <strong>negrito exemplo</strong> |
+| `_italico exemplo_` | <em>italico exemplo</em> |
+| `~taxado exemplo~` | <del>taxado exemplo</del> |
+| `1. item` | lista enumerada |
+| `- item` | lista simples |
 
-Por padrão, o sistema usa `texto.md`. Também é possível escolher outro arquivo Markdown dentro de `modelos/`, passando apenas o nome sem extensão:
+Lista profissional de 60 emojis sugeridos para uso moderado:
 
-```powershell
-node main.js faturamento
-```
+`⚠️` alerta, `✅` concluido, `❌` erro, `📋` lista, `👍` ok, `ℹ️` informacao, `📌` destaque, `⏰` prazo, `⏱️` economia de tempo, `📎` anexo, `💬` resposta, `🚀` lancamento, `🎯` objetivo, `💡` ideia, `🏷️` preco baixo, `💸` baixo custo, `♻️` economia de recursos, `📦` entrega, `📈` resultado, `🤝` parceria/tamo junto, `🆗` aprovado, `☑️` confirmado, `🔔` lembrete, `📣` anuncio, `📢` comunicado, `📲` contato, `📞` ligacao, `✉️` email, `📝` cadastro, `📄` documento, `🧾` comprovante, `💳` pagamento, `💰` valor, `🎁` brinde, `🔥` oferta, `⭐` favorito, `🛒` compra, `🛍️` pedido, `🚚` frete, `🔒` seguro, `🔐` acesso, `🛠️` suporte, `🧩` solucao, `📊` relatorio, `📉` reducao, `🧮` calculo, `📅` agenda, `🗓️` data, `⌛` aguardando, `🔄` atualizacao, `⬆️` aumento, `⬇️` desconto, `➡️` proximo passo, `✨` novidade, `🎉` comemoracao, `🏆` conquista, `💎` premium, `🙏` agradecimento, `🙂` cordialidade, `😔` atencao empatica.
 
-Com `npm start`, passe o argumento depois de `--`:
+## GUI
 
-```powershell
-npm start -- faturamento
-```
-
-Esse comando usa:
-
-```text
-modelos/faturamento.md
-```
-
-As mesmas regras de `texto.md` se aplicam ao modelo selecionado: variáveis, `$diatarde$`, anexos, URLs, logs e controle inteligente de reenvio. Quando o modelo usar `./` ou `.\` em anexos, o caminho é resolvido a partir da pasta onde o próprio modelo está.
-
-Um mesmo arquivo também pode conter múltiplos modelos separados por uma linha com `^^^`. Quando todos os blocos tiverem tamanho mínimo válido, o envio usa distribuição circular entre os destinatários.
-
-```markdown
-Texto modelo A com pelo menos o tamanho mínimo configurado.
-
-^^^
-
-Texto modelo B com pelo menos o tamanho mínimo configurado.
-```
-
-O tamanho mínimo padrão de cada bloco é `96` caracteres e pode ser alterado por `TEMPLATE_VARIANT_MIN_LENGTH`.
-
-### Listas em `listas/`
-
-Por padrão, o sistema usa `clientes.csv`. Também é possível escolher outro CSV dentro de `listas/`, passando apenas o nome sem extensão:
-
-```powershell
-node main.js --lista base_exemplo
-```
-
-Esse comando usa:
-
-```text
-listas/base_exemplo.csv
-```
-
-Também é possível combinar modelo e lista:
-
-```powershell
-node main.js faturamento base_exemplo
-```
-
-Se o valor da lista contiver um filtro, ele será aplicado sobre o `clientes.csv` padrão, não tratado como arquivo:
-
-```powershell
-node main.js --lista "status=ativo"
-node main.js faturamento "status!=inativo"
-node main.js --lista "valor>=10,5 && status=ativo"
-node main.js --lista "($.isnum(valor) && valor>0) || $.istrue(vigente)"
-```
-
-O nome da coluna é insensível a maiúsculas e minúsculas. O valor comparado é tratado automaticamente como texto, número ou booleano quando possível. Aspas ao redor do filtro inteiro ou das partes são aceitas, por exemplo:
-
-```powershell
-node main.js --lista '"STATUS"="ativo"'
-```
-
-Comparadores aceitos:
-
-```text
-=  !=  <  <=  >  >=
-```
-
-Operadores lógicos aceitos:
-
-```text
-&&  ||  ^^  !
-```
-
-Também são aceitos parênteses e operações matemáticas simples:
-
-```powershell
-node main.js --lista "(valor+taxa*2)>=100 && !(status=cancelado)"
-```
-
-Funções lógicas disponíveis:
-
-```text
-$.vazio(coluna)
-$.isnum(coluna)
-$.isfloat(coluna)
-$.isint(coluna)
-$.isbool(coluna)
-$.istrue(coluna)
-$.istring(coluna)
-```
-
-Valores booleanos são reconhecidos sem diferenciar maiúsculas, minúsculas ou acentos quando aplicável. Exemplos aceitos incluem `sim`, `não`, `true`, `false`, `1`, `0`, `ativo`, `inativo`, `habilitado`, `desabilitado`, `aprovado`, `reprovado`, `vigente`, `cancelado`, `suspenso`, `inapto`, `vencido`, `valido`, `válido` e `inválido`.
-
-### `.env` opcional
-
-O projeto tenta encontrar automaticamente Chrome, Chromium ou Edge no Windows, macOS e Linux. Se precisar indicar o navegador manualmente, crie um arquivo `.env`:
-
-```env
-PUPPETEER_EXECUTABLE_PATH=C:\caminho\para\chrome.exe
-```
-
-Exemplos ilustrativos por sistema:
-
-```env
-# Windows
-PUPPETEER_EXECUTABLE_PATH=C:\caminho\para\chrome.exe
-
-# macOS
-PUPPETEER_EXECUTABLE_PATH=/Applications/Google Chrome.app/Contents/MacOS/Google Chrome
-
-# Linux
-PUPPETEER_EXECUTABLE_PATH=/usr/bin/google-chrome
-```
-
-Também é possível ajustar o intervalo aleatório entre envios:
-
-```env
-MIN_DELAY_MS=8000
-MAX_DELAY_MS=20000
-```
-
-Também é possível ajustar a regra inteligente de reenvio:
-
-```env
-MESSAGE_DIFF_THRESHOLD_PERCENT=10
-RESEND_AFTER_HOURS=48
-```
-
-Por padrão, se o `texto.md` nativo mudar 10% ou mais em relação à versão já enviada para um telefone, o sistema considera uma nova mensagem e permite o envio. Se a mensagem for igual ou muito parecida, ela também pode ser reenviada automaticamente depois de 48 horas.
-
-### Navegador já aberto
-
-Se aparecer uma mensagem parecida com:
-
-```text
-The browser is already running for .wwebjs_auth\session. Use a different userDataDir or stop the running browser first.
-```
-
-isso significa que o perfil local salvo em `.wwebjs_auth/session` já está aberto por outro navegador. Há três caminhos:
-
-1. Feche a janela aberta pelo disparador e rode `npm start` novamente.
-2. Use uma sessão separada, que pode pedir novo QR Code:
-
-```env
-WA_CLIENT_ID=campanha_teste
-```
-
-3. Reutilize um navegador já aberto somente se ele tiver sido iniciado com depuração remota.
-
-Exemplo ilustrativo no Windows:
-
-```powershell
-& "C:\caminho\para\chrome.exe" --remote-debugging-port=9222 --user-data-dir="C:\pasta\chrome-whatsapp"
-```
-
-Exemplo ilustrativo em macOS/Linux:
-
-```bash
-google-chrome --remote-debugging-port=9222 --user-data-dir="/caminho/chrome-whatsapp"
-```
-
-Para manter o WhatsApp autenticado nesse modo, reutilize a mesma pasta informada em `--user-data-dir` nas próximas execuções.
-
-Depois configure:
-
-```env
-BROWSER_URL=http://127.0.0.1:9222
-```
-
-Também é aceito:
-
-```env
-BROWSER_WS_ENDPOINT=ws://127.0.0.1:9222/devtools/browser/exemplo
-```
-
-Atalho opcional para usar `http://127.0.0.1:9222`:
-
-```env
-CONNECT_EXISTING_BROWSER=true
-```
-
-Uma janela comum do Chrome, Chromium ou Edge aberta sem depuração remota não pode ser controlada pelo Puppeteer.
-
-## Sessões
-
-A sessão padrão continua funcionando sem configuração. Para criar uma sessão nova:
-
-```powershell
-node main.js --new-session Comercial --gui
-```
-
-Para escolher uma sessão:
-
-```powershell
-node main.js --session Comercial --gui
-node main.js --session 1234 --gui
-```
-
-Se houver múltiplas sessões e nenhuma for informada, a CLI mostra um menu obrigatório. Sessões nomeadas usam logs em `logs/sessions/NOME/`; a sessão padrão mantém `logs/`.
-
-Na GUI, o seletor de sessão permite alternar entre sessões existentes. A troca reinicia automaticamente o client do WhatsApp e reabre a interface na sessão escolhida, pois o perfil do `LocalAuth` é definido antes de abrir o WhatsApp Web. Também é possível criar, renomear e remover sessões diretamente pela tela. Se a última sessão for removida, a próxima abertura volta ao fluxo inicial com QR Code.
-
-Para renomear:
-
-```powershell
-node main.js --rename-session Comercial Financeiro
-```
-
-Para remover:
-
-```powershell
-node main.js --remove-session Comercial
-```
-
-## Execução
-
-Faça uma validação antes de enviar:
-
-```powershell
-npm run check
-```
-
-### Interface gráfica
-
-Inicie o fluxo assistido:
+Execute:
 
 ```powershell
 npm run start:gui
 ```
 
-Ou use os inicializadores:
+A interface local abre no inicio do fluxo, mostra autenticacao/carregamento do WhatsApp e libera o botao de envio somente quando o WhatsApp estiver pronto. Ela permite:
 
-```powershell
-.\start.cmd
-```
+- selecionar, criar, renomear e remover sessoes;
+- informar modelo por textarea ou arquivo `.md`;
+- informar filtro;
+- anexar CSV opcional;
+- forcar reenvio ou limpar historico de enviados;
+- acompanhar andamento sem inundar a tela.
 
-Em macOS/Linux:
+## CLI
 
-```bash
-sh ./start.sh
-```
+Comandos principais:
 
-A interface local sobe no início do fluxo e tenta abrir como uma aba no mesmo navegador controlado pelo WhatsApp Web. Se isso não for possível, ela abre no navegador padrão e informa o fallback no andamento.
-
-A tela mostra o status de carregamento/autenticação do WhatsApp e só libera o botão "Executar" depois que o WhatsApp estiver conectado. Nela é possível configurar:
-
-- modelo por textarea;
-- modelo por arquivo `.md`;
-- filtro;
-- CSV opcional de clientes;
-- reenvio forçado;
-- limpeza do histórico de enviados.
-
-Textarea e arquivo `.md` são mutuamente exclusivos. A tela faz validações leves antes de enviar os dados ao backend local, e o backend reaproveita a mesma pré-validação RCF antes do primeiro envio.
-
-Quando um modelo for informado pela GUI, ele substitui `texto.md` apenas naquela execução. Caminhos relativos de anexos digitados na tela são resolvidos a partir da raiz do projeto.
-
-### Linha de comando
-
-O modo CLI continua disponível para automação:
-
-```powershell
-npm start
-```
-
-Na primeira execução, escaneie o QR Code exibido no terminal. Depois disso, a sessão fica salva em `.wwebjs_auth`.
-
-Durante o envio, o console exibe uma linha de status compacta com progresso, enviados, pulados, erros e avisos. A linha é atualizada no lugar para evitar excesso de mensagens na tela.
-
-Quando um registro é pulado, o console mostra o motivo. O caso mais comum é o telefone já existir em `logs/enviados.csv`.
-
-### Comandos
-
-| Comando | Função |
+| Comando | Funcao |
 | --- | --- |
-| `.\start.cmd` | Prepara dependências e inicia a GUI no Windows. |
-| `sh ./start.sh` | Prepara dependências e inicia a GUI no macOS/Linux. |
-| `npm run start:gui` | Autentica e abre a interface gráfica local. |
-| `npm run browser:ensure` | Verifica navegador compatível e instala Chrome via Puppeteer se necessário. |
-| `npm start` | Valida e inicia o envio via CLI. |
-| `npm start -- faturamento` | Usa `modelos/faturamento.md` no lugar de `texto.md`. |
-| `node main.js --lista base_exemplo` | Usa `listas/base_exemplo.csv` no lugar de `clientes.csv`. |
+| `npm start` | Envia usando `clientes.csv` e `texto.md`. |
+| `npm start -- faturamento` | Usa `modelos/faturamento.md`. |
+| `node main.js --lista base_exemplo` | Usa `listas/base_exemplo.csv`. |
 | `node main.js faturamento base_exemplo` | Usa modelo e lista nomeados. |
-| `node main.js --lista "status=ativo"` | Usa `clientes.csv` filtrando a coluna `status`. |
-| `node main.js --lista "valor>=10 && status=ativo"` | Usa filtro composto sobre `clientes.csv`. |
-| `npm run check` | Valida arquivos e configuração sem enviar. |
-| `node main.js --check faturamento` | Valida `modelos/faturamento.md` sem enviar. |
-| `npm test` | Roda a suíte automatizada. |
-| `npm run start:force` | Reenvia ignorando o histórico de enviados. |
+| `node main.js --lista "status=ativo && valor>=100"` | Filtra `clientes.csv`. |
+| `npm run start:force` | Ignora historico de enviados nesta execucao. |
 | `npm run start:clear` | Limpa `logs/enviados.csv` antes de iniciar. |
-| `npm run sent:clear` | Alias para limpar enviados. |
-| `npm run start:reset` | Alias legado para limpar enviados. |
-| `.\atualizar.cmd` | Atualiza repositório, dependências e navegador no Windows. |
-| `sh ./atualizar.sh` | Atualiza repositório, dependências e navegador no macOS/Linux. |
+| `npm test` | Roda a suite automatizada. |
 
-Para reenviar mesmo quando o telefone consta como enviado:
+Use `npm run <script> -- argumento` quando passar parametros por scripts npm.
 
-```powershell
-npm run start:force
-```
+## Sessoes
 
-Alias em português:
+A sessao padrao usa `.wwebjs_auth/session`. Sessoes nomeadas usam perfis independentes e logs separados.
 
 ```powershell
-node main.js --reenviar
+node main.js --new-session Comercial --gui
+node main.js --session Comercial --gui
+node main.js --rename-session Comercial Financeiro
+node main.js --remove-session Comercial
 ```
 
-Para limpar a lista de enviados antes de iniciar uma nova campanha:
+Na GUI, alternar, criar ou remover a sessao ativa reinicia automaticamente o client do WhatsApp. Se a ultima sessao for removida, a proxima abertura volta ao fluxo inicial com QR Code.
 
-```powershell
-npm run start:clear
-```
-
-Também existem os aliases:
-
-```powershell
-npm run sent:clear
-npm run start:reset
-```
-
-Alias em português:
-
-```powershell
-node main.js --reset-enviados
-```
-
-O sistema também evita reenvio de forma inteligente:
-
-- se a mesma mensagem, ou uma mensagem menos de 10% diferente, foi enviada para o telefone há menos de 48 horas, ele pula;
-- se o arquivo de mensagem em uso mudou 10% ou mais, ele considera uma mensagem nova e envia sem precisar forçar;
-- se passaram mais de 48 horas, ele permite reenviar mesmo que a mensagem seja igual.
-
-Esses limites podem ser ajustados no `.env`. Telefones inválidos ou números não encontrados no WhatsApp continuam sem envio.
-
-## Logs
+## Logs e reenvio
 
 Os logs ficam em `logs/`:
 
-- `enviados.csv`: números já enviados, usado para evitar duplicidade.
-- `erros.csv`: falhas de envio, números inválidos ou números sem WhatsApp.
-- `mensagens.json`: cache local das versões nativas dos arquivos de mensagem usadas para comparar mudanças.
-- `pulos.csv`: registros pulados com o motivo.
-- `avisos.csv`: avisos, como variáveis ausentes no template.
+- `enviados.csv`: telefones enviados.
+- `erros.csv`: falhas e numeros invalidos.
+- `pulos.csv`: registros pulados com motivo.
+- `avisos.csv`: avisos de template.
+- `mensagens.json`: versoes nativas usadas no controle inteligente.
 
-Se a execução for interrompida, rode `npm start` novamente. O sistema consulta `logs/enviados.csv` e `logs/mensagens.json` para decidir se deve pular, reenviar por mudança de conteúdo ou reenviar por expiração do prazo.
+Por padrao, uma mensagem igual ou menos de 10% diferente nao e reenviada para o mesmo telefone dentro de 48 horas. Ajustes:
+
+```env
+MESSAGE_DIFF_THRESHOLD_PERCENT=10
+RESEND_AFTER_HOURS=48
+MIN_DELAY_MS=8000
+MAX_DELAY_MS=20000
+```
 
 ## Testes
-
-Para rodar os testes automatizados:
 
 ```powershell
 npm test
 ```
 
-Os testes verificam regras centrais do RCF, incluindo normalização de telefone, CSV obrigatório, deduplicação, validação antes do envio e logs.
+Os testes cobrem parser, filtros, template, anexos, logs, sessoes e validacoes centrais do RCF. `npm run check` valida a campanha real sem enviar, mas depende dos arquivos operacionais locais.
+
+## Documentacao
+
+- [RCF.md](RCF.md): contrato funcional e nao funcional.
+- [docs/usage.md](docs/usage.md): guia avancado de modelos, filtros, anexos, navegador e operacao.
+- [AGENTS.md](AGENTS.md): instrucoes para manutencao assistida.
+
+## Licenca e disclaimer
+
+Autor: JeanCarloEM.com
+
+Repositorio: <https://github.com/JeanCarloEM/whats>
+
+Licenca: [Mozilla Public License 2.0](LICENSE), tambem disponivel em <https://www.mozilla.org/MPL/2.0/>.
+
+Disclaimer:
+
+Este software é fornecido estritamente como está e como disponível, sem garantias expressas, implícitas, legais, comerciais, técnicas, operacionais, de disponibilidade, segurança, conformidade, licitude, não infração ou adequação a qualquer finalidade. O uso, configuração, conteúdo enviado, destinatários, credenciais, automações e consequências são de responsabilidade exclusiva do usuário. Nada constitui consultoria, serviço gerenciado, vínculo, autorização para uso indevido, promessa de resultado ou assunção de responsabilidade pelo autor, que não responderá por danos, perdas, bloqueios, sanções, incidentes, violações, reclamações ou responsabilidades civis, criminais, trabalhistas, administrativas, regulatórias, contratuais ou de qualquer outra natureza.

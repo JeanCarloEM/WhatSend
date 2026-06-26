@@ -790,7 +790,9 @@ function renderGuiHtml() {
       --warn: #a15c07;
       --info: #175cd3;
       --ok: #067647;
-      --shadow: 0 18px 50px rgba(21, 30, 43, 0.08);
+      --focus: rgba(8, 127, 91, 0.18);
+      --font-sans: "Noto Sans", "Segoe UI", Roboto, Helvetica, Arial, system-ui, -apple-system, BlinkMacSystemFont, "Liberation Sans", sans-serif;
+      --shadow: 0 14px 36px rgba(21, 30, 43, 0.07);
     }
 
     * { box-sizing: border-box; }
@@ -799,13 +801,13 @@ function renderGuiHtml() {
       margin: 0;
       background: var(--bg);
       color: var(--text);
-      font: 15px/1.5 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font: 15px/1.52 var(--font-sans);
     }
 
     main {
       width: min(1120px, calc(100% - 32px));
       margin: 0 auto;
-      padding: 32px 0;
+      padding: 28px 0 34px;
     }
 
     header {
@@ -813,12 +815,12 @@ function renderGuiHtml() {
       align-items: end;
       justify-content: space-between;
       gap: 24px;
-      margin-bottom: 20px;
+      margin-bottom: 18px;
     }
 
     h1 {
       margin: 0;
-      font-size: 28px;
+      font-size: 27px;
       line-height: 1.15;
     }
 
@@ -837,15 +839,16 @@ function renderGuiHtml() {
       border-radius: 999px;
       color: var(--accent-strong);
       background: #eefbf4;
-      padding: 8px 12px;
+      padding: 7px 12px;
       white-space: nowrap;
       font-weight: 700;
+      box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.72);
     }
 
     .layout {
       display: grid;
       grid-template-columns: minmax(0, 1.2fr) minmax(320px, 0.8fr);
-      gap: 18px;
+      gap: 16px;
       align-items: start;
     }
 
@@ -854,8 +857,8 @@ function renderGuiHtml() {
       border: 1px solid var(--line);
       border-radius: 8px;
       box-shadow: var(--shadow);
-      padding: 18px;
-      margin-bottom: 18px;
+      padding: 17px;
+      margin-bottom: 16px;
     }
 
     label {
@@ -875,13 +878,23 @@ function renderGuiHtml() {
       color: var(--text);
       font: inherit;
       padding: 11px 12px;
+      transition: border-color 0.15s ease, box-shadow 0.15s ease;
+    }
+
+    textarea:focus,
+    input[type="text"]:focus,
+    input[type="file"]:focus,
+    select:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px var(--focus);
+      outline: none;
     }
 
     textarea {
-      min-height: 210px;
+      min-height: 205px;
       resize: vertical;
-      font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
-      font-size: 13px;
+      font-family: var(--font-sans);
+      font-size: 14px;
     }
 
     .hint {
@@ -890,10 +903,38 @@ function renderGuiHtml() {
       color: var(--muted);
     }
 
+    .hint strong {
+      color: var(--text);
+    }
+
+    .syntax-demo {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      display: grid;
+      gap: 0;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+      margin-top: 10px;
+      overflow: hidden;
+    }
+
+    .syntax-demo div {
+      padding: 9px 10px;
+      background: #fff;
+    }
+
+    .syntax-demo div:nth-child(odd) {
+      background: #f8fafc;
+      border-right: 1px solid var(--line);
+      color: var(--muted);
+      font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
+      font-size: 12px;
+    }
+
     details.hint {
       border: 1px solid var(--line);
       border-radius: 8px;
-      padding: 10px 12px;
+      padding: 9px 11px;
+      background: #fbfcfe;
     }
 
     details.hint summary {
@@ -904,16 +945,17 @@ function renderGuiHtml() {
     .emoji-list {
       display: flex;
       flex-wrap: wrap;
-      gap: 8px;
+      gap: 7px;
       margin-top: 10px;
     }
 
     .emoji-list span {
       border: 1px solid var(--line);
       border-radius: 999px;
-      padding: 4px 8px;
+      padding: 4px 9px;
       background: #fff;
       white-space: nowrap;
+      font-size: 12px;
     }
 
     .split {
@@ -979,7 +1021,7 @@ function renderGuiHtml() {
       display: flex;
       align-items: center;
       gap: 12px;
-      margin-top: 16px;
+      margin-top: 15px;
     }
 
     .message {
@@ -1042,6 +1084,15 @@ function renderGuiHtml() {
       header {
         align-items: start;
       }
+
+      .syntax-demo {
+        grid-template-columns: 1fr;
+      }
+
+      .syntax-demo div:nth-child(odd) {
+        border-right: 0;
+        border-bottom: 1px solid var(--line);
+      }
     }
   </style>
 </head>
@@ -1083,50 +1134,78 @@ function renderGuiHtml() {
           <h2>Modelo de mensagem</h2>
           <label for="templateText">Texto do modelo</label>
           <textarea id="templateText" spellcheck="false" placeholder="$diatarde$, \${nome}.&#10;&#10;Seu valor atualizado é \${(valor+taxa)}."></textarea>
-          <div class="hint">\${campo} aceita colunas/expressões. Pode usar emoji, *negrito*, _itálico_, ~taxado~ com marcador colado ao texto, listas 1., 2., - e *.</div>
+          <div class="hint">\${campo} aceita colunas/expressões. Pode usar emoji, listas 1., 2., - e *, e marcação textual com o marcador colado na palavra.</div>
+          <div class="syntax-demo" aria-label="Demonstração de sintaxe textual">
+            <div>*negrito exemplo*</div>
+            <div><strong>negrito exemplo</strong></div>
+            <div>_itálico exemplo_</div>
+            <div><em>itálico exemplo</em></div>
+            <div>~taxado exemplo~</div>
+            <div><s>taxado exemplo</s></div>
+          </div>
           <details class="hint">
             <summary>Emojis profissionais</summary>
             <div class="emoji-list">
               <span>⚠️ alerta</span>
-              <span>✅ check</span>
-              <span>🆗 OK</span>
+              <span>✅ concluído</span>
               <span>❌ erro</span>
               <span>📋 lista</span>
-              <span>👍 joinha</span>
-              <span>☑️ ticado</span>
+              <span>👍 ok</span>
               <span>ℹ️ informação</span>
               <span>📌 destaque</span>
               <span>⏰ prazo</span>
+              <span>⏱️ economia de tempo</span>
               <span>📎 anexo</span>
               <span>💬 resposta</span>
-              <span>🙂 alegria</span>
-              <span>😔 tristeza</span>
-              <span>😢 choro</span>
-              <span>🙏 agradecimento</span>
               <span>🚀 lançamento</span>
-              <span>🔥 oferta</span>
-              <span>⭐ destaque</span>
               <span>🎯 objetivo</span>
               <span>💡 ideia</span>
-              <span>🎁 brinde</span>
-              <span>🏷️ promoção</span>
-              <span>💰 preço</span>
-              <span>💳 pagamento</span>
-              <span>🛒 compra</span>
-              <span>🛍️ pedido</span>
+              <span>🏷️ preço baixo</span>
+              <span>💸 baixo custo</span>
+              <span>♻️ economia de recursos</span>
               <span>📦 entrega</span>
-              <span>🚚 frete</span>
+              <span>📈 crescimento</span>
+              <span>🤝 parceria</span>
+              <span>🆗 aprovado</span>
+              <span>☑️ confirmado</span>
+              <span>🔔 lembrete</span>
               <span>📣 anúncio</span>
               <span>📢 comunicado</span>
               <span>📲 contato</span>
-              <span>🔔 lembrete</span>
-              <span>🔒 segurança</span>
-              <span>🎉 comemoração</span>
-              <span>💎 premium</span>
-              <span>🏆 conquista</span>
-              <span>📈 crescimento</span>
-              <span>🤝 parceria</span>
+              <span>📞 ligação</span>
+              <span>✉️ email</span>
               <span>📝 cadastro</span>
+              <span>📄 documento</span>
+              <span>🧾 comprovante</span>
+              <span>💳 pagamento</span>
+              <span>💰 valor</span>
+              <span>🎁 brinde</span>
+              <span>🔥 oferta</span>
+              <span>⭐ favorito</span>
+              <span>🛒 compra</span>
+              <span>🛍️ pedido</span>
+              <span>🚚 frete</span>
+              <span>🔒 seguro</span>
+              <span>🔐 acesso</span>
+              <span>🛠️ suporte</span>
+              <span>🧩 solução</span>
+              <span>📊 relatório</span>
+              <span>📉 redução</span>
+              <span>🧮 cálculo</span>
+              <span>📅 agenda</span>
+              <span>🗓️ data</span>
+              <span>⌛ aguardando</span>
+              <span>🔄 atualização</span>
+              <span>⬆️ aumento</span>
+              <span>⬇️ desconto</span>
+              <span>➡️ próximo passo</span>
+              <span>✨ novidade</span>
+              <span>🎉 comemoração</span>
+              <span>🏆 conquista</span>
+              <span>💎 premium</span>
+              <span>🙏 agradecimento</span>
+              <span>🙂 cordialidade</span>
+              <span>😔 atenção empática</span>
             </div>
           </details>
           <div style="height:14px"></div>

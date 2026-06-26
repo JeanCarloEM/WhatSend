@@ -233,6 +233,9 @@ A GUI deve oferecer:
 - Opções de reenviar ignorando histórico e limpar histórico.
 - Validações locais leves antes do envio.
 - Mensagens claras de erro e progresso.
+- Tipografia baseada em Noto Sans, com fallbacks sans-serif comuns do sistema.
+- Demonstração visual concisa da marcação textual crua e do resultado esperado.
+- Lista recolhível e equilibrada com exatamente 60 sugestões profissionais de emojis.
 
 Arquivos informados na GUI devem ser materializados temporariamente em área controlada pelo projeto ou sistema operacional, sem alterar `clientes.csv`, `texto.md` ou os modelos originais.
 
@@ -274,6 +277,12 @@ O mecanismo de expressões deve oferecer as funções `$.round()`, `$.ceil()`, `
 
 Devem existir scripts de atualização no root para Windows e macOS/Linux, capazes de atualizar o repositório por `git pull --ff-only`, atualizar dependências npm para versões estáveis recentes e revalidar navegador compatível.
 
+### RN028 - Integração Contínua
+
+Quando o projeto estiver hospedado no GitHub, deve existir workflow de CI para alterações em código, testes, scripts e configuração executável, evitando execução em alterações apenas documentais comuns.
+
+Todos os jobs do workflow devem possuir `timeout-minutes` explícito de no máximo 5 minutos.
+
 ## Requisitos Não Funcionais
 
 ### RNF001 - Plataforma
@@ -303,3 +312,5 @@ O desenho deve permitir evolução futura para múltiplos templates, campanhas, 
 ### RNF007 - UX
 
 A interface deve ser simples, responsiva, minimalista, clara e suficiente para usuários com familiaridade básica com fórmulas, planilhas ou programação leve.
+
+Microajustes visuais devem preservar contraste, espaçamento consistente, leitura clara e visual profissional, sem transformar a GUI em landing page.
