@@ -1,6 +1,6 @@
 # WhatSender
 
-[![CI](https://github.com/JeanCarloEM/whats/actions/workflows/ci.yml/badge.svg)](https://github.com/JeanCarloEM/whats/actions/workflows/ci.yml)
+[![CI](https://github.com/JeanCarloEM/whatsender/actions/workflows/ci.yml/badge.svg)](https://github.com/JeanCarloEM/whatsender/actions/workflows/ci.yml)
 [![License: MPL-2.0](https://img.shields.io/badge/License-MPL--2.0-brightgreen.svg)](LICENSE)
 [![Node.js](https://img.shields.io/badge/Node.js-LTS-339933.svg)](https://nodejs.org/)
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-blue.svg)](#requisitos)
@@ -177,8 +177,8 @@ Comandos principais:
 | `node main.js --rename-session Comercial Financeiro` | Renomeia uma sessao. |
 | `node main.js --remove-session Comercial` | Remove sessao e autenticacao local correspondente. |
 | `npm test` | Roda a suite automatizada. |
-| `.\atualizar.cmd` | Atualiza repositorio, dependencias e navegador no Windows. |
-| `sh ./atualizar.sh` | Atualiza repositorio, dependencias e navegador no macOS/Linux. |
+| `.\atualizar.cmd` | Atualiza pelo GitHub Releases, ou por `main` se nao houver release, no Windows. |
+| `sh ./atualizar.sh` | Atualiza pelo GitHub Releases, ou por `main` se nao houver release, no macOS/Linux. |
 
 Use `npm run <script> -- argumento` quando passar parametros por scripts npm. Exemplo: `npm run start:force -- faturamento`.
 
@@ -232,7 +232,7 @@ Os testes cobrem parser, filtros, template, anexos, logs, sessoes e validacoes c
 
 Autor: JeanCarloEM.com
 
-Repositorio: <https://github.com/JeanCarloEM/whats>
+Repositorio: <https://github.com/JeanCarloEM/whatsender>
 
 Licenca: [Mozilla Public License 2.0](LICENSE), tambem disponivel em <https://www.mozilla.org/MPL/2.0/>.
 

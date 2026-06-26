@@ -52,6 +52,11 @@ const {
   removeSession,
   listPersistedSessions,
 } = require("../main");
+const {
+  MAIN_TARBALL_URL,
+  safeTarPath,
+  shouldSkip,
+} = require("../scripts/update-project");
 
 const COMPLEX_CLIENTS_CSV = path.join(__dirname, "clientes-complexos.csv");
 const COMPLEX_EXPECTED_JSON = path.join(__dirname, "expressions-complexas.expected.json");
@@ -216,6 +221,18 @@ test("explica perfil de navegador já em uso", () => {
 
   assert.match(message, /perfil local do WhatsApp Web já está em uso/);
   assert.match(message, /depuração remota/);
+});
+
+test("atualizador não depende de .git e preserva arquivos operacionais", () => {
+  assert.match(MAIN_TARBALL_URL, /JeanCarloEM\/whatsender\/tar\.gz\/refs\/heads\/main/);
+  assert.equal(shouldSkip("clientes.csv"), true);
+  assert.equal(shouldSkip("texto.md"), true);
+  assert.equal(shouldSkip(".env"), true);
+  assert.equal(shouldSkip("logs/enviados.csv"), true);
+  assert.equal(shouldSkip(".wwebjs_auth/session"), true);
+  assert.equal(shouldSkip("src/app.js"), false);
+  assert.equal(safeTarPath("JeanCarloEM-whatsender-abc123/src/app.js"), "src/app.js");
+  assert.equal(safeTarPath("JeanCarloEM-whatsender-abc123/../segredo.txt"), "");
 });
 
 test("status interativo renderiza sem erro", () => {

@@ -17,7 +17,8 @@
     "start:reset": "node main.js --reset-sent",
     "check": "node main.js --check",
     "check:test": "node main.js --check --check-csv test/check-clientes.csv --check-template test/check-texto.md",
-    "test": "node --test"
+    "test": "node --test",
+    "update": "node scripts/update-project.js"
   },
   "dependencies": {
     "csv-parse": "^7.0.0",

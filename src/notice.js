@@ -1,6 +1,6 @@
 const LICENSE_LOCAL_PATH = "LICENSE";
 const LICENSE_URL = "https://www.mozilla.org/MPL/2.0/";
-const REPOSITORY_URL = "https://github.com/JeanCarloEM/whats";
+const REPOSITORY_URL = "https://github.com/JeanCarloEM/whatsender";
 const AUTHOR = "JeanCarloEM.com";
 const LICENSE_NAME = "Mozilla Public License 2.0";
 

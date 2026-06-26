@@ -154,6 +154,20 @@ GUI_PORT=3137
 WA_CLIENT_ID=campanha_teste
 ```
 
+## Atualizacao
+
+Os inicializadores de atualizacao nao dependem de `git` nem de existir `.git` na pasta local. Eles consultam `https://github.com/JeanCarloEM/whatsender`, baixam a release mais recente quando houver release publicada e, se nao houver release, baixam a branch `main`.
+
+```powershell
+.\atualizar.cmd
+```
+
+```bash
+sh ./atualizar.sh
+```
+
+Durante a copia, arquivos operacionais locais sao preservados, incluindo `clientes.csv`, `texto.md`, `.env`, `logs/`, `.wwebjs_auth/`, `.runtime/` e `node_modules/`. Depois disso, o script roda `npm install` com download automatico do Puppeteer desativado e valida o navegador com `scripts/ensure-browser.js`.
+
 ## Validacao
 
 Use:

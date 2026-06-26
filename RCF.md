@@ -288,7 +288,15 @@ O mecanismo de expressões deve oferecer as funções `$.round()`, `$.ceil()`, `
 
 ### RN027 - Atualização
 
-Devem existir scripts de atualização no root para Windows e macOS/Linux, capazes de atualizar o repositório por `git pull --ff-only`, atualizar dependências npm para versões estáveis recentes e revalidar navegador compatível.
+Devem existir scripts de atualização no root para Windows e macOS/Linux.
+
+A atualização não deve depender da existência de `git` nem de diretório local `./.git`.
+
+O atualizador deve consultar `https://github.com/JeanCarloEM/whatsender`, baixar a release mais recente quando houver release publicada e, se não houver release, baixar a branch `main`.
+
+Arquivos operacionais locais devem ser preservados durante a atualização, incluindo `clientes.csv`, `texto.md`, `.env`, logs, sessões do WhatsApp, runtime local e `node_modules`.
+
+Depois de atualizar os arquivos do projeto, o atualizador deve sincronizar dependências npm e revalidar navegador compatível.
 
 ### RN028 - Integração Contínua
 
