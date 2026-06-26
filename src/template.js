@@ -12,12 +12,58 @@ const {
   normalizeFieldName,
 } = require("./utils");
 
+const HTML_NAMED_ENTITIES = new Map([
+  ["amp", "&"],
+  ["apos", "'"],
+  ["cent", "¢"],
+  ["copy", "©"],
+  ["euro", "€"],
+  ["gt", ">"],
+  ["hellip", "..."],
+  ["laquo", "«"],
+  ["lt", "<"],
+  ["mdash", "—"],
+  ["nbsp", " "],
+  ["ndash", "–"],
+  ["quot", "\""],
+  ["raquo", "»"],
+  ["reg", "®"],
+  ["aacute", "á"],
+  ["agrave", "à"],
+  ["acirc", "â"],
+  ["atilde", "ã"],
+  ["auml", "ä"],
+  ["ccedil", "ç"],
+  ["eacute", "é"],
+  ["ecirc", "ê"],
+  ["iacute", "í"],
+  ["oacute", "ó"],
+  ["ocirc", "ô"],
+  ["otilde", "õ"],
+  ["uacute", "ú"],
+  ["uuml", "ü"],
+  ["Aacute", "Á"],
+  ["Agrave", "À"],
+  ["Acirc", "Â"],
+  ["Atilde", "Ã"],
+  ["Auml", "Ä"],
+  ["Ccedil", "Ç"],
+  ["Eacute", "É"],
+  ["Ecirc", "Ê"],
+  ["Iacute", "Í"],
+  ["Oacute", "Ó"],
+  ["Ocirc", "Ô"],
+  ["Otilde", "Õ"],
+  ["Uacute", "Ú"],
+  ["Uuml", "Ü"],
+]);
+
 function applyTemplate(template, data, options = {}) {
   const missingVariables = new Set();
   const dataMap = buildCaseInsensitiveDataMap(data);
   const normalizedTemplate = normalizeTemplateText(template);
 
-  return replaceDayPeriodMarkers(
+  const rendered = replaceDayPeriodMarkers(
     replaceTemplateExpressions(normalizedTemplate, (expression) => {
       const key = normalizeNestedTemplateExpression(String(expression).trim());
       let ast;
@@ -38,7 +84,7 @@ function applyTemplate(template, data, options = {}) {
           return "";
         }
 
-        const value = record.value ?? "";
+        const value = decodeHtmlEntities(record.value ?? "");
         return normalizedKey === "nome" ? formatNameForMessage(value) : value;
       }
 
@@ -57,6 +103,8 @@ function applyTemplate(template, data, options = {}) {
     }),
     options.now || new Date(),
   );
+
+  return normalizeTemplateText(rendered);
 }
 
 function replaceTemplateExpressions(template, callback) {
@@ -264,11 +312,57 @@ function getLineSnippet(source, index) {
 }
 
 function normalizeTemplateText(text) {
-  return String(text || "")
+  const normalized = normalizeTemplateLineBreaks(String(text || "")
     .replace(/^\ufeff/u, "")
+  );
+
+  return normalizeTemplateLineBreaks(decodeHtmlEntities(normalized));
+}
+
+function normalizeTemplateLineBreaks(text) {
+  return String(text || "")
     .replace(/\r\n/g, "\n")
     .replace(/\r/g, "\n")
     .replace(/[\u2028\u2029]/gu, "\n");
+}
+
+function decodeHtmlEntities(text) {
+  return String(text || "")
+    .replace(/&([a-z][a-z0-9]+);/gi, (match, name) => {
+      if (HTML_NAMED_ENTITIES.has(name)) {
+        return HTML_NAMED_ENTITIES.get(name);
+      }
+
+      const lowerName = name.toLocaleLowerCase("en-US");
+      return HTML_NAMED_ENTITIES.has(lowerName)
+        ? HTML_NAMED_ENTITIES.get(lowerName)
+        : match;
+    })
+    .replace(
+      /&#x([0-9a-f]{1,6});|&#x([0-9a-f]{1,6})(?=$|[^\p{L}\p{N}])/giu,
+      (match, withSemicolon, withoutSemicolon) =>
+        decodeCodePoint(withSemicolon || withoutSemicolon, 16, match),
+    )
+    .replace(
+      /&#([0-9]{1,7});|&#([0-9]{1,7})(?=$|[^\p{L}\p{N}])/gu,
+      (match, withSemicolon, withoutSemicolon) =>
+        decodeCodePoint(withSemicolon || withoutSemicolon, 10, match),
+    );
+}
+
+function decodeCodePoint(value, radix, fallback) {
+  const codePoint = Number.parseInt(value, radix);
+
+  if (
+    !Number.isInteger(codePoint) ||
+    codePoint < 0 ||
+    codePoint > 0x10ffff ||
+    (codePoint >= 0xd800 && codePoint <= 0xdfff)
+  ) {
+    return fallback;
+  }
+
+  return codePoint === 0xa0 ? " " : String.fromCodePoint(codePoint);
 }
 
 function normalizeNestedTemplateExpression(expression) {
@@ -296,7 +390,7 @@ function expressionResultToString(value) {
     });
   }
 
-  return String(value);
+  return decodeHtmlEntities(String(value));
 }
 
 function notifyMissingTemplateVariable(field, missingVariables, options = {}) {
@@ -382,6 +476,7 @@ function splitTemplateVariants(template, minLength = TEMPLATE_VARIANT_MIN_LENGTH
 
 module.exports = {
   applyTemplate,
+  decodeHtmlEntities,
   inspectTemplateSyntax,
   normalizeTemplateText,
   replaceTemplateExpressions,

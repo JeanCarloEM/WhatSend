@@ -57,6 +57,8 @@ O conteúdo textual deve ser preservado conforme definido no arquivo, após subs
 
 Quebras de linha de Windows (`CRLF`), Linux/macOS (`LF`), `CR` isolado e separadores Unicode devem ser normalizados para `LF` antes do envio, por ser o formato mais estável para WhatsApp Web. Recuos, espaços e tabulações intencionais do texto devem ser preservados.
 
+Entidades HTML numéricas e nomeadas comuns, como `&#x20;`, `&#32;`, `&nbsp;`, `&amp;`, `&lt;` e `&ccedil;`, devem ser convertidas para caracteres Unicode reais antes do envio e antes da interpretação de anexos. O WhatsApp não deve receber essas entidades cruas.
+
 ### RN003 - Variáveis do Template
 
 Variáveis devem usar o padrão `${nome}`, `${telefone}`, `${conta}` ou qualquer outra coluna existente no CSV.
@@ -85,7 +87,7 @@ Ao aplicar `${nome}`, o valor deve ser formatado para mensagem:
 
 ### RN005 - Recursos Markdown Textuais
 
-O template pode conter recursos textuais do Markdown aceitos pelo WhatsApp, como listas, blockquote, itálico, destaque e emojis. O sistema não deve sanitizar ou reescrever esse conteúdo textual além das variáveis previstas.
+O template pode conter recursos textuais do Markdown aceitos pelo WhatsApp, como listas, blockquote, itálico, destaque e emojis. O sistema não deve sanitizar ou reescrever esse conteúdo textual além das variáveis previstas e da conversão de entidades HTML para caracteres reais.
 
 ### RN006 - Anexos via Markdown
 

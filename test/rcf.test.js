@@ -14,6 +14,7 @@ const {
   buildSendPlan,
   buildPuppeteerConfig,
   createStatusReporter,
+  decodeHtmlEntities,
   evaluateExpression,
   evaluateFilterExpression,
   formatBrowserStartupError,
@@ -394,6 +395,20 @@ test("normaliza quebras Windows/Linux para envio sem remover recuos", () => {
   );
 });
 
+test("converte entidades HTML para caracteres reais antes do envio", () => {
+  const result = applyTemplate(
+    "A&#x20;B C&#32;D OK&#x21;\n${extra}\n${nome}",
+    {
+      extra: "&#231; &amp; &lt;ok&gt;&nbsp;fim",
+      nome: "jo&#xE3;o teste",
+    },
+  );
+
+  assert.equal(result, "A B C D OK!\nç & <ok> fim\nJoão Teste");
+  assert.equal(decodeHtmlEntities("Fim&#x21"), "Fim!");
+  assert.equal(decodeHtmlEntities("Valor inválido &#xD800; preservado"), "Valor inválido &#xD800; preservado");
+});
+
 test("detecta possíveis erros confirmáveis de sintaxe no modelo", () => {
   const issues = inspectTemplateSyntax(
     "Olá {nome}\nValor ${valor+}\nFechamento solto }\nAberto ${conta",
@@ -417,6 +432,18 @@ test("interpreta notação markdown de anexo preservando a ordem", () => {
     { type: "text", value: "Antes\n" },
     { type: "media", source: "arquivo.pdf", raw: "![](arquivo.pdf)" },
     { type: "text", value: "\nDepois" },
+  ]);
+});
+
+test("converte entidade HTML em caminho de anexo antes de interpretar markdown", () => {
+  const parts = parseTemplateParts("![](https://exemplo.test/arquivo.pdf?x=1&amp;y=2)");
+
+  assert.deepEqual(parts, [
+    {
+      raw: "![](https://exemplo.test/arquivo.pdf?x=1&y=2)",
+      source: "https://exemplo.test/arquivo.pdf?x=1&y=2",
+      type: "media",
+    },
   ]);
 });
 
