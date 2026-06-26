@@ -173,6 +173,10 @@ Deve ser possível isolar uma sessão alternativa por `WA_CLIENT_ID`.
 
 Dados de clientes não devem ser transmitidos para sistemas terceiros, exceto para o próprio WhatsApp durante o envio e para URLs de anexos explicitamente declaradas no template.
 
+O projeto deve declarar de forma clara que se destina a comunicação legítima, proporcional e consentida com clientes reais, assinantes, contatos que autorizaram contato ou públicos próprios e legítimos.
+
+O projeto deve se posicionar expressamente contra uso massivo, abusivo, enganoso, invasivo, como spam, scraping, assédio, fraude, envio sem consentimento ou qualquer prática que viole leis, termos de serviço, privacidade ou direitos de terceiros.
+
 ### RN017 - Integridade dos Dados de Entrada
 
 O sistema não deve alterar `clientes.csv` nem `texto.md` durante validação ou envio.
@@ -204,6 +208,15 @@ O comando de checagem deve validar arquivos, estrutura de logs, template, anexos
 ```text
 npm run check
 ```
+
+Para validação automatizada e CI, deve existir modo de checagem com fixtures versionadas, sem depender de `clientes.csv` e `texto.md` reais:
+
+```text
+npm run check:test
+node main.js --check --check-csv CAMINHO.csv --check-template CAMINHO.md
+```
+
+Os parâmetros `--check-csv` e `--check-template` devem aceitar paths relativos ou absolutos somente quando usados junto com `--check`.
 
 Em caso de falha, o processamento deve ser interrompido antes do primeiro envio.
 

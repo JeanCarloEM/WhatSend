@@ -35,6 +35,12 @@ ${$.int(valor)}
 
 Um arquivo pode conter multiplas variacoes separadas por uma linha com `^^^`. Quando todos os blocos atingem o tamanho minimo configurado, a distribuicao entre destinatarios e circular.
 
+## Emojis profissionais
+
+Lista complementar de 60 emojis sugeridos para uso moderado em mensagens profissionais:
+
+`⚠️` alerta, `✅` concluido, `❌` erro, `📋` lista, `👍` ok, `ℹ️` informacao, `📌` destaque, `⏰` prazo, `⏱️` economia de tempo, `📎` anexo, `💬` resposta, `🚀` lancamento, `🎯` objetivo, `💡` ideia, `🏷️` preco baixo, `💸` baixo custo, `♻️` economia de recursos, `📦` entrega, `📈` resultado, `🤝` parceria/tamo junto, `🆗` aprovado, `☑️` confirmado, `🔔` lembrete, `📣` anuncio, `📢` comunicado, `📲` contato, `📞` ligacao, `✉️` email, `📝` cadastro, `📄` documento, `🧾` comprovante, `💳` pagamento, `💰` valor, `🎁` brinde, `🔥` oferta, `⭐` favorito, `🛒` compra, `🛍️` pedido, `🚚` frete, `🔒` seguro, `🔐` acesso, `🛠️` suporte, `🧩` solucao, `📊` relatorio, `📉` reducao, `🧮` calculo, `📅` agenda, `🗓️` data, `⌛` aguardando, `🔄` atualizacao, `⬆️` aumento, `⬇️` desconto, `➡️` proximo passo, `✨` novidade, `🎉` comemoracao, `🏆` conquista, `💎` premium, `🙏` agradecimento, `🙂` cordialidade, `😔` atencao empatica.
+
 ## Listas e filtros
 
 A lista padrao e `clientes.csv`. Listas alternativas ficam em `listas/`:
@@ -154,7 +160,16 @@ Use:
 
 ```powershell
 npm run check
+npm run check:test
 npm test
 ```
 
-`npm run check` valida a campanha real e depende dos arquivos locais operacionais. `npm test` usa fixtures em `test/` e nao deve alterar `clientes.csv` nem `texto.md`.
+`npm run check` valida a campanha real e depende dos arquivos locais operacionais. `npm run check:test` usa fixtures versionadas em `test/check-clientes.csv` e `test/check-texto.md`, sem alterar `clientes.csv` nem `texto.md`.
+
+Tambem e possivel informar paths especificos para a validacao:
+
+```powershell
+node main.js --check --check-csv test/check-clientes.csv --check-template test/check-texto.md
+```
+
+Os parametros `--check-csv` e `--check-template` sao aceitos apenas junto com `--check`. O caminho pode ser relativo ao diretorio atual ou absoluto. `npm test` usa fixtures em `test/` e nao deve alterar arquivos operacionais reais.

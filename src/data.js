@@ -294,15 +294,54 @@ function resolveListSelection(listArg, paths = PATHS) {
   };
 }
 
+function resolveCheckInputPath(filePath, extension, label) {
+  const rawPath = stripWrappingQuotes(filePath);
+
+  if (!rawPath) {
+    return undefined;
+  }
+
+  const resolvedPath = path.isAbsolute(rawPath)
+    ? path.normalize(rawPath)
+    : path.resolve(process.cwd(), rawPath);
+
+  if (path.extname(resolvedPath).toLocaleLowerCase("pt-BR") !== extension) {
+    throw new Error(`${label} inválido. Use um arquivo ${extension}.`);
+  }
+
+  return resolvedPath;
+}
+
 function resolveExecutionPaths(paths = PATHS, options = {}) {
-  const listSelection = resolveListSelection(options.listArg, paths);
+  const checkCsvPath =
+    options.check && options.checkCsvPath
+      ? resolveCheckInputPath(options.checkCsvPath, ".csv", "CSV de check")
+      : undefined;
+  const checkTemplatePath =
+    options.check && options.checkTemplatePath
+      ? resolveCheckInputPath(options.checkTemplatePath, ".md", "Template de check")
+      : undefined;
+  const basePaths = {
+    ...paths,
+    ...(checkCsvPath ? { csv: checkCsvPath } : {}),
+    ...(checkTemplatePath
+      ? {
+          template: checkTemplatePath,
+          templateBaseDir: path.dirname(checkTemplatePath),
+        }
+      : {}),
+  };
+  const listSelection = resolveListSelection(options.listArg, basePaths);
 
   return {
-    ...paths,
+    ...basePaths,
     ...listSelection,
-    template: options.templateName
-      ? resolveModelTemplatePath(options.templateName, paths)
-      : paths.template,
+    template:
+      checkTemplatePath
+        ? checkTemplatePath
+        : options.templateName
+          ? resolveModelTemplatePath(options.templateName, basePaths)
+          : basePaths.template,
   };
 }
 
@@ -314,6 +353,7 @@ module.exports = {
   loadTemplate,
   parseListFilter,
   readTextFile,
+  resolveCheckInputPath,
   resolveExecutionPaths,
   resolveListCsvPath,
   resolveListSelection,

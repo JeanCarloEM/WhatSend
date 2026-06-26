@@ -76,6 +76,11 @@ npm run check
 ```
 
 `npm run check` exige os arquivos operacionais (`clientes.csv` e `texto.md`) e nao envia mensagens.
+Para validar o RCF com fixtures versionadas, sem depender desses arquivos reais:
+
+```powershell
+npm run check:test
+```
 
 ## Uso rapido
 
@@ -124,9 +129,6 @@ Demonstracao de sintaxe textual:
 | `1. item` | lista enumerada |
 | `- item` | lista simples |
 
-Lista profissional de 60 emojis sugeridos para uso moderado:
-
-`⚠️` alerta, `✅` concluido, `❌` erro, `📋` lista, `👍` ok, `ℹ️` informacao, `📌` destaque, `⏰` prazo, `⏱️` economia de tempo, `📎` anexo, `💬` resposta, `🚀` lancamento, `🎯` objetivo, `💡` ideia, `🏷️` preco baixo, `💸` baixo custo, `♻️` economia de recursos, `📦` entrega, `📈` resultado, `🤝` parceria/tamo junto, `🆗` aprovado, `☑️` confirmado, `🔔` lembrete, `📣` anuncio, `📢` comunicado, `📲` contato, `📞` ligacao, `✉️` email, `📝` cadastro, `📄` documento, `🧾` comprovante, `💳` pagamento, `💰` valor, `🎁` brinde, `🔥` oferta, `⭐` favorito, `🛒` compra, `🛍️` pedido, `🚚` frete, `🔒` seguro, `🔐` acesso, `🛠️` suporte, `🧩` solucao, `📊` relatorio, `📉` reducao, `🧮` calculo, `📅` agenda, `🗓️` data, `⌛` aguardando, `🔄` atualizacao, `⬆️` aumento, `⬇️` desconto, `➡️` proximo passo, `✨` novidade, `🎉` comemoracao, `🏆` conquista, `💎` premium, `🙏` agradecimento, `🙂` cordialidade, `😔` atencao empatica.
 
 ## GUI
 
@@ -151,16 +153,34 @@ Comandos principais:
 
 | Comando | Funcao |
 | --- | --- |
-| `npm start` | Envia usando `clientes.csv` e `texto.md`. |
+| `.\start.cmd` | Prepara dependencias e abre a GUI no Windows. |
+| `sh ./start.sh` | Prepara dependencias e abre a GUI no macOS/Linux. |
+| `npm install` | Instala dependencias manualmente. |
+| `npm run browser:ensure` | Verifica Chrome/Chromium/Edge e instala Chrome compativel se necessario. |
+| `npm run check` | Valida a campanha real sem enviar. |
+| `npm run check:test` | Valida com fixtures em `test/`, sem depender de `clientes.csv` real. |
+| `node main.js --check --check-csv test/check-clientes.csv --check-template test/check-texto.md` | Valida usando paths especificos de CSV e Markdown. |
+| `npm run start:gui` | Inicia a interface grafica local. |
+| `npm start` | Envia via CLI usando `clientes.csv` e `texto.md`. |
 | `npm start -- faturamento` | Usa `modelos/faturamento.md`. |
+| `node main.js --check faturamento` | Valida um modelo especifico sem enviar. |
 | `node main.js --lista base_exemplo` | Usa `listas/base_exemplo.csv`. |
 | `node main.js faturamento base_exemplo` | Usa modelo e lista nomeados. |
-| `node main.js --lista "status=ativo && valor>=100"` | Filtra `clientes.csv`. |
+| `node main.js --lista "status=ativo"` | Filtra `clientes.csv` por coluna. |
+| `node main.js --lista "valor>=100 && status=ativo"` | Usa filtro composto com comparacao e logica. |
 | `npm run start:force` | Ignora historico de enviados nesta execucao. |
 | `npm run start:clear` | Limpa `logs/enviados.csv` antes de iniciar. |
+| `npm run sent:clear` | Alias para limpar enviados. |
+| `npm run start:reset` | Alias legado para limpar enviados. |
+| `node main.js --new-session Comercial --gui` | Cria sessao nomeada e abre a GUI. |
+| `node main.js --session Comercial --gui` | Abre a GUI usando uma sessao existente. |
+| `node main.js --rename-session Comercial Financeiro` | Renomeia uma sessao. |
+| `node main.js --remove-session Comercial` | Remove sessao e autenticacao local correspondente. |
 | `npm test` | Roda a suite automatizada. |
+| `.\atualizar.cmd` | Atualiza repositorio, dependencias e navegador no Windows. |
+| `sh ./atualizar.sh` | Atualiza repositorio, dependencias e navegador no macOS/Linux. |
 
-Use `npm run <script> -- argumento` quando passar parametros por scripts npm.
+Use `npm run <script> -- argumento` quando passar parametros por scripts npm. Exemplo: `npm run start:force -- faturamento`.
 
 ## Sessoes
 
@@ -190,8 +210,8 @@ Por padrao, uma mensagem igual ou menos de 10% diferente nao e reenviada para o 
 ```env
 MESSAGE_DIFF_THRESHOLD_PERCENT=10
 RESEND_AFTER_HOURS=48
-MIN_DELAY_MS=8000
-MAX_DELAY_MS=20000
+MIN_DELAY_MS=1500
+MAX_DELAY_MS=4000
 ```
 
 ## Testes
@@ -218,4 +238,4 @@ Licenca: [Mozilla Public License 2.0](LICENSE), tambem disponivel em <https://ww
 
 Disclaimer:
 
-Este software é fornecido estritamente como está e como disponível, sem garantias expressas, implícitas, legais, comerciais, técnicas, operacionais, de disponibilidade, segurança, conformidade, licitude, não infração ou adequação a qualquer finalidade. O uso, configuração, conteúdo enviado, destinatários, credenciais, automações e consequências são de responsabilidade exclusiva do usuário. Nada constitui consultoria, serviço gerenciado, vínculo, autorização para uso indevido, promessa de resultado ou assunção de responsabilidade pelo autor, que não responderá por danos, perdas, bloqueios, sanções, incidentes, violações, reclamações ou responsabilidades civis, criminais, trabalhistas, administrativas, regulatórias, contratuais ou de qualquer outra natureza.
+Este software é fornecido estritamente como está e como disponível, sem garantias expressas, implícitas, legais, comerciais, técnicas, operacionais, de disponibilidade, segurança, conformidade, licitude, não infração ou adequação a qualquer finalidade. O projeto é destinado exclusivamente a usos legítimos, proporcionais e consentidos, como comunicação com clientes reais, assinantes, contatos que autorizaram contato ou públicos próprios e legítimos. O autor é expressamente contrário ao uso massivo, abusivo, enganoso, invasivo, como spam, scraping, assédio, fraude, envio sem consentimento ou qualquer prática que viole leis, termos de serviço, privacidade ou direitos de terceiros. O uso, configuração, conteúdo enviado, destinatários, credenciais, automações e consequências são de responsabilidade exclusiva do usuário. Nada constitui consultoria, serviço gerenciado, vínculo, autorização para uso indevido, promessa de resultado ou assunção de responsabilidade pelo autor, que não responderá por danos, perdas, bloqueios, sanções, incidentes, violações, reclamações ou responsabilidades civis, criminais, trabalhistas, administrativas, regulatórias, contratuais ou de qualquer outra natureza.

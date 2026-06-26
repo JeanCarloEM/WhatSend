@@ -39,6 +39,8 @@ function parseExecutionOptions(argv = process.argv.slice(2)) {
   const positionalArgs = [];
   const options = {
     check: false,
+    checkCsvPath: undefined,
+    checkTemplatePath: undefined,
     forceResend: false,
     gui: false,
     help: false,
@@ -60,6 +62,30 @@ function parseExecutionOptions(argv = process.argv.slice(2)) {
 
     if (arg === "--check") {
       options.check = true;
+      continue;
+    }
+
+    if (arg.startsWith("--check-csv=") || arg.startsWith("--check-clientes=")) {
+      options.checkCsvPath = arg.slice(arg.indexOf("=") + 1);
+      continue;
+    }
+
+    if (["--check-csv", "--check-clientes"].includes(arg)) {
+      const result = readOptionValue(argv, index);
+      options.checkCsvPath = result.value;
+      index = result.nextIndex;
+      continue;
+    }
+
+    if (arg.startsWith("--check-template=") || arg.startsWith("--check-modelo=")) {
+      options.checkTemplatePath = arg.slice(arg.indexOf("=") + 1);
+      continue;
+    }
+
+    if (["--check-template", "--check-modelo"].includes(arg)) {
+      const result = readOptionValue(argv, index);
+      options.checkTemplatePath = result.value;
+      index = result.nextIndex;
       continue;
     }
 
@@ -171,6 +197,11 @@ function parseExecutionOptions(argv = process.argv.slice(2)) {
   }
 
   applyPositionalExecutionArgs(options, positionalArgs);
+
+  if (!options.check && (options.checkCsvPath || options.checkTemplatePath)) {
+    throw new Error("Use --check-csv e --check-template apenas junto com --check.");
+  }
+
   return options;
 }
 
@@ -214,6 +245,9 @@ function printHelp() {
 
 Opções:
   --check             Valida arquivos e configuração sem enviar.
+  --check-csv PATH    Usa um CSV específico somente na validação --check.
+  --check-template PATH
+                      Usa um Markdown específico somente na validação --check.
   --gui               Abre a interface gráfica local após autenticar.
   --force-resend      Ignora logs/enviados.csv nesta execução e reenvia.
   --session VALOR     Usa uma sessão pelo nome, id ou últimos dígitos do telefone.

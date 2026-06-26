@@ -36,6 +36,8 @@ jobs:
   test:
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    env:
+      PUPPETEER_SKIP_DOWNLOAD: "true"
 
     steps:
       - name: Checkout
@@ -52,3 +54,6 @@ jobs:
 
       - name: Run tests
         run: npm test
+
+      - name: Run RCF check with fixtures
+        run: npm run check:test

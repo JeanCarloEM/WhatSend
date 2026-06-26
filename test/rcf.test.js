@@ -36,6 +36,7 @@ const {
   parseExpression,
   parseTemplateParts,
   resolveExecutionPaths,
+  resolveCheckInputPath,
   resolveListCsvPath,
   resolveListSelection,
   resolveModelTemplatePath,
@@ -410,6 +411,39 @@ test("resolve modelo opcional dentro de ./modelos", () => {
     path.join(paths.modelsDir, "faturamento.md"),
   );
   assert.throws(() => resolveModelTemplatePath("../segredo", paths), /Modelo inválido/);
+});
+
+test("permite CSV e template por path somente para npm run check", () => {
+  const { paths } = createFixture();
+  const csvPath = path.join(paths.root || path.dirname(paths.csv), "check.csv");
+  const templatePath = path.join(paths.root || path.dirname(paths.template), "check.md");
+
+  fs.writeFileSync(csvPath, "nome,telefone\nCheck,11999999999\n", "utf8");
+  fs.writeFileSync(templatePath, "Modelo check ${nome}", "utf8");
+
+  const options = parseExecutionOptions([
+    "--check",
+    "--check-csv",
+    csvPath,
+    "--check-template",
+    templatePath,
+  ]);
+  const resolved = resolveExecutionPaths(paths, options);
+
+  assert.equal(options.checkCsvPath, csvPath);
+  assert.equal(options.checkTemplatePath, templatePath);
+  assert.equal(resolved.csv, csvPath);
+  assert.equal(resolved.template, templatePath);
+  assert.equal(resolved.templateBaseDir, path.dirname(templatePath));
+  assert.equal(resolveCheckInputPath(csvPath, ".csv", "CSV de check"), csvPath);
+  assert.throws(
+    () => parseExecutionOptions(["--check-csv", csvPath]),
+    /apenas junto com --check/,
+  );
+  assert.throws(
+    () => resolveCheckInputPath(templatePath, ".csv", "CSV de check"),
+    /CSV de check inválido/,
+  );
 });
 
 test("resolve lista opcional dentro de ./listas", () => {
