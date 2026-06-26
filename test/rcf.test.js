@@ -1323,6 +1323,7 @@ test("envia anexo final com texto como legenda da mesma mensagem", async () => {
     async sendMessage(to, content, options) {
       calls.push({
         filename: content && content.filename,
+        mimetype: content && content.mimetype,
         options,
         text: typeof content === "string" ? content : undefined,
         to,
@@ -1353,6 +1354,7 @@ test("envia anexo inicial com texto como legenda da mesma mensagem", async () =>
     async sendMessage(to, content, options) {
       calls.push({
         filename: content && content.filename,
+        mimetype: content && content.mimetype,
         options,
         text: typeof content === "string" ? content : undefined,
         to,
@@ -1398,6 +1400,7 @@ test("envia OGG de áudio como mensagem de voz separada no ponto da notação", 
     async sendMessage(to, content, options) {
       calls.push({
         filename: content && content.filename,
+        mimetype: content && content.mimetype,
         options,
         text: typeof content === "string" ? content : undefined,
         to,
@@ -1421,6 +1424,7 @@ test("envia OGG de áudio como mensagem de voz separada no ponto da notação", 
     sendAudioAsVoice: true,
     sendMediaAsDocument: false,
   });
+  assert.equal(calls[1].mimetype, "audio/ogg; codecs=opus");
 });
 
 test("não usa legenda automática para OGG de áudio no início ou final", async () => {
@@ -1433,6 +1437,7 @@ test("não usa legenda automática para OGG de áudio no início ou final", asyn
     async sendMessage(to, content, options) {
       calls.push({
         filename: content && content.filename,
+        mimetype: content && content.mimetype,
         options,
         text: typeof content === "string" ? content : undefined,
         to,
@@ -1452,6 +1457,7 @@ test("não usa legenda automática para OGG de áudio no início ou final", asyn
     "audio.ogg",
   ]);
   assert.equal(calls[1].options.sendAudioAsVoice, true);
+  assert.equal(calls[1].mimetype, "audio/ogg; codecs=opus");
   assert.equal(calls[1].options.caption, undefined);
 });
 

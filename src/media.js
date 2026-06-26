@@ -397,12 +397,13 @@ async function sendRenderedTemplate(client, chatId, renderedTemplate, paths = PA
 async function sendOggVoiceMessage(client, chatId, media, part) {
   const caption = normalizeCaption(part.caption);
   const captionPosition = part[CAPTION_POSITION];
+  const voiceMedia = createOggVoiceMedia(media);
 
   if (caption && captionPosition === "before") {
     await client.sendMessage(chatId, caption);
   }
 
-  await client.sendMessage(chatId, media, {
+  await client.sendMessage(chatId, voiceMedia, {
     sendAudioAsVoice: true,
     sendMediaAsDocument: false,
   });
@@ -412,9 +413,19 @@ async function sendOggVoiceMessage(client, chatId, media, part) {
   }
 }
 
+function createOggVoiceMedia(media) {
+  return new MessageMedia(
+    "audio/ogg; codecs=opus",
+    media.data,
+    media.filename || "audio.ogg",
+    media.filesize,
+  );
+}
+
 module.exports = {
   buildLocalMediaCandidates,
   buildSendPlan,
+  createOggVoiceMedia,
   downloadMediaUrl,
   getMediaFallbackDirs,
   isOggAudioOnly,
