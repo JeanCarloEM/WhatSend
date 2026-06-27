@@ -10,6 +10,7 @@ module.exports = {
   ...require("./logs"),
   ...require("./media"),
   ...require("./notice"),
+  ...require("./runtime"),
   ...require("./sessions"),
   ...require("./status"),
   ...require("./template"),

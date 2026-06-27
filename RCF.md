@@ -320,6 +320,14 @@ Quando o projeto estiver hospedado no GitHub, deve existir workflow de CI para a
 
 Todos os jobs do workflow devem possuir `timeout-minutes` explícito de no máximo 5 minutos.
 
+### RN029 - Reutilização de Instância Local
+
+Ao iniciar a GUI, o sistema deve registrar em diretório temporário do sistema operacional a instância ativa por contexto de execução, incluindo PID, porta, URL local, sessão/perfil do WhatsApp, data de início e assinatura dos scripts de execução.
+
+Uma nova abertura da GUI para o mesmo contexto deve verificar se a instância registrada ainda está ativa, responde como a mesma aplicação e usa a mesma sessão. Se os scripts não tiverem mudado desde o registro, a nova execução deve reutilizar a instância existente e apenas reabrir a URL da interface local, preservando a sessão autenticada do WhatsApp.
+
+Se os scripts tiverem mudado, a nova execução deve encerrar a instância registrada e seus processos filhos quando possível, removendo o registro temporário antes de iniciar uma nova instância.
+
 ## Requisitos Não Funcionais
 
 ### RNF001 - Plataforma

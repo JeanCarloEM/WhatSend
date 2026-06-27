@@ -14,6 +14,8 @@ const {
   applyTemplate,
   buildSendPlan,
   buildPuppeteerConfig,
+  createMessageMediaFromFile,
+  createRuntimeScriptSnapshot,
   createStatusReporter,
   decodeHtmlEntities,
   evaluateExpression,
@@ -29,6 +31,7 @@ const {
   getTemplateFingerprint,
   getWhatsAppClientId,
   getWindowsBrowserCandidates,
+  hasRuntimeScriptsChanged,
   isOggAudioOnly,
   inspectTemplateSyntax,
   loadAlreadySent,
@@ -60,6 +63,7 @@ const {
   resolveSessionByIdentifier,
   removeSession,
   listPersistedSessions,
+  registerGuiInstance,
 } = require("../main");
 const {
   MAIN_TARBALL_URL,
@@ -697,6 +701,93 @@ test("anexos relativos com ./ podem cair para a raiz quando não estão ao lado 
     mediaPath,
   );
   assert.doesNotThrow(() => validateRuntimeFiles(executionPaths, { checkBrowser: false }));
+});
+
+test("anexo OGG externo relativo com .. e espaços resolve fora do repositório", async () => {
+  const { root, paths } = createFixture();
+  const externalDir = path.join(root, "..", "audios externos");
+  const mediaPath = path.join(externalDir, "audio externo.ogg");
+  const relativeSource = path.relative(path.dirname(paths.template), mediaPath);
+
+  fs.mkdirSync(externalDir, { recursive: true });
+  fs.writeFileSync(mediaPath, createFakeOggAudio());
+
+  assert.equal(
+    resolveLocalMediaPath(
+      relativeSource,
+      paths.template,
+      path.dirname(paths.template),
+      [paths.root],
+    ),
+    mediaPath,
+  );
+
+  const calls = [];
+  const client = {
+    async sendMessage(to, content, options) {
+      calls.push({
+        filename: content && content.filename,
+        mimetype: content && content.mimetype,
+        options,
+        text: typeof content === "string" ? content : undefined,
+        to,
+      });
+    },
+  };
+
+  await sendRenderedTemplate(
+    client,
+    "5511999999999@c.us",
+    `Antes\n![](${relativeSource})\nDepois`,
+    paths,
+  );
+
+  assert.deepEqual(calls.map((call) => call.text || call.filename), [
+    "Antes\n",
+    "audio externo.ogg",
+    "\nDepois",
+  ]);
+  assert.equal(calls[1].options.sendAudioAsVoice, true);
+  assert.equal(calls[1].mimetype, "audio/ogg");
+});
+
+test("runtime detecta alteração em scripts e registra instância sem expor token", () => {
+  const { root, paths } = createFixture();
+  const srcDir = path.join(root, "src");
+  const mainPath = path.join(root, "main.js");
+  const scriptPath = path.join(srcDir, "app.js");
+
+  fs.mkdirSync(srcDir, { recursive: true });
+  fs.writeFileSync(mainPath, "require('./src/app')\n", "utf8");
+  fs.writeFileSync(scriptPath, "module.exports = 1;\n", "utf8");
+
+  const scriptSnapshot = createRuntimeScriptSnapshot(root);
+  const future = new Date(Date.now() + 5000);
+  fs.writeFileSync(scriptPath, "module.exports = 2;\n", "utf8");
+  fs.utimesSync(scriptPath, future, future);
+
+  assert.equal(hasRuntimeScriptsChanged({ scriptSnapshot }, root), true);
+
+  const registration = registerGuiInstance(
+    { url: "http://127.0.0.1:3137/" },
+    {
+      ...paths,
+      activeSession: { id: "default" },
+      authSessionDir: path.join(paths.auth, "session"),
+    },
+    { token: "segredo-local" },
+  );
+
+  try {
+    assert.equal(fs.existsSync(registration.recordPath), true);
+    assert.equal(registration.record.port, 3137);
+    assert.deepEqual(registration.record.profiles, ["default"]);
+    assert.equal(registration.publicRecord.token, undefined);
+  } finally {
+    registration.stop();
+  }
+
+  assert.equal(fs.existsSync(registration.recordPath), false);
 });
 
 test("permite CSV e template por path somente para npm run check", () => {
@@ -1418,6 +1509,50 @@ test("envia OGG de áudio como mensagem de voz separada no ponto da notação", 
   assert.deepEqual(calls.map((call) => call.text || call.filename), [
     "Antes\n",
     "audio.ogg",
+    "\nDepois",
+  ]);
+  assert.deepEqual(calls[1].options, {
+    sendAudioAsVoice: true,
+    sendMediaAsDocument: false,
+  });
+  assert.equal(calls[1].mimetype, "audio/ogg");
+});
+
+test("envia OGG externo absoluto com espaços usando nome seguro de arquivo", async () => {
+  const { root, paths } = createFixture();
+  const externalDir = path.join(root, "..", "audios externos");
+  const mediaPath = path.join(externalDir, "audio externo.ogg");
+
+  fs.mkdirSync(externalDir, { recursive: true });
+  fs.writeFileSync(mediaPath, createFakeOggAudio());
+
+  const media = createMessageMediaFromFile(mediaPath);
+  assert.equal(media.filename, "audio externo.ogg");
+  assert.equal(media.mimetype, "audio/ogg");
+
+  const calls = [];
+  const client = {
+    async sendMessage(to, content, options) {
+      calls.push({
+        filename: content && content.filename,
+        mimetype: content && content.mimetype,
+        options,
+        text: typeof content === "string" ? content : undefined,
+        to,
+      });
+    },
+  };
+
+  await sendRenderedTemplate(
+    client,
+    "5511999999999@c.us",
+    `Antes\n![](${mediaPath})\nDepois`,
+    paths,
+  );
+
+  assert.deepEqual(calls.map((call) => call.text || call.filename), [
+    "Antes\n",
+    "audio externo.ogg",
     "\nDepois",
   ]);
   assert.deepEqual(calls[1].options, {

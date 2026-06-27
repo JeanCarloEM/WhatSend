@@ -2,6 +2,7 @@ const fs = require("fs");
 const http = require("http");
 const https = require("https");
 const path = require("path");
+const { fileURLToPath } = require("url");
 const { MessageMedia } = require("whatsapp-web.js");
 
 const { PATHS, ROOT_DIR } = require("./config");
@@ -77,6 +78,7 @@ function resolveLocalMediaPath(source, templatePath, baseDir, fallbackDirs = [RO
       throw new Error(`Anexo não é um arquivo: ${source}`);
     }
 
+    assertReadableFile(filePath, source);
     return filePath;
   }
 
@@ -86,7 +88,7 @@ function resolveLocalMediaPath(source, templatePath, baseDir, fallbackDirs = [RO
 }
 
 function buildLocalMediaCandidates(source, templatePath, baseDir, fallbackDirs = [ROOT_DIR]) {
-  const rawSource = String(source || "").trim();
+  const rawSource = normalizeLocalMediaSource(source);
 
   if (path.isAbsolute(rawSource)) {
     return [path.normalize(rawSource)];
@@ -117,6 +119,33 @@ function buildLocalMediaCandidates(source, templatePath, baseDir, fallbackDirs =
   }
 
   return uniqueDirs.map((dir) => path.resolve(dir, rawSource));
+}
+
+function normalizeLocalMediaSource(source) {
+  const rawSource = String(source || "")
+    .trim()
+    .replace(/^["'](.+)["']$/, "$1")
+    .trim();
+
+  if (/^file:\/\//iu.test(rawSource)) {
+    try {
+      return fileURLToPath(rawSource);
+    } catch {
+      return rawSource;
+    }
+  }
+
+  return rawSource;
+}
+
+function assertReadableFile(filePath, source) {
+  try {
+    fs.accessSync(filePath, fs.constants.R_OK);
+  } catch (err) {
+    throw new Error(
+      `Anexo não pôde ser lido: ${source}. Caminho resolvido: ${filePath}. ${err.message}`,
+    );
+  }
 }
 
 function getMediaFallbackDirs(paths = PATHS) {
@@ -221,6 +250,44 @@ function fetchUrlBuffer(url, redirectCount = 0) {
 
 function shouldSendAsDocument(media) {
   return !String(media.mimetype || "").startsWith("image/");
+}
+
+function createMessageMediaFromFile(filePath) {
+  const normalizedPath = path.normalize(filePath);
+  const filename = path.basename(normalizedPath);
+  let stat;
+
+  try {
+    stat = fs.statSync(normalizedPath);
+    const media = MessageMedia.fromFilePath(normalizedPath);
+    media.filename = filename;
+    media.filesize = stat.size;
+
+    if (!media.mimetype) {
+      media.mimetype = inferMediaMimeType(normalizedPath);
+    }
+
+    return media;
+  } catch (err) {
+    throw new Error(`Falha ao ler anexo: ${normalizedPath}. ${err.message}`);
+  }
+}
+
+function inferMediaMimeType(filePath) {
+  const ext = path.extname(filePath).toLocaleLowerCase("pt-BR");
+  const types = {
+    ".gif": "image/gif",
+    ".jpeg": "image/jpeg",
+    ".jpg": "image/jpeg",
+    ".ogg": "audio/ogg",
+    ".opus": "audio/ogg",
+    ".pdf": "application/pdf",
+    ".png": "image/png",
+    ".webp": "image/webp",
+    ".zip": "application/zip",
+  };
+
+  return types[ext] || "application/octet-stream";
 }
 
 function isOggSource(source) {
@@ -375,7 +442,7 @@ async function sendRenderedTemplate(client, chatId, renderedTemplate, paths = PA
     }
 
     const filePath = await resolveMediaPath(part.source, paths, downloadCache);
-    const media = MessageMedia.fromFilePath(filePath);
+    const media = createMessageMediaFromFile(filePath);
 
     if (isOggAudioOnly(filePath)) {
       await sendOggVoiceMessage(client, chatId, media, part);
@@ -424,10 +491,12 @@ function createOggVoiceMedia(media) {
 
 module.exports = {
   buildLocalMediaCandidates,
+  createMessageMediaFromFile,
   buildSendPlan,
   createOggVoiceMedia,
   downloadMediaUrl,
   getMediaFallbackDirs,
+  inferMediaMimeType,
   isOggAudioOnly,
   isOggSource,
   isUrl,

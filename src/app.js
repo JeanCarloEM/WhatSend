@@ -21,6 +21,10 @@ const {
   registerGuiClientHandlers,
   startGuiServer,
 } = require("./gui");
+const {
+  prepareGuiInstance,
+  registerGuiInstance,
+} = require("./runtime");
 const { inspectTemplateSyntax } = require("./template");
 
 async function main() {
@@ -71,8 +75,22 @@ async function main() {
     console.log(`Sessão selecionada: ${selectedSession.displayName}`);
 
     if (options.gui) {
+      const guiInstance = await prepareGuiInstance(sessionPaths, options);
+
+      if (guiInstance.action === "reuse") {
+        console.log(`Interface local reutilizada em ${guiInstance.record.url}`);
+        return;
+      }
+
+      if (guiInstance.action === "replace") {
+        console.log("Instância anterior encerrada porque os scripts foram alterados.");
+      }
+
       const client = createWhatsAppClient(sessionPaths);
       const guiServerInfo = await startGuiServer(client, sessionPaths, options);
+      const guiRuntime = registerGuiInstance(guiServerInfo, sessionPaths);
+      options.guiRuntime = guiRuntime;
+      guiServerInfo.state.runtime = guiRuntime.publicRecord;
       console.log(`Interface local disponível em ${guiServerInfo.url}`);
       openGuiWhenBrowserIsAvailable(client, guiServerInfo.url, guiServerInfo.state);
       registerGuiClientHandlers(client, sessionPaths, {

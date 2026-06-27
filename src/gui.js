@@ -202,12 +202,47 @@ async function routeGuiRequest(req, res, context) {
     return;
   }
 
+  if (req.method === "GET" && url.pathname === "/api/runtime/identity") {
+    sendJson(res, 200, {
+      ok: true,
+      runtime: context.baseOptions.guiRuntime
+        ? context.baseOptions.guiRuntime.publicRecord
+        : context.state.runtime || null,
+    });
+    return;
+  }
+
   if (req.method === "GET" && url.pathname === "/api/status") {
     context.state.sessions = listSessions(context.basePaths);
     sendJson(res, 200, {
       ok: true,
       state: context.state,
     });
+    return;
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/runtime/shutdown") {
+    const payload = await readJsonBody(req);
+    const runtime = context.baseOptions.guiRuntime;
+
+    if (!runtime || payload.token !== runtime.record.token) {
+      sendJson(res, 403, {
+        error: "Encerramento local não autorizado.",
+        ok: false,
+      });
+      return;
+    }
+
+    sendJson(res, 202, {
+      message: "Encerrando instância local.",
+      ok: true,
+    });
+    setTimeout(() => {
+      shutdownCurrentGuiProcess(context, payload.reason).catch((err) => {
+        context.state.lastError = err.message || String(err);
+        context.state.status = "erro";
+      });
+    }, 50);
     return;
   }
 
@@ -799,6 +834,37 @@ async function restartGuiProcess(context, sessionId) {
   });
 
   child.unref();
+  process.exit(0);
+}
+
+async function shutdownCurrentGuiProcess(context, reason) {
+  context.state.status = "encerrando";
+  context.state.whatsappReady = false;
+  pushGuiLog(context.state, {
+    message:
+      reason === "scripts_changed"
+        ? "Encerrando instância para carregar scripts atualizados."
+        : "Encerrando instância local.",
+    type: "warning",
+  });
+
+  try {
+    if (context.client && typeof context.client.destroy === "function") {
+      await context.client.destroy();
+    }
+  } catch (_) {
+    // O processo será encerrado mesmo se o navegador já tiver fechado.
+  }
+
+  await closeServer(context.server);
+
+  if (
+    context.baseOptions.guiRuntime &&
+    typeof context.baseOptions.guiRuntime.stop === "function"
+  ) {
+    context.baseOptions.guiRuntime.stop();
+  }
+
   process.exit(0);
 }
 
