@@ -187,6 +187,8 @@ Comandos principais:
 | `node main.js --rename-session Comercial Financeiro` | Renomeia uma sessao. |
 | `node main.js --remove-session Comercial` | Remove sessao e autenticacao local correspondente. |
 | `npm test` | Roda a suite automatizada. |
+| `npm run build:dist` | Gera a release distribuível em `dist/`. |
+| `npm run validate:dist` | Valida estrutura, segurança e execução do `dist`. |
 | `.\atualizar.cmd` | Atualiza pelo GitHub Releases, ou por `main` se nao houver release, no Windows. |
 | `sh ./atualizar.sh` | Atualiza pelo GitHub Releases, ou por `main` se nao houver release, no macOS/Linux. |
 
@@ -231,6 +233,13 @@ npm test
 ```
 
 Os testes cobrem parser, filtros, template, anexos, logs, sessoes e validacoes centrais do RCF. `npm run check` valida a campanha real sem enviar, mas depende dos arquivos operacionais locais.
+
+Para gerar e validar a release distribuível:
+
+```powershell
+npm run build:dist
+npm run validate:dist
+```
 
 ## Documentacao
 

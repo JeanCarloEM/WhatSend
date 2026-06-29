@@ -9,35 +9,7 @@ name: CI
 
 on:
   push:
-    paths:
-      - ".github/workflows/ci.yml"
-      - "main.js"
-      - "package.json"
-      - "package-lock.json"
-      - "scripts/**"
-      - "src/**"
-      - "test/**"
-      - "start.cmd"
-      - "start.bat"
-      - "start.sh"
-      - "atualizar.cmd"
-      - "atualizar.bat"
-      - "atualizar.sh"
   pull_request:
-    paths:
-      - ".github/workflows/ci.yml"
-      - "main.js"
-      - "package.json"
-      - "package-lock.json"
-      - "scripts/**"
-      - "src/**"
-      - "test/**"
-      - "start.cmd"
-      - "start.bat"
-      - "start.sh"
-      - "atualizar.cmd"
-      - "atualizar.bat"
-      - "atualizar.sh"
 
 jobs:
   test:
@@ -64,3 +36,16 @@ jobs:
 
       - name: Run RCF check with fixtures
         run: npm run check:test
+
+      - name: Build distributable dist
+        run: npm run build:dist
+
+      - name: Validate distributable dist
+        run: npm run validate:dist
+
+      - name: Upload dist artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: WhatSend-dist
+          path: dist/
+          if-no-files-found: error

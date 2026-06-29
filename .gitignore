@@ -1,4 +1,5 @@
 node_modules
+dist/
 logs
 .wwebjs*
 .wwebjs_sessions.json

@@ -77,6 +77,11 @@ const {
   safeTarPath,
   shouldSkip,
 } = require("../scripts/update-project");
+const {
+  splitLeadingLegalHeader,
+  shouldExcludeEntry: shouldExcludeDistEntry,
+  shouldExcludeRootFile,
+} = require("../scripts/build-dist");
 
 const COMPLEX_CLIENTS_CSV = path.join(__dirname, "clientes-complexos.csv");
 const COMPLEX_EXPECTED_JSON = path.join(__dirname, "expressions-complexas.expected.json");
@@ -245,15 +250,34 @@ test("explica perfil de navegador já em uso", () => {
 });
 
 test("atualizador não depende de .git e preserva arquivos operacionais", () => {
-  assert.match(MAIN_TARBALL_URL, /JeanCarloEM\/whatsender\/tar\.gz\/refs\/heads\/main/);
+  assert.match(MAIN_TARBALL_URL, /JeanCarloEM\/WhatSend\/tar\.gz\/refs\/heads\/main/);
   assert.equal(shouldSkip("clientes.csv"), true);
   assert.equal(shouldSkip("texto.md"), true);
   assert.equal(shouldSkip(".env"), true);
   assert.equal(shouldSkip("logs/enviados.csv"), true);
   assert.equal(shouldSkip(".wwebjs_auth/session"), true);
   assert.equal(shouldSkip("src/app.js"), false);
-  assert.equal(safeTarPath("JeanCarloEM-whatsender-abc123/src/app.js"), "src/app.js");
-  assert.equal(safeTarPath("JeanCarloEM-whatsender-abc123/../segredo.txt"), "");
+  assert.equal(safeTarPath("JeanCarloEM-WhatSend-abc123/src/app.js"), "src/app.js");
+  assert.equal(safeTarPath("JeanCarloEM-WhatSend-abc123/../segredo.txt"), "");
+});
+
+test("build dist preserva cabeçalho legal e limita exclusão operacional à raiz", () => {
+  const source = [
+    "// Autor: Exemplo",
+    "// Licenca: MPL-2.0",
+    "",
+    "// Comentário comum minificável",
+    "const valor = 1 + 1;",
+    "",
+  ].join("\n");
+  const { body, header } = splitLeadingLegalHeader(source);
+
+  assert.equal(header, "// Autor: Exemplo\n// Licenca: MPL-2.0\n\n");
+  assert.equal(body, "// Comentário comum minificável\nconst valor = 1 + 1;\n");
+  assert.equal(shouldExcludeRootFile("clientes.csv"), true);
+  assert.equal(shouldExcludeRootFile("texto.md"), true);
+  assert.equal(shouldExcludeDistEntry("clientes.csv"), false);
+  assert.equal(shouldExcludeDistEntry("texto.md"), false);
 });
 
 test("status interativo renderiza sem erro", () => {
@@ -586,9 +610,10 @@ test("GUI usa diretório do arquivo de modelo informado como base dos anexos", (
 test("GUI pré-analisa anexos do modelo e aceita pasta de referência", () => {
   const { root, paths } = createFixture();
   const referenceDir = path.join(root, "referencias");
-  const mediaPath = path.join(referenceDir, "rendefacil-lilhian.ogg");
+  const mediaName = "audio-referencia-unico.ogg";
+  const mediaPath = path.join(referenceDir, mediaName);
   const templateFile = {
-    content: "Olá\n![](./rendefacil-lilhian.ogg)",
+    content: `Olá\n![](./${mediaName})`,
     name: "modelo.md",
     path: "modelo.md",
   };

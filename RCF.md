@@ -316,9 +316,11 @@ Depois de atualizar os arquivos do projeto, o atualizador deve sincronizar depen
 
 ### RN028 - Integração Contínua
 
-Quando o projeto estiver hospedado no GitHub, deve existir workflow de CI para alterações em código, testes, scripts e configuração executável, evitando execução em alterações apenas documentais comuns.
+Quando o projeto estiver hospedado no GitHub, deve existir workflow de CI para push e pull request.
 
 Todos os jobs do workflow devem possuir `timeout-minutes` explícito de no máximo 5 minutos.
+
+O workflow deve executar testes, checagem RCF com fixtures, geração de `./dist`, validação do `./dist` e publicação do diretório `dist/` como artefato da execução.
 
 ### RN029 - Reutilização de Instância Local
 
@@ -327,6 +329,24 @@ Ao iniciar a GUI, o sistema deve registrar em diretório temporário do sistema 
 Uma nova abertura da GUI para o mesmo contexto deve verificar se a instância registrada ainda está ativa, responde como a mesma aplicação e usa a mesma sessão. Se os scripts não tiverem mudado desde o registro, a nova execução deve reutilizar a instância existente e apenas reabrir a URL da interface local, preservando a sessão autenticada do WhatsApp.
 
 Se os scripts tiverem mudado, a nova execução deve encerrar a instância registrada e seus processos filhos quando possível, removendo o registro temporário antes de iniciar uma nova instância.
+
+### RN030 - Release Distribuível
+
+O comando `npm run build:dist` deve gerar `./dist` de forma limpa, reproduzível e funcional, removendo conteúdo anterior antes de recriar a release.
+
+A release deve incluir somente arquivos necessários à execução e documentação: `LICENSE`, `README*`, `RCF.md`, `docs/`, `main.js`, `src/`, `scripts/`, inicializadores, `package.json`, `package-lock.json`, arquivos `.env.*` não sensíveis e arquivos de configuração/formatação explicitamente permitidos.
+
+Arquivos JavaScript distribuídos devem ser minificados por biblioteca Open Source mantida. Documentação, arquivos de configuração, scripts shell/batch e formatos em que a minificação possa alterar semântica não devem ser minificados.
+
+Quando um arquivo minificado possuir cabeçalho inicial de licença, copyright, autoria, atribuição, disclaimer ou aviso legal equivalente, esse cabeçalho deve ser preservado integralmente no início do arquivo distribuído, sem minificação, reformatação ou alteração. A minificação deve ser aplicada somente ao restante do conteúdo.
+
+A release não deve incluir `node_modules/`, `.git/`, diretórios iniciados por `.`, `AGENTS.md`, testes, caches, logs com conteúdo, sessões, `.wwebjs_sessions.json`, `.env` real ou qualquer arquivo operacional/sensível.
+
+Os arquivos operacionais `clientes.csv` e `texto.md` localizados na raiz do projeto nunca devem ser copiados para a raiz de `./dist`. Essa regra deve proteger os arquivos reais do usuário sem bloquear automaticamente arquivos homônimos em outros diretórios que sejam necessários à documentação, testes internos de empacotamento ou funcionamento distribuível.
+
+Os diretórios operacionais `logs/`, `modelos/` e `listas/` devem existir na release apenas como diretórios vazios de topo, sem copiar arquivos nem subdiretórios do ambiente local.
+
+O comando `npm run build:dist` deve validar ao final da geração que cabeçalhos legais foram preservados e que `clientes.csv` e `texto.md` da raiz não foram incluídos. O comando `npm run validate:dist` deve validar a estrutura final, ausência de arquivos sensíveis, preservação de cabeçalhos legais e funcionamento da aplicação usando uma cópia temporária do conteúdo de `./dist`, com dependências instaladas a partir do próprio `package-lock.json` distribuído.
 
 ## Requisitos Não Funcionais
 
