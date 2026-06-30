@@ -76,4 +76,7 @@ unset PUPPETEER_SKIP_CHROMIUM_DOWNLOAD
 echo "Verificando navegador compativel..."
 node scripts/ensure-browser.js
 
-npm run start:gui -- "$@"
+node scripts/start-gui-detached.js -- "$@"
+
+echo "A interface local continuara em segundo plano. Este terminal sera liberado em alguns segundos."
+sleep 5

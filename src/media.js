@@ -618,6 +618,8 @@ async function waitForWhatsAppMediaContext(client, timeoutMs = MEDIA_CONTEXT_REA
 
   while (Date.now() - startedAt <= timeoutMs) {
     try {
+      await focusWhatsAppPage(client);
+
       if (typeof page.isClosed === "function" && page.isClosed()) {
         throw new Error("Página do WhatsApp Web fechada.");
       }
@@ -653,6 +655,21 @@ async function waitForWhatsAppMediaContext(client, timeoutMs = MEDIA_CONTEXT_REA
   return false;
 }
 
+async function focusWhatsAppPage(client) {
+  const page = client && client.pupPage;
+
+  if (!page || typeof page.bringToFront !== "function") {
+    return false;
+  }
+
+  try {
+    await page.bringToFront();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 function delay(ms) {
   return new Promise((resolve) => setTimeout(resolve, Math.max(0, ms)));
 }
@@ -682,6 +699,7 @@ module.exports = {
   resolveMediaPath,
   sendRenderedTemplate,
   sendMediaMessageWithRetry,
+  focusWhatsAppPage,
   waitForWhatsAppMediaContext,
   validateTemplateMediaReferences,
 };

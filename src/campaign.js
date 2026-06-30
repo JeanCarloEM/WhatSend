@@ -17,6 +17,9 @@ const { getRecordValue, randomDelay, sanitizePhone, sleep } = require("./utils")
 const { createStatusReporter, maskPhone } = require("./status");
 const { getExistingBrowserConnectionConfig, getWhatsAppClientId, resolveBrowserExecutablePath } = require("./browser");
 
+const WHATSAPP_TAB_ATTENTION_NOTICE =
+  "Se o envio de anexos ou áudio parecer lento, mantenha a aba do WhatsApp Web visível; alguns navegadores reduzem atividade de abas em segundo plano.";
+
 function validateRuntimeFiles(paths = PATHS, options = {}) {
   const checkBrowser = options.checkBrowser !== false;
   const issues = [];
@@ -96,6 +99,12 @@ async function processCampaign(client, paths = PATHS, options = {}) {
     message: `Clientes encontrados: ${clientes.length}`,
     total: clientes.length,
     type: "info",
+  });
+  status.event(WHATSAPP_TAB_ATTENTION_NOTICE, "yellow");
+  emitProgress(options, {
+    message: WHATSAPP_TAB_ATTENTION_NOTICE,
+    total: clientes.length,
+    type: "warning",
   });
 
   for (let index = 0; index < clientes.length; index += 1) {

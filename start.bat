@@ -73,4 +73,11 @@ if errorlevel 1 (
   exit /b 1
 )
 
-call npm run start:gui -- %*
+call node scripts\start-gui-detached.js -- %*
+if errorlevel 1 (
+  echo Falha ao iniciar a interface local.
+  exit /b 1
+)
+
+echo A interface local continuara em segundo plano. Esta janela sera liberada em alguns segundos.
+timeout /t 5 /nobreak >nul

@@ -237,6 +237,26 @@ test("CONNECT_EXISTING_BROWSER usa a porta local padrão", () => {
   );
 });
 
+test("navegador controlado reduz throttling de abas em segundo plano", () => {
+  withEnv(
+    {
+      BROWSER_URL: "",
+      BROWSER_WS_ENDPOINT: "",
+      CHROME_EXECUTABLE_PATH: "",
+      CONNECT_EXISTING_BROWSER: "",
+      PUPPETEER_BROWSER_URL: "",
+      PUPPETEER_BROWSER_WS_ENDPOINT: "",
+      PUPPETEER_EXECUTABLE_PATH: process.execPath,
+    },
+    () => {
+      const config = buildPuppeteerConfig();
+      assert.ok(config.args.includes("--disable-background-timer-throttling"));
+      assert.ok(config.args.includes("--disable-backgrounding-occluded-windows"));
+      assert.ok(config.args.includes("--disable-renderer-backgrounding"));
+    },
+  );
+});
+
 test("aceita WA_CLIENT_ID para sessão separada e rejeita valor inválido", () => {
   withEnv({ WA_CLIENT_ID: "campanha_teste-01", WWEBJS_CLIENT_ID: "" }, () => {
     assert.equal(getWhatsAppClientId(), "campanha_teste-01");
@@ -292,13 +312,23 @@ test("build dist preserva cabeçalho legal e limita exclusão operacional à rai
 test("scripts start instalam dependências sem acionar download implícito do Puppeteer", () => {
   const startBat = fs.readFileSync(path.join(PROJECT_ROOT, "start.bat"), "utf8");
   const startSh = fs.readFileSync(path.join(PROJECT_ROOT, "start.sh"), "utf8");
+  const detachedLauncher = fs.readFileSync(
+    path.join(PROJECT_ROOT, "scripts", "start-gui-detached.js"),
+    "utf8",
+  );
 
   assert.match(startBat, /PUPPETEER_SKIP_DOWNLOAD=true/);
   assert.match(startBat, /PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true/);
   assert.match(startBat, /set "PUPPETEER_SKIP_DOWNLOAD="/);
+  assert.match(startBat, /start-gui-detached\.js/);
+  assert.match(startBat, /timeout \/t 5/);
   assert.match(startSh, /export PUPPETEER_SKIP_DOWNLOAD=true/);
   assert.match(startSh, /export PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true/);
   assert.match(startSh, /unset PUPPETEER_SKIP_DOWNLOAD/);
+  assert.match(startSh, /start-gui-detached\.js/);
+  assert.match(startSh, /sleep 5/);
+  assert.match(detachedLauncher, /detached: true/);
+  assert.match(detachedLauncher, /windowsHide: true/);
 });
 
 test("status interativo renderiza sem erro", () => {
@@ -1151,6 +1181,18 @@ test("GUI renderiza barra de progresso fixa no topo", () => {
   assert.match(html, /position: fixed/);
   assert.match(html, /height: 0\.5rem/);
   assert.match(html, /renderTopProgress/);
+});
+
+test("GUI renderiza desligamento e confirmação contextual de execução", () => {
+  const html = renderGuiHtml();
+
+  assert.match(html, /id="shutdownButton"/);
+  assert.match(html, /\/api\/runtime\/stop/);
+  assert.match(html, /id="executionConfirmOverlay"/);
+  assert.match(html, /Confirmar execução/);
+  assert.match(html, /shouldConfirmExecutionContext/);
+  assert.match(html, /payloadCsvLabel/);
+  assert.match(html, /mantenha a aba do WhatsApp Web visível/);
 });
 
 test("parser avalia filtros complexos contra fixture versionada", () => {

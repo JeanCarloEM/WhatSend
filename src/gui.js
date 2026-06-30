@@ -242,6 +242,20 @@ async function routeGuiRequest(req, res, context) {
     return;
   }
 
+  if (req.method === "POST" && url.pathname === "/api/runtime/stop") {
+    sendJson(res, 202, {
+      message: "Desligando WhatSend.",
+      ok: true,
+    });
+    setTimeout(() => {
+      shutdownCurrentGuiProcess(context, "user_request").catch((err) => {
+        context.state.lastError = err.message || String(err);
+        context.state.status = "erro";
+      });
+    }, 50);
+    return;
+  }
+
   if (req.method === "POST" && url.pathname === "/api/runtime/shutdown") {
     const payload = await readJsonBody(req);
     const runtime = context.baseOptions.guiRuntime;
@@ -1238,6 +1252,12 @@ function renderGuiHtml() {
       margin-bottom: 18px;
     }
 
+    .header-actions {
+      align-items: center;
+      display: flex;
+      gap: 10px;
+    }
+
     h1 {
       margin: 0;
       font-size: 27px;
@@ -1499,6 +1519,18 @@ function renderGuiHtml() {
       background: #912018;
     }
 
+    .shutdown-button {
+      background: #7a271a;
+      min-width: 44px;
+      padding: 0 13px;
+      font-size: 18px;
+      line-height: 1;
+    }
+
+    .shutdown-button:hover {
+      background: #631b14;
+    }
+
     .actions {
       display: flex;
       align-items: center;
@@ -1527,6 +1559,13 @@ function renderGuiHtml() {
       border: 1px solid #abefc6;
     }
 
+    .message.warning {
+      display: block;
+      background: #fffaeb;
+      color: var(--warn);
+      border: 1px solid #fedf89;
+    }
+
     .log {
       display: grid;
       gap: 8px;
@@ -1553,6 +1592,73 @@ function renderGuiHtml() {
       display: block;
       font-size: 12px;
       margin-bottom: 2px;
+    }
+
+    .modal-overlay {
+      align-items: center;
+      background: rgba(15, 23, 42, 0.46);
+      display: none;
+      inset: 0;
+      justify-content: center;
+      padding: 20px;
+      position: fixed;
+      z-index: 60;
+    }
+
+    .modal-overlay.visible {
+      display: flex;
+    }
+
+    .modal-dialog {
+      background: #fff;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      box-shadow: 0 20px 48px rgba(15, 23, 42, 0.2);
+      max-width: 560px;
+      padding: 18px;
+      width: min(100%, 560px);
+    }
+
+    .modal-dialog h2 {
+      margin-bottom: 8px;
+    }
+
+    .confirm-table {
+      border: 1px solid var(--line);
+      border-collapse: collapse;
+      margin-top: 14px;
+      width: 100%;
+    }
+
+    .confirm-table th,
+    .confirm-table td {
+      border-bottom: 1px solid var(--line);
+      padding: 9px 10px;
+      text-align: left;
+      vertical-align: top;
+    }
+
+    .confirm-table th {
+      background: #f8fafc;
+      color: var(--muted);
+      font-size: 12px;
+      width: 36%;
+    }
+
+    .modal-actions {
+      display: flex;
+      gap: 10px;
+      justify-content: flex-end;
+      margin-top: 16px;
+    }
+
+    .secondary-button {
+      background: #eef2f6;
+      color: var(--text);
+    }
+
+    .secondary-button:hover {
+      background: #e4e7ec;
     }
 
     @media (max-width: 860px) {
@@ -1588,7 +1694,10 @@ function renderGuiHtml() {
         <h1>Disparador WhatsApp</h1>
         <p>Acompanhe a conexão do WhatsApp e configure a execução local.</p>
       </div>
-      <div class="status-pill" id="statusPill">Aguardando</div>
+      <div class="header-actions">
+        <div class="status-pill" id="statusPill">Aguardando</div>
+        <button id="shutdownButton" class="icon-button shutdown-button" type="button" title="Desligar" aria-label="Desligar">⏻</button>
+      </div>
     </header>
 
     <div class="layout">
@@ -1745,6 +1854,20 @@ function renderGuiHtml() {
     </div>
   </main>
 
+  <div id="executionConfirmOverlay" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="executionConfirmTitle">
+    <div class="modal-dialog">
+      <h2 id="executionConfirmTitle">Confirmar execução</h2>
+      <p>Confira a associação entre sessão, modelo e base antes de enviar.</p>
+      <table class="confirm-table">
+        <tbody id="executionConfirmRows"></tbody>
+      </table>
+      <div class="modal-actions">
+        <button id="executionConfirmCancel" class="secondary-button" type="button">Cancelar</button>
+        <button id="executionConfirmOk" type="button">Sim</button>
+      </div>
+    </div>
+  </div>
+
   <script>
     const form = document.getElementById("runForm");
     const button = document.getElementById("runButton");
@@ -1753,6 +1876,7 @@ function renderGuiHtml() {
     const statusPill = document.getElementById("statusPill");
     const topProgress = document.getElementById("topProgress");
     const topProgressBar = document.getElementById("topProgressBar");
+    const shutdownButton = document.getElementById("shutdownButton");
     const sessionSelect = document.getElementById("sessionSelect");
     const newSessionButton = document.getElementById("newSessionButton");
     const renameSessionButton = document.getElementById("renameSessionButton");
@@ -1761,6 +1885,10 @@ function renderGuiHtml() {
     const templateBaseDirInput = document.getElementById("templateBaseDir");
     const templateBaseDirBox = document.getElementById("templateBaseDirBox");
     const templateMediaStatus = document.getElementById("templateMediaStatus");
+    const executionConfirmOverlay = document.getElementById("executionConfirmOverlay");
+    const executionConfirmRows = document.getElementById("executionConfirmRows");
+    const executionConfirmOk = document.getElementById("executionConfirmOk");
+    const executionConfirmCancel = document.getElementById("executionConfirmCancel");
     let activeSessionId = "";
     let lastSessionCount = 0;
     let knownSessions = [];
@@ -1857,6 +1985,84 @@ function renderGuiHtml() {
       }
 
       return errors;
+    }
+
+    function shouldConfirmExecutionContext(payload) {
+      return Boolean((payload.csvFile && payload.csvFile.name) || knownSessions.length > 1);
+    }
+
+    function currentSessionLabel() {
+      const selected = knownSessions.find((session) => session.id === activeSessionId);
+      return selected ? selected.displayName : (activeSessionId || "Sessão atual");
+    }
+
+    function payloadModelLabel(payload) {
+      if (payload.templateFile && payload.templateFile.name) {
+        return payload.templateFile.name;
+      }
+
+      if (payload.templateText && payload.templateText.trim()) {
+        return "Texto digitado na GUI";
+      }
+
+      return "texto.md padrão";
+    }
+
+    function payloadCsvLabel(payload) {
+      return payload.csvFile && payload.csvFile.name
+        ? payload.csvFile.name
+        : "clientes.csv padrão";
+    }
+
+    function confirmExecutionContext(payload) {
+      if (!shouldConfirmExecutionContext(payload)) {
+        return Promise.resolve(true);
+      }
+
+      const rows = [
+        ["Sessão", currentSessionLabel()],
+        ["Modelo", payloadModelLabel(payload)],
+        ["Base de clientes", payloadCsvLabel(payload)],
+        ["Filtro", payload.filter && payload.filter.trim() ? payload.filter.trim() : "Sem filtro"],
+      ];
+
+      executionConfirmRows.innerHTML = "";
+      for (const [label, value] of rows) {
+        const row = document.createElement("tr");
+        const th = document.createElement("th");
+        const td = document.createElement("td");
+        th.textContent = label;
+        td.textContent = value;
+        row.append(th, td);
+        executionConfirmRows.append(row);
+      }
+
+      executionConfirmOverlay.classList.add("visible");
+
+      return new Promise((resolve) => {
+        const finish = (confirmed) => {
+          executionConfirmOverlay.classList.remove("visible");
+          executionConfirmOk.removeEventListener("click", onOk);
+          executionConfirmCancel.removeEventListener("click", onCancel);
+          executionConfirmOverlay.removeEventListener("click", onOverlay);
+          document.removeEventListener("keydown", onKeyDown);
+          resolve(confirmed);
+        };
+        const onOk = () => finish(true);
+        const onCancel = () => finish(false);
+        const onOverlay = (event) => {
+          if (event.target === executionConfirmOverlay) finish(false);
+        };
+        const onKeyDown = (event) => {
+          if (event.key === "Escape") finish(false);
+        };
+
+        executionConfirmOk.addEventListener("click", onOk);
+        executionConfirmCancel.addEventListener("click", onCancel);
+        executionConfirmOverlay.addEventListener("click", onOverlay);
+        document.addEventListener("keydown", onKeyDown);
+        executionConfirmOk.focus();
+      });
     }
 
     function scheduleTemplateMediaAnalysis() {
@@ -2078,6 +2284,13 @@ function renderGuiHtml() {
         const localErrors = validateLocal(payload);
         if (localErrors.length) throw new Error(localErrors.join("\\n"));
 
+        const confirmedContext = await confirmExecutionContext(payload);
+        if (!confirmedContext) {
+          showMessage("Execução cancelada para conferência de sessão e arquivos.", "warning");
+          button.disabled = false;
+          return;
+        }
+
         const validation = await postJson("/api/validate", payload);
 
         if (!confirmTemplateSyntaxIssues(validation.syntaxIssues)) {
@@ -2091,7 +2304,10 @@ function renderGuiHtml() {
         }
 
         await postJson("/api/run", payload);
-        showMessage("Processamento iniciado.", "ok");
+        showMessage(
+          "Processamento iniciado. Se áudio ou anexos parecerem lentos, mantenha a aba do WhatsApp Web visível.",
+          "warning",
+        );
         await refreshStatus();
         startStatusPolling();
       } catch (err) {
@@ -2116,6 +2332,21 @@ function renderGuiHtml() {
       }
 
       scheduleTemplateMediaAnalysis();
+    });
+
+    shutdownButton.addEventListener("click", async () => {
+      const confirmed = window.confirm("Desligar o WhatSend? O WhatsApp controlado e a interface local serão encerrados.");
+
+      if (!confirmed) return;
+
+      try {
+        shutdownButton.disabled = true;
+        showMessage("Desligando WhatSend...", "warning");
+        await postJson("/api/runtime/stop", {});
+      } catch (err) {
+        shutdownButton.disabled = false;
+        showMessage(err.message, "error");
+      }
     });
 
     sessionSelect.addEventListener("change", async () => {

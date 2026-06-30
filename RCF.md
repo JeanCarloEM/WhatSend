@@ -244,6 +244,8 @@ Em caso de falha, o processamento deve ser interrompido antes do primeiro envio.
 
 O sistema deve usar navegador Chromium compatível, detectando automaticamente Chrome, Chromium ou Edge em Windows, macOS e Linux, ou aceitando configuração manual por `PUPPETEER_EXECUTABLE_PATH` e `CHROME_EXECUTABLE_PATH`.
 
+Ao iniciar navegador controlado pelo projeto, devem ser aplicadas opções compatíveis para reduzir throttling de abas/janelas em segundo plano quando suportado pelo Chromium, sem depender disso como garantia absoluta de envio.
+
 Quando o navegador já estiver aberto, só deve ser reutilizado se tiver sido iniciado com depuração remota e informado por `BROWSER_URL`, `BROWSER_WS_ENDPOINT` ou `CONNECT_EXISTING_BROWSER`.
 
 ### RN022 - Interface Gráfica Local
@@ -255,6 +257,12 @@ A GUI deve ser servida por servidor HTTP leve local, sem transmitir dados para s
 A interface local deve ser iniciada no começo do fluxo para exibir status de autenticação e carregamento do WhatsApp. O envio só pode ser liberado após o WhatsApp ficar pronto.
 
 Durante o processamento de envio, a GUI deve exibir uma barra de progresso fina, fixa no topo da janela, visível apenas enquanto houver execução ativa. A barra deve avançar conforme destinatários forem concluídos, pulados ou falharem, com transição suave, animação discreta e cores profissionais que contrastem com a página sem prejudicar a leitura dos demais componentes.
+
+A GUI deve oferecer um botão de desligar que encerre o processo local, fechando o client controlado e a interface. O botão deve pedir confirmação antes de encerrar.
+
+Ao iniciar uma execução, a GUI deve exibir aviso não bloqueante de que, se áudio ou anexos parecerem lentos, pode ser necessário manter a aba do WhatsApp Web visível. A CLI deve emitir aviso equivalente no terminal.
+
+Ao executar pela GUI, se houver arquivo CSV selecionado manualmente ou múltiplas sessões disponíveis, deve ser exibida confirmação explícita com sessão, modelo, base de clientes e filtro antes de iniciar o envio, permitindo confirmar ou cancelar.
 
 Quando possível, a GUI deve ser aberta como aba no mesmo navegador controlado pelo WhatsApp Web. Se o navegador controlado ainda não estiver disponível ou não permitir nova aba, a GUI pode ser aberta no navegador padrão, registrando esse fallback de forma clara.
 
@@ -289,6 +297,8 @@ Quando Node.js estiver ausente, o script deve orientar ou tentar instalação au
 Os scripts devem verificar navegador compatível. Se Chrome, Edge ou Chromium não forem encontrados, devem tentar instalar automaticamente um Chrome compatível via instalador do Puppeteer.
 
 Durante a instalação automática de dependências pelos scripts de inicialização, o download implícito de navegador pelo postinstall do Puppeteer deve ser desativado. A instalação ou validação de navegador deve ocorrer somente na etapa explícita de verificação de navegador, para evitar falhas por cache parcial, ambiente sem permissão ou divergência entre dependências e navegador local.
+
+Os scripts de inicialização voltados à GUI devem iniciar o processo local em segundo plano após a preparação do ambiente, manter o terminal apenas por breve período informativo e então liberá-lo/fechá-lo, preservando `npm run start:gui` como opção em primeiro plano para depuração.
 
 ### RN024 - Sessões de WhatsApp
 
