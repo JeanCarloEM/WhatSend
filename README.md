@@ -191,6 +191,8 @@ Comandos principais:
 | `npm test` | Roda a suite automatizada. |
 | `npm run build:dist` | Gera a release distribuível em `dist/`. |
 | `npm run validate:dist` | Valida estrutura, segurança e execução do `dist`. |
+| `npm run release-notes:generate -- HASH_INICIAL HASH_FINAL` | Gera `dist/release-notes.md` para uma release formal. |
+| `npm run release-notes:validate` | Valida localmente que `dist/release-notes.md` esteja em commit exclusivo. |
 | `.\atualizar.cmd` | Atualiza pelo GitHub Releases, ou por `main` se nao houver release, no Windows. |
 | `sh ./atualizar.sh` | Atualiza pelo GitHub Releases, ou por `main` se nao houver release, no macOS/Linux. |
 
@@ -244,6 +246,8 @@ Para gerar e validar a release distribuível:
 npm run build:dist
 npm run validate:dist
 ```
+
+`dist/release-notes.md`, quando existir, é protegido: o build preserva seu conteúdo e ele só deve ser gerado por `npm run release-notes:generate -- HASH_INICIAL HASH_FINAL`. Esse arquivo deve ser commitado sozinho.
 
 ## Documentacao
 

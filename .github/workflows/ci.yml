@@ -21,12 +21,17 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
+
+      - name: Validate release notes policy
+        run: node scripts/validate-release-notes-policy.js --github
 
       - name: Install dependencies
         run: npm ci

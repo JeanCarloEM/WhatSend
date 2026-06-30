@@ -90,6 +90,12 @@ const {
   shouldExcludeEntry: shouldExcludeDistEntry,
   shouldExcludeRootFile,
 } = require("../scripts/build-dist");
+const {
+  buildReleaseNotesMarkdown,
+  categorizeCommitMessages,
+  validateChangedFilesForSingleCommit,
+  validateReleaseNotesContent,
+} = require("../scripts/release-notes-policy");
 
 const COMPLEX_CLIENTS_CSV = path.join(__dirname, "clientes-complexos.csv");
 const COMPLEX_EXPECTED_JSON = path.join(__dirname, "expressions-complexas.expected.json");
@@ -307,6 +313,49 @@ test("build dist preserva cabeçalho legal e limita exclusão operacional à rai
   assert.equal(shouldExcludeRootFile("texto.md"), true);
   assert.equal(shouldExcludeDistEntry("clientes.csv"), false);
   assert.equal(shouldExcludeDistEntry("texto.md"), false);
+});
+
+test("release notes exige rastreio, melhorias e correções em Markdown", () => {
+  const markdown = buildReleaseNotesMarkdown(
+    "546d5805ea91d0323084d2677623ad22395ab73a",
+    "b9d90ef461bef4e98ce6fc957382f1aecca3820f",
+    [
+      "melhoria: adiciona barra de progresso na GUI",
+      "fix: corrige envio de áudio OGG",
+      "docs: ajusta espaçamento do README",
+    ],
+  );
+
+  assert.match(markdown, /^# Rastreio/m);
+  assert.match(markdown, /^# Melhorias/m);
+  assert.match(markdown, /^# Correções/m);
+  assert.match(markdown, /546d5805ea91d0323084d2677623ad22395ab73a → b9d90ef461bef4e98ce6fc957382f1aecca3820f/);
+  assert.match(markdown, /Adiciona barra de progresso na GUI\./);
+  assert.match(markdown, /Corrige envio de áudio OGG\./);
+  assert.doesNotMatch(markdown, /README/);
+  assert.equal(validateReleaseNotesContent(markdown), true);
+});
+
+test("release notes só pode ser commitado sozinho", () => {
+  assert.equal(validateChangedFilesForSingleCommit(["dist/release-notes.md"]), true);
+  assert.equal(validateChangedFilesForSingleCommit(["src/app.js"]), true);
+
+  assert.throws(
+    () => validateChangedFilesForSingleCommit(["dist/release-notes.md", "src/app.js"], "b9d90ef"),
+    /deve estar em commit exclusivo/,
+  );
+});
+
+test("release notes ignora commits triviais e separa melhorias de correções", () => {
+  const categorized = categorizeCommitMessages([
+    "adicionado continue.ia",
+    "docs: reorganiza sumário",
+    "melhoria: adiciona comando de geração",
+    "fix: corrige validação de release notes",
+  ]);
+
+  assert.deepEqual(categorized.improvements, ["Adiciona comando de geração."]);
+  assert.deepEqual(categorized.fixes, ["Corrige validação de release notes."]);
 });
 
 test("scripts start instalam dependências sem acionar download implícito do Puppeteer", () => {

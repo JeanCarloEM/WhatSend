@@ -9,6 +9,7 @@ const childProcess = require("child_process");
 const fs = require("fs");
 const os = require("os");
 const path = require("path");
+const { RELEASE_NOTES_RELATIVE_PATH, validateReleaseNotesContent } = require("./release-notes-policy");
 
 const ROOT_DIR = path.resolve(__dirname, "..");
 const DIST_DIR = path.join(ROOT_DIR, "dist");
@@ -58,9 +59,24 @@ function validateDist() {
   validateStructure(DIST_DIR);
   validateNoSensitiveFiles(DIST_DIR);
   validateStructureOnlyDirs(DIST_DIR);
+  validateReleaseNotesIfPresent(DIST_DIR);
   validateLegalHeaders(DIST_DIR);
   validateExecutableDist(DIST_DIR);
   console.log("Dist validado com sucesso.");
+}
+
+function validateReleaseNotesIfPresent(distDir) {
+  const releaseNotesPath = path.join(distDir, RELEASE_NOTES_RELATIVE_PATH.replace(/^dist\//u, ""));
+
+  if (!fs.existsSync(releaseNotesPath)) {
+    return;
+  }
+
+  if (!fs.statSync(releaseNotesPath).isFile()) {
+    throw new Error("release-notes.md em dist deve ser arquivo Markdown.");
+  }
+
+  validateReleaseNotesContent(fs.readFileSync(releaseNotesPath, "utf8"));
 }
 
 function validateStructure(distDir) {
@@ -402,5 +418,6 @@ module.exports = {
   validateDist,
   validateLegalHeaders,
   validateNoSensitiveFiles,
+  validateReleaseNotesIfPresent,
   validateStructure,
 };

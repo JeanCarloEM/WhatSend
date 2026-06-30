@@ -370,6 +370,30 @@ Os diretórios operacionais `logs/`, `modelos/` e `listas/` devem existir na rel
 
 O comando `npm run build:dist` deve validar ao final da geração que cabeçalhos legais foram preservados e que `clientes.csv` e `texto.md` da raiz não foram incluídos. O comando `npm run validate:dist` deve validar a estrutura final, ausência de arquivos sensíveis, preservação de cabeçalhos legais e funcionamento da aplicação usando uma cópia temporária do conteúdo de `./dist`, com dependências instaladas a partir do próprio `package-lock.json` distribuído.
 
+### RN031 - Release Notes Protegidas
+
+O arquivo `./dist/release-notes.md` é um artefato protegido de criação formal de release.
+
+O arquivo não deve ser alterado automaticamente por build, validação, atualização ou qualquer outro fluxo operacional. Quando já existir, `npm run build:dist` deve preservar seu conteúdo. Alterações somente são permitidas por solicitação explícita do usuário ou pelo comando específico:
+
+```text
+npm run release-notes:generate -- HASH_INICIAL HASH_FINAL
+```
+
+O arquivo deve ser Markdown e conter obrigatoriamente, nesta ordem, as seções:
+
+```text
+# Rastreio
+# Melhorias
+# Correções
+```
+
+A seção `# Rastreio` deve informar o intervalo no formato `commit A → commit B`, com hash inicial e final. As seções de conteúdo devem ser curtas, objetivas, orientadas ao usuário final e devem ignorar alterações triviais que não agreguem valor operacional.
+
+Toda alteração em `./dist/release-notes.md` deve ocorrer em commit exclusivo, sem qualquer outro arquivo modificado no mesmo commit. Esse commit representa apenas a consolidação da release; todas as melhorias, correções e ajustes descritos já devem existir em commits anteriores.
+
+Commits que misturem `./dist/release-notes.md` com código, documentação, configuração ou qualquer outro arquivo são proibidos. A regra deve ser validada em camadas, incluindo hook Git local quando possível, workflow do GitHub e scripts de validação. A mensagem de bloqueio deve explicar o motivo e indicar comandos compatíveis com Windows, Linux e macOS para remover apenas `./dist/release-notes.md` do commit, preservando as demais alterações.
+
 ## Requisitos Não Funcionais
 
 ### RNF001 - Plataforma

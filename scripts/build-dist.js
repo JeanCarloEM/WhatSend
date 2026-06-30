@@ -8,6 +8,7 @@
 const fs = require("fs");
 const path = require("path");
 const terser = require("terser");
+const { RELEASE_NOTES_PATH, validateReleaseNotesContent } = require("./release-notes-policy");
 
 const ROOT_DIR = path.resolve(__dirname, "..");
 const DIST_DIR = path.join(ROOT_DIR, "dist");
@@ -67,6 +68,8 @@ const LEGAL_HEADER_KEYWORDS = [
 ];
 
 async function buildDist() {
+  const releaseNotesSnapshot = readExistingReleaseNotes();
+
   cleanDistDirectory();
   fs.mkdirSync(DIST_DIR, { recursive: true });
 
@@ -86,8 +89,26 @@ async function buildDist() {
 
   ensureEnvExample();
   await minifyJavaScriptFiles(DIST_DIR);
+  restoreExistingReleaseNotes(releaseNotesSnapshot);
   validateBuiltDist();
   console.log(`Release distribuível gerada em ${path.relative(ROOT_DIR, DIST_DIR)}`);
+}
+
+function readExistingReleaseNotes() {
+  if (!fs.existsSync(RELEASE_NOTES_PATH) || !fs.statSync(RELEASE_NOTES_PATH).isFile()) {
+    return null;
+  }
+
+  return fs.readFileSync(RELEASE_NOTES_PATH);
+}
+
+function restoreExistingReleaseNotes(snapshot) {
+  if (!snapshot) {
+    return;
+  }
+
+  fs.mkdirSync(path.dirname(RELEASE_NOTES_PATH), { recursive: true });
+  fs.writeFileSync(RELEASE_NOTES_PATH, snapshot);
 }
 
 function cleanDistDirectory() {
@@ -96,6 +117,10 @@ function cleanDistDirectory() {
   }
 
   for (const entry of sortedDirents(DIST_DIR)) {
+    if (path.join(DIST_DIR, entry.name) === RELEASE_NOTES_PATH) {
+      continue;
+    }
+
     fs.rmSync(path.join(DIST_DIR, entry.name), {
       force: true,
       maxRetries: 8,
@@ -222,7 +247,16 @@ function shouldExcludeRootFile(name) {
 
 function validateBuiltDist() {
   validateRootOperationalFilesExcluded();
+  validateReleaseNotesIfPresent();
   validateMinifiedLegalHeaders();
+}
+
+function validateReleaseNotesIfPresent() {
+  if (!fs.existsSync(RELEASE_NOTES_PATH)) {
+    return;
+  }
+
+  validateReleaseNotesContent(fs.readFileSync(RELEASE_NOTES_PATH, "utf8"));
 }
 
 function validateRootOperationalFilesExcluded() {

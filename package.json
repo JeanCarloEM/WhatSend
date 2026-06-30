@@ -8,6 +8,7 @@
   "main": "main.js",
   "scripts": {
     "browser:ensure": "node scripts/ensure-browser.js",
+    "prepare": "node scripts/install-git-hooks.js",
     "start": "node main.js",
     "gui": "node main.js --gui",
     "start:clear": "node main.js --clear-sent",
@@ -17,6 +18,8 @@
     "start:reset": "node main.js --reset-sent",
     "build:dist": "node scripts/build-dist.js",
     "validate:dist": "node scripts/validate-dist.js",
+    "release-notes:generate": "node scripts/generate-release-notes.js",
+    "release-notes:validate": "node scripts/validate-release-notes-policy.js --staged",
     "check": "node main.js --check",
     "check:test": "node main.js --check --check-csv test/check-clientes.csv --check-template test/check-texto.md",
     "test": "node --test",
