@@ -1533,9 +1533,13 @@ test("GUI renderiza editor textual com abas, toolbar e preview", () => {
   assert.match(html, /id="templateTabs"/);
   assert.match(html, /id="templatePreview"/);
   assert.match(html, /data-wrap="\*"/);
+  assert.match(html, /id="emojiMenu"/);
+  assert.match(html, /renderEmojiMenu/);
+  assert.match(html, /appendFormattedPreviewText/);
   assert.match(html, /id="insertPostingButton"/);
   assert.match(html, /setEditorContent/);
   assert.match(html, /\/api\/template\/preview/);
+  assert.doesNotMatch(html, /window\.prompt\("Emoji:/);
 });
 
 test("preview da GUI usa plano de envio para postagens e anexos", () => {

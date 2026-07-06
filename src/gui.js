@@ -1437,24 +1437,36 @@ function renderGuiHtml() {
       border: 1px solid var(--line);
       border-radius: 8px;
       background: #fff;
-      overflow: hidden;
+      overflow: visible;
     }
 
-    .wa-toolbar,
-    .wa-tabs {
+    .wa-toolbar {
       align-items: center;
       background: #f8fafc;
       border-bottom: 1px solid var(--line);
       display: flex;
       gap: 6px;
       min-height: 42px;
-      overflow-x: auto;
+      overflow: visible;
       padding: 7px;
+      position: relative;
+      z-index: 11;
+    }
+
+    .wa-tabs {
+      align-items: end;
+      background: #f8fafc;
+      border-bottom: 1px solid var(--line);
+      display: flex;
+      gap: 4px;
+      min-height: 43px;
+      overflow-x: auto;
+      overflow-y: visible;
+      padding: 7px 7px 0;
     }
 
     .wa-toolbar button,
-    .wa-tab,
-    .wa-tab-action {
+    .wa-tab {
       align-items: center;
       background: #fff;
       border: 1px solid var(--line);
@@ -1468,23 +1480,110 @@ function renderGuiHtml() {
       min-height: 30px;
       min-width: 32px;
       padding: 5px 9px;
+      transition: background 0.14s ease, border-color 0.14s ease, box-shadow 0.14s ease, transform 0.14s ease;
       white-space: nowrap;
     }
 
     .wa-toolbar button:hover,
-    .wa-tab:hover,
-    .wa-tab-action:hover {
+    .wa-tab:hover {
       border-color: #98a2b3;
+      box-shadow: 0 3px 8px rgba(16, 24, 40, 0.08);
+      transform: translateY(-1px);
+    }
+
+    .wa-toolbar-group {
+      position: relative;
+    }
+
+    .emoji-menu {
+      background: #fff;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      box-shadow: var(--shadow);
+      display: none;
+      gap: 5px;
+      grid-template-columns: repeat(6, 34px);
+      left: 0;
+      max-height: 250px;
+      overflow-y: auto;
+      padding: 8px;
+      position: fixed;
+      top: 0;
+      width: max-content;
+      z-index: 1000;
+    }
+
+    .emoji-menu.open {
+      display: grid;
+    }
+
+    .emoji-menu button {
+      font-size: 18px;
+      min-height: 32px;
+      min-width: 32px;
+      padding: 3px;
+    }
+
+    .emoji-menu button:hover {
+      background: #ecfdf3;
+      border-color: #12b76a;
+      transform: scale(1.04);
+    }
+
+    .wa-tab {
+      border-bottom-left-radius: 0;
+      border-bottom-right-radius: 0;
+      gap: 8px;
+      min-height: 36px;
+      padding: 6px 10px;
+      position: relative;
+      top: 1px;
     }
 
     .wa-tab.active {
-      background: #ecfdf3;
+      background: #fff;
       border-color: #12b76a;
+      border-bottom-color: #fff;
+      box-shadow: 0 -1px 0 #12b76a, 0 -3px 8px rgba(18, 183, 106, 0.12);
       color: #067647;
     }
 
-    .wa-tab-action.danger {
+    .wa-tab-create {
+      border-radius: 7px 7px 0 0;
+      color: #067647;
+      font-size: 18px;
+      min-width: 36px;
+    }
+
+    .wa-tab-delete {
+      align-items: center;
+      background: transparent;
+      border: 0;
+      border-radius: 5px;
       color: var(--danger);
+      cursor: pointer;
+      display: inline-flex;
+      font-size: 14px;
+      height: 22px;
+      justify-content: center;
+      min-height: 0;
+      min-width: 22px;
+      padding: 0;
+      transition: background 0.14s ease, transform 0.14s ease;
+      width: 22px;
+    }
+
+    .wa-tab-delete:hover {
+      background: #fff1f0;
+      transform: scale(1.06);
+    }
+
+    .danger-tool {
+      color: var(--danger);
+    }
+
+    .icon-tool {
+      font-size: 16px;
     }
 
     .wa-editor-shell {
@@ -1561,6 +1660,10 @@ function renderGuiHtml() {
       padding: 14px;
     }
 
+    .wa-preview:hover {
+      background: #eaf6ed;
+    }
+
     .wa-preview-empty {
       color: var(--muted);
       font-size: 13px;
@@ -1589,6 +1692,33 @@ function renderGuiHtml() {
       max-width: 92%;
       padding: 8px 10px;
       white-space: pre-wrap;
+      transition: box-shadow 0.14s ease, transform 0.14s ease;
+    }
+
+    .wa-bubble:hover {
+      box-shadow: 0 4px 12px rgba(16, 24, 40, 0.1);
+      transform: translateY(-1px);
+    }
+
+    .wa-bubble strong {
+      font-weight: 800;
+    }
+
+    .wa-bubble em {
+      font-style: italic;
+    }
+
+    .wa-bubble s {
+      text-decoration-thickness: 1.5px;
+    }
+
+    .wa-bubble code {
+      background: #f2f4f7;
+      border: 1px solid var(--line);
+      border-radius: 4px;
+      font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
+      font-size: 0.94em;
+      padding: 1px 4px;
     }
 
     .wa-bubble.media {
@@ -1732,22 +1862,6 @@ function renderGuiHtml() {
       font-weight: 900;
     }
 
-    .emoji-list {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 7px;
-      margin-top: 10px;
-    }
-
-    .emoji-list span {
-      border: 1px solid var(--line);
-      border-radius: 999px;
-      padding: 4px 9px;
-      background: #fff;
-      white-space: nowrap;
-      font-size: 12px;
-    }
-
     .split {
       display: grid;
       grid-template-columns: 1fr 1fr;
@@ -1787,9 +1901,14 @@ function renderGuiHtml() {
       font-weight: 800;
       min-height: 44px;
       padding: 0 18px;
+      transition: background 0.14s ease, box-shadow 0.14s ease, transform 0.14s ease;
     }
 
-    button:hover { background: var(--accent-strong); }
+    button:hover {
+      background: var(--accent-strong);
+      box-shadow: 0 4px 10px rgba(23, 92, 211, 0.16);
+      transform: translateY(-1px);
+    }
     button:disabled { cursor: not-allowed; opacity: 0.55; }
 
     .icon-button {
@@ -2025,17 +2144,34 @@ function renderGuiHtml() {
 
         <section>
           <h2>Modelo de mensagem</h2>
-          <label for="templateEditorInput">Texto do modelo</label>
+          <label for="templateFile">Arquivo .md</label>
+          <input id="templateFile" type="file" accept=".md,text/markdown,text/plain">
+          <div id="templateMediaStatus" class="field-message"></div>
+          <div id="templateBaseDirBox" class="template-base-dir">
+            <label for="templateBaseDir">Pasta de referência dos anexos</label>
+            <input id="templateBaseDir" type="text" placeholder="C:/LOCAL/whatsapp/anexos">
+            <div class="hint">Use quando o navegador não conseguir informar a pasta real do .md. Deve ser um diretório local existente.</div>
+          </div>
+          <div class="hint">Se nenhum arquivo for selecionado, use o editor abaixo ou o modelo padrão texto.md.</div>
+
+          <label for="templateEditorInput" style="margin-top:14px">Texto do modelo</label>
           <div class="wa-editor">
+            <div class="wa-tabs" id="templateTabs" aria-label="Blocos do modelo">
+              <button id="newTemplateTabButton" class="wa-tab wa-tab-create" type="button" title="Novo modelo" aria-label="Novo modelo">+</button>
+            </div>
             <div class="wa-toolbar" aria-label="Ferramentas de edição textual">
               <button type="button" data-wrap="*" title="Negrito">B</button>
               <button type="button" data-wrap="_" title="Itálico"><em>I</em></button>
-              <button type="button" data-wrap="~" title="Tachado"><s>S</s></button>
-              <button type="button" id="insertEmojiButton" title="Inserir emoji">☺</button>
+              <button type="button" data-wrap="~" title="Tachado"><s>T</s></button>
+              <button type="button" data-wrap="\`\`\`" title="Monoespaçado" class="icon-tool">⟨⟩</button>
+              <div class="wa-toolbar-group">
+                <button type="button" id="insertEmojiButton" title="Inserir emoji" aria-haspopup="menu" aria-expanded="false">☺</button>
+                <div id="emojiMenu" class="emoji-menu" role="menu" aria-label="Emojis profissionais"></div>
+              </div>
               <button type="button" id="insertAttachmentButton" title="Inserir anexo">📎</button>
-              <button type="button" id="insertPostingButton" title="Dividir postagem">$postagem$</button>
+              <button type="button" id="insertPostingButton" title="Inserir nova postagem">↵ Nova postagem</button>
+              <button type="button" id="saveTemplateButton" title="Salvar como" aria-label="Salvar como">💾</button>
             </div>
-            <div class="wa-tabs" id="templateTabs" aria-label="Blocos do modelo"></div>
             <div class="wa-editor-shell">
               <div class="wa-input-pane">
                 <pre id="templateHighlight" class="wa-highlight" aria-hidden="true"></pre>
@@ -2046,11 +2182,6 @@ function renderGuiHtml() {
           </div>
           <textarea id="templateText" class="visually-hidden-field" tabindex="-1" aria-hidden="true"></textarea>
           <div class="hint">\${campo} aceita colunas/expressões. Use a toolbar para inserir apenas marcação textual do WhatsApp. Anexos em ![](arquivo.pdf), $postagem$ e separadores ^^^ permanecem texto puro.</div>
-          <div class="actions" style="margin-top:10px">
-            <button id="newTemplateTabButton" type="button">Nova aba</button>
-            <button id="deleteTemplateTabButton" type="button" class="secondary">Excluir aba</button>
-            <button id="saveTemplateButton" type="button" class="secondary">Salvar como</button>
-          </div>
           <div class="syntax-demo" aria-label="Demonstração de sintaxe textual">
             <div>*negrito exemplo*</div>
             <div><strong>negrito exemplo</strong></div>
@@ -2058,80 +2189,8 @@ function renderGuiHtml() {
             <div><em>itálico exemplo</em></div>
             <div>~taxado exemplo~</div>
             <div><s>taxado exemplo</s></div>
-          </div>
-          <details class="hint">
-            <summary>Emojis profissionais</summary>
-            <div class="emoji-list">
-              <span>⚠️ alerta</span>
-              <span>✅ concluído</span>
-              <span>❌ erro</span>
-              <span>📋 lista</span>
-              <span>👍 ok</span>
-              <span>ℹ️ informação</span>
-              <span>📌 destaque</span>
-              <span>⏰ prazo</span>
-              <span>⏱️ economia de tempo</span>
-              <span>📎 anexo</span>
-              <span>💬 resposta</span>
-              <span>🚀 lançamento</span>
-              <span>🎯 objetivo</span>
-              <span>💡 ideia</span>
-              <span>🏷️ preço baixo</span>
-              <span>💸 baixo custo</span>
-              <span>♻️ economia de recursos</span>
-              <span>📦 entrega</span>
-              <span>📈 crescimento</span>
-              <span>🤝 parceria</span>
-              <span>🆗 aprovado</span>
-              <span>☑️ confirmado</span>
-              <span>🔔 lembrete</span>
-              <span>📣 anúncio</span>
-              <span>📢 comunicado</span>
-              <span>📲 contato</span>
-              <span>📞 ligação</span>
-              <span>✉️ email</span>
-              <span>📝 cadastro</span>
-              <span>📄 documento</span>
-              <span>🧾 comprovante</span>
-              <span>💳 pagamento</span>
-              <span>💰 valor</span>
-              <span>🎁 brinde</span>
-              <span>🔥 oferta</span>
-              <span>⭐ favorito</span>
-              <span>🛒 compra</span>
-              <span>🛍️ pedido</span>
-              <span>🚚 frete</span>
-              <span>🔒 seguro</span>
-              <span>🔐 acesso</span>
-              <span>🛠️ suporte</span>
-              <span>🧩 solução</span>
-              <span>📊 relatório</span>
-              <span>📉 redução</span>
-              <span>🧮 cálculo</span>
-              <span>📅 agenda</span>
-              <span>🗓️ data</span>
-              <span>⌛ aguardando</span>
-              <span>🔄 atualização</span>
-              <span>⬆️ aumento</span>
-              <span>⬇️ desconto</span>
-              <span>➡️ próximo passo</span>
-              <span>✨ novidade</span>
-              <span>🎉 comemoração</span>
-              <span>🏆 conquista</span>
-              <span>💎 premium</span>
-              <span>🙏 agradecimento</span>
-              <span>🙂 cordialidade</span>
-              <span>😔 atenção empática</span>
-            </div>
-          </details>
-          <div style="height:14px"></div>
-          <label for="templateFile">Ou arquivo .md</label>
-          <input id="templateFile" type="file" accept=".md,text/markdown,text/plain">
-          <div id="templateMediaStatus" class="field-message"></div>
-          <div id="templateBaseDirBox" class="template-base-dir">
-            <label for="templateBaseDir">Pasta de referência dos anexos</label>
-            <input id="templateBaseDir" type="text" placeholder="C:/LOCAL/whatsapp/anexos">
-            <div class="hint">Use quando o navegador não conseguir informar a pasta real do .md. Deve ser um diretório local existente.</div>
+            <div>\`\`\`mono exemplo\`\`\`</div>
+            <div><code>mono exemplo</code></div>
           </div>
         </section>
 
@@ -2212,9 +2271,9 @@ function renderGuiHtml() {
     const templatePreview = document.getElementById("templatePreview");
     const templateTabs = document.getElementById("templateTabs");
     const newTemplateTabButton = document.getElementById("newTemplateTabButton");
-    const deleteTemplateTabButton = document.getElementById("deleteTemplateTabButton");
     const saveTemplateButton = document.getElementById("saveTemplateButton");
     const insertEmojiButton = document.getElementById("insertEmojiButton");
+    const emojiMenu = document.getElementById("emojiMenu");
     const insertAttachmentButton = document.getElementById("insertAttachmentButton");
     const insertPostingButton = document.getElementById("insertPostingButton");
     const executionConfirmOverlay = document.getElementById("executionConfirmOverlay");
@@ -2233,6 +2292,69 @@ function renderGuiHtml() {
     let templateBlocks = [""];
     let activeTemplateBlock = 0;
     let isComposingTemplate = false;
+    let scrollSyncSource = "";
+    const emojiOptions = [
+      ["⚠️", "alerta"],
+      ["✅", "concluído"],
+      ["❌", "erro"],
+      ["📋", "lista"],
+      ["👍", "ok"],
+      ["ℹ️", "informação"],
+      ["📌", "destaque"],
+      ["⏰", "prazo"],
+      ["⏱️", "economia de tempo"],
+      ["📎", "anexo"],
+      ["💬", "resposta"],
+      ["🚀", "lançamento"],
+      ["🎯", "objetivo"],
+      ["💡", "ideia"],
+      ["🏷️", "preço baixo"],
+      ["💸", "baixo custo"],
+      ["♻️", "economia de recursos"],
+      ["📦", "entrega"],
+      ["📈", "crescimento"],
+      ["🤝", "parceria"],
+      ["🆗", "aprovado"],
+      ["☑️", "confirmado"],
+      ["🔔", "lembrete"],
+      ["📣", "anúncio"],
+      ["📢", "comunicado"],
+      ["📲", "contato"],
+      ["📞", "ligação"],
+      ["✉️", "email"],
+      ["📝", "cadastro"],
+      ["📄", "documento"],
+      ["🧾", "comprovante"],
+      ["💳", "pagamento"],
+      ["💰", "valor"],
+      ["🎁", "brinde"],
+      ["🔥", "oferta"],
+      ["⭐", "favorito"],
+      ["🛒", "compra"],
+      ["🛍️", "pedido"],
+      ["🚚", "frete"],
+      ["🔒", "seguro"],
+      ["🔐", "acesso"],
+      ["🛠️", "suporte"],
+      ["🧩", "solução"],
+      ["📊", "relatório"],
+      ["📉", "redução"],
+      ["🧮", "cálculo"],
+      ["📅", "agenda"],
+      ["🗓️", "data"],
+      ["⌛", "aguardando"],
+      ["🔄", "atualização"],
+      ["⬆️", "aumento"],
+      ["⬇️", "desconto"],
+      ["➡️", "próximo passo"],
+      ["✨", "novidade"],
+      ["🎉", "comemoração"],
+      ["🏆", "conquista"],
+      ["💎", "premium"],
+      ["🙏", "agradecimento"],
+      ["🙂", "cordialidade"],
+      ["😔", "atenção empática"],
+    ];
 
     function showMessage(text, type) {
       message.textContent = text;
@@ -2356,9 +2478,11 @@ function renderGuiHtml() {
 
     function highlightTemplateText(text) {
       const source = String(text || "");
+      const monoMarker = String.fromCharCode(96).repeat(3);
+      const markerPattern = new RegExp("(" + monoMarker + "|\\\\*|_|~)", "g");
       const highlighted = escapeMarkup(source || " ")
         .replace(/(\\$\\{[^}]*\\})/g, '<span class="wa-placeholder-token">$1</span>')
-        .replace(/(\\*|_|~)/g, '<span class="wa-marker">$1</span>');
+        .replace(markerPattern, '<span class="wa-marker">$1</span>');
       return highlighted + (source.endsWith("\\n") ? " " : "\\n");
     }
 
@@ -2372,15 +2496,62 @@ function renderGuiHtml() {
       templateHighlight.scrollLeft = templateEditorInput.scrollLeft;
     }
 
+    function getScrollRatio(element) {
+      const max = element.scrollHeight - element.clientHeight;
+      return max > 0 ? element.scrollTop / max : 0;
+    }
+
+    function setScrollRatio(element, ratio) {
+      const max = element.scrollHeight - element.clientHeight;
+      element.scrollTop = max > 0 ? max * Math.max(0, Math.min(1, ratio)) : 0;
+    }
+
+    function syncEditorPreviewScroll(source) {
+      if (scrollSyncSource) return;
+
+      const from = source === "preview" ? templatePreview : templateEditorInput;
+      const to = source === "preview" ? templateEditorInput : templatePreview;
+      const ratio = getScrollRatio(from);
+
+      scrollSyncSource = source;
+      window.requestAnimationFrame(() => {
+        setScrollRatio(to, ratio);
+        syncHighlightScroll();
+        window.requestAnimationFrame(() => {
+          scrollSyncSource = "";
+        });
+      });
+    }
+
+    function syncPreviewToEditorPosition() {
+      const ratio = getScrollRatio(templateEditorInput);
+      scrollSyncSource = "render";
+      window.requestAnimationFrame(() => {
+        setScrollRatio(templatePreview, ratio);
+        window.requestAnimationFrame(() => {
+          scrollSyncSource = "";
+        });
+      });
+    }
+
     function renderTemplateTabs() {
       templateTabs.innerHTML = "";
       templateBlocks.forEach((block, index) => {
-        const tab = document.createElement("button");
-        tab.type = "button";
+        const tab = document.createElement("div");
         tab.className = "wa-tab" + (index === activeTemplateBlock ? " active" : "");
-        tab.textContent = "Modelo " + (index + 1);
+        tab.setAttribute("role", "tab");
+        tab.tabIndex = 0;
         tab.title = block.trim() ? "Editar modelo " + (index + 1) : "Modelo vazio";
-        tab.addEventListener("click", () => {
+        const label = document.createElement("span");
+        label.textContent = "Modelo " + (index + 1);
+        const remove = document.createElement("button");
+        remove.type = "button";
+        remove.className = "wa-tab-delete";
+        remove.textContent = "🗑";
+        remove.title = "Excluir modelo";
+        remove.setAttribute("aria-label", "Excluir modelo " + (index + 1));
+
+        const activate = () => {
           if (index === activeTemplateBlock) return;
           saveActiveTemplateBlock();
           activeTemplateBlock = index;
@@ -2388,11 +2559,25 @@ function renderGuiHtml() {
           syncTemplateHidden();
           renderTemplateTabs();
           renderTemplateHighlight();
-          scheduleTemplatePreview();
+          refreshTemplatePreviewNow();
           window.requestAnimationFrame(() => templateEditorInput.focus());
+        };
+
+        tab.addEventListener("click", activate);
+        tab.addEventListener("keydown", (event) => {
+          if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            activate();
+          }
         });
+        remove.addEventListener("click", (event) => {
+          event.stopPropagation();
+          removeTemplateTab(index);
+        });
+        tab.append(label, remove);
         templateTabs.append(tab);
       });
+      templateTabs.append(newTemplateTabButton);
     }
 
     function setEditorContent(text, options = {}) {
@@ -2406,7 +2591,7 @@ function renderGuiHtml() {
       syncTemplateHidden();
       renderTemplateTabs();
       renderTemplateHighlight();
-      scheduleTemplatePreview();
+      refreshTemplatePreviewNow();
     }
 
     function handleTemplateInputChanged() {
@@ -2418,7 +2603,7 @@ function renderGuiHtml() {
         syncTemplateHidden();
         renderTemplateTabs();
         renderTemplateHighlight();
-        scheduleTemplatePreview();
+        refreshTemplatePreviewNow();
         return;
       }
 
@@ -2428,37 +2613,90 @@ function renderGuiHtml() {
     }
 
     function insertTextAtCursor(text) {
+      const scrollTop = templateEditorInput.scrollTop;
+      const scrollLeft = templateEditorInput.scrollLeft;
       const start = templateEditorInput.selectionStart;
       const end = templateEditorInput.selectionEnd;
       templateEditorInput.setRangeText(text, start, end, "end");
       handleTemplateInputChanged();
+      templateEditorInput.scrollTop = scrollTop;
+      templateEditorInput.scrollLeft = scrollLeft;
+      syncHighlightScroll();
       templateEditorInput.focus();
     }
 
     function wrapSelection(marker) {
+      const scrollTop = templateEditorInput.scrollTop;
+      const scrollLeft = templateEditorInput.scrollLeft;
       const start = templateEditorInput.selectionStart;
       const end = templateEditorInput.selectionEnd;
       const value = templateEditorInput.value;
       const selected = value.slice(start, end);
-      const hasWrappedSelection =
-        selected.startsWith(marker) && selected.endsWith(marker) && selected.length >= marker.length * 2;
-      const before = value.slice(Math.max(0, start - marker.length), start);
-      const after = value.slice(end, end + marker.length);
+      const firstPrintableOffset = selected.search(/\\S/u);
 
-      if (hasWrappedSelection) {
-        const replacement = selected.slice(marker.length, selected.length - marker.length);
-        templateEditorInput.setRangeText(replacement, start, end, "select");
-      } else if (!selected && before === marker && after === marker) {
-        templateEditorInput.setSelectionRange(start - marker.length, end + marker.length);
-        templateEditorInput.setRangeText("", start - marker.length, end + marker.length, "end");
+      if (start === end) {
+        templateEditorInput.setRangeText(marker + marker, start, end, "end");
+        templateEditorInput.setSelectionRange(start + marker.length, start + marker.length);
+      } else if (firstPrintableOffset < 0) {
+        templateEditorInput.setSelectionRange(start, end);
       } else {
-        templateEditorInput.setRangeText(marker + selected + marker, start, end, selected ? "select" : "end");
-        if (selected) {
-          templateEditorInput.setSelectionRange(start + marker.length, end + marker.length);
+        const leading = selected.slice(0, firstPrintableOffset);
+        const lastPrintableOffset = selected.search(/\\s*$/u);
+        const trailing = selected.slice(lastPrintableOffset);
+        const core = selected.slice(firstPrintableOffset, lastPrintableOffset);
+        const coreStart = start + leading.length;
+        const coreEnd = coreStart + core.length;
+        const before = value.slice(Math.max(0, coreStart - marker.length), coreStart);
+        const after = value.slice(coreEnd, coreEnd + marker.length);
+        const coreIsWrapped =
+          core.startsWith(marker) && core.endsWith(marker) && core.length >= marker.length * 2;
+
+        if (coreIsWrapped) {
+          const replacement = leading + core.slice(marker.length, core.length - marker.length) + trailing;
+          templateEditorInput.setRangeText(replacement, start, end, "select");
+          templateEditorInput.setSelectionRange(start + leading.length, start + replacement.length - trailing.length);
+        } else if (before === marker && after === marker) {
+          templateEditorInput.setRangeText("", coreEnd, coreEnd + marker.length, "end");
+          templateEditorInput.setRangeText("", coreStart - marker.length, coreStart, "end");
+          templateEditorInput.setSelectionRange(coreStart - marker.length, coreEnd - marker.length);
+        } else {
+          templateEditorInput.setRangeText(marker, coreEnd, coreEnd, "end");
+          templateEditorInput.setRangeText(marker, coreStart, coreStart, "end");
+          templateEditorInput.setSelectionRange(coreStart + marker.length, coreEnd + marker.length);
         }
       }
 
+      templateEditorInput.scrollTop = scrollTop;
+      templateEditorInput.scrollLeft = scrollLeft;
       handleTemplateInputChanged();
+      syncHighlightScroll();
+      templateEditorInput.focus();
+    }
+
+    function removeTemplateTab(index) {
+      const confirmed = window.confirm("Excluir este modelo? Esta ação remove a aba da edição atual.");
+      if (!confirmed) return;
+
+      saveActiveTemplateBlock();
+
+      if (templateBlocks.length <= 1) {
+        templateBlocks = [""];
+        activeTemplateBlock = 0;
+      } else {
+        const removedActive = index === activeTemplateBlock;
+        templateBlocks.splice(index, 1);
+        if (removedActive) {
+          activeTemplateBlock = Math.min(index, templateBlocks.length - 1);
+        } else if (index < activeTemplateBlock) {
+          activeTemplateBlock -= 1;
+        }
+      }
+
+      templateEditorInput.value = templateBlocks[activeTemplateBlock] || "";
+      syncTemplateHidden();
+      renderTemplateTabs();
+      renderTemplateHighlight();
+      refreshTemplatePreviewNow();
       templateEditorInput.focus();
     }
 
@@ -2468,6 +2706,7 @@ function renderGuiHtml() {
       empty.className = "wa-preview-empty";
       empty.textContent = "Atualizando prévia...";
       templatePreview.append(empty);
+      syncPreviewToEditorPosition();
     }
 
     function renderTemplatePreview(result) {
@@ -2480,6 +2719,7 @@ function renderGuiHtml() {
           ? result.errors.join("\\n")
           : "Não foi possível gerar a prévia.";
         templatePreview.append(empty);
+        syncPreviewToEditorPosition();
         return;
       }
 
@@ -2489,6 +2729,7 @@ function renderGuiHtml() {
         empty.className = "wa-preview-empty";
         empty.textContent = "Digite um modelo para visualizar as postagens.";
         templatePreview.append(empty);
+        syncPreviewToEditorPosition();
         return;
       }
 
@@ -2511,6 +2752,8 @@ function renderGuiHtml() {
 
         templatePreview.append(group);
       });
+
+      syncPreviewToEditorPosition();
     }
 
     function renderPreviewItem(item) {
@@ -2518,7 +2761,7 @@ function renderGuiHtml() {
       bubble.className = "wa-bubble" + (item.type === "text" ? "" : " media");
 
       if (item.type === "text") {
-        bubble.textContent = item.value || "";
+        appendFormattedPreviewText(bubble, item.value || "");
         return bubble;
       }
 
@@ -2537,11 +2780,86 @@ function renderGuiHtml() {
       if (item.caption) {
         const caption = document.createElement("div");
         caption.className = "wa-caption";
-        caption.textContent = item.caption;
+        appendFormattedPreviewText(caption, item.caption);
         bubble.append(caption);
       }
 
       return bubble;
+    }
+
+    function appendFormattedPreviewText(parent, value) {
+      const text = String(value || "");
+      const monoMarker = String.fromCharCode(96).repeat(3);
+      const markerPattern = new RegExp("(" + monoMarker + "|\\\\*|_|~)(\\\\S(?:[\\\\s\\\\S]*?\\\\S)?)\\\\1", "g");
+      let cursor = 0;
+      let match;
+
+      while ((match = markerPattern.exec(text)) !== null) {
+        if (match.index > cursor) {
+          parent.append(document.createTextNode(text.slice(cursor, match.index)));
+        }
+
+        const marker = match[1];
+        const inner = match[2];
+        const element = document.createElement(
+          marker === "*" ? "strong" : marker === "_" ? "em" : marker === "~" ? "s" : "code",
+        );
+        appendFormattedPreviewText(element, inner);
+        parent.append(element);
+        cursor = markerPattern.lastIndex;
+      }
+
+      if (cursor < text.length) {
+        parent.append(document.createTextNode(text.slice(cursor)));
+      }
+    }
+
+    function renderEmojiMenu() {
+      emojiMenu.innerHTML = "";
+      emojiOptions.forEach(([emoji, label]) => {
+        const option = document.createElement("button");
+        option.type = "button";
+        option.setAttribute("role", "menuitem");
+        option.title = label;
+        option.textContent = emoji;
+        option.addEventListener("click", () => {
+          insertTextAtCursor(emoji);
+          closeEmojiMenu();
+        });
+        emojiMenu.append(option);
+      });
+    }
+
+    function closeEmojiMenu() {
+      emojiMenu.classList.remove("open");
+      insertEmojiButton.setAttribute("aria-expanded", "false");
+    }
+
+    function positionEmojiMenu() {
+      const buttonRect = insertEmojiButton.getBoundingClientRect();
+      const margin = 8;
+      const menuWidth = emojiMenu.offsetWidth || 228;
+      const menuHeight = emojiMenu.offsetHeight || 250;
+      const left = Math.max(
+        margin,
+        Math.min(buttonRect.left, window.innerWidth - menuWidth - margin),
+      );
+      const below = buttonRect.bottom + 6;
+      const top = below + menuHeight > window.innerHeight
+        ? Math.max(margin, buttonRect.top - menuHeight - 6)
+        : below;
+
+      emojiMenu.style.left = left + "px";
+      emojiMenu.style.top = top + "px";
+    }
+
+    function toggleEmojiMenu() {
+      const open = !emojiMenu.classList.contains("open");
+      emojiMenu.classList.toggle("open", open);
+      insertEmojiButton.setAttribute("aria-expanded", open ? "true" : "false");
+      if (open) {
+        positionEmojiMenu();
+      }
     }
 
     function scheduleTemplatePreview() {
@@ -2553,22 +2871,33 @@ function renderGuiHtml() {
       }, 250);
     }
 
+    function refreshTemplatePreviewNow() {
+      window.clearTimeout(templatePreviewTimer);
+      updateTemplatePreview().catch((err) => {
+        renderTemplatePreview({ errors: [err.message], ok: false, variants: [] });
+      });
+    }
+
     async function updateTemplatePreview() {
       if (isComposingTemplate) return;
 
       const token = ++templatePreviewToken;
+      saveActiveTemplateBlock();
       syncTemplateHidden();
+      const activeText = String(templateBlocks[activeTemplateBlock] || "");
 
-      if (!templateTextHidden.value.trim()) {
+      if (!activeText.trim()) {
         renderTemplatePreview({ errors: [], ok: true, variants: [] });
         return;
       }
 
-      renderTemplatePreviewLoading();
+      if (!templatePreview.children.length) {
+        renderTemplatePreviewLoading();
+      }
       const result = await postJson("/api/template/preview", {
-        editorBlocks: getPersistableTemplateBlocks(),
+        editorBlocks: [activeText],
         templateBaseDir: templateBaseDirInput.value,
-        templateText: templateTextHidden.value,
+        templateText: activeText,
       });
 
       if (token !== templatePreviewToken) return;
@@ -2970,7 +3299,13 @@ function renderGuiHtml() {
     templateEditorInput.addEventListener("paste", () => {
       window.setTimeout(handleTemplateInputChanged, 0);
     });
-    templateEditorInput.addEventListener("scroll", syncHighlightScroll);
+    templateEditorInput.addEventListener("scroll", () => {
+      syncHighlightScroll();
+      syncEditorPreviewScroll("editor");
+    });
+    templatePreview.addEventListener("scroll", () => {
+      syncEditorPreviewScroll("preview");
+    });
     templateEditorInput.addEventListener("compositionstart", () => {
       isComposingTemplate = true;
     });
@@ -2983,10 +3318,35 @@ function renderGuiHtml() {
       button.addEventListener("click", () => wrapSelection(button.getAttribute("data-wrap") || ""));
     });
 
-    insertEmojiButton.addEventListener("click", () => {
-      const emoji = window.prompt("Emoji:", "✅");
-      if (emoji) insertTextAtCursor(emoji);
+    insertEmojiButton.addEventListener("click", (event) => {
+      event.stopPropagation();
+      toggleEmojiMenu();
     });
+
+    emojiMenu.addEventListener("click", (event) => {
+      event.stopPropagation();
+    });
+
+    document.addEventListener("click", (event) => {
+      if (event.target !== insertEmojiButton && !emojiMenu.contains(event.target)) {
+        closeEmojiMenu();
+      }
+    });
+
+    document.addEventListener("focusin", (event) => {
+      if (event.target !== insertEmojiButton && !emojiMenu.contains(event.target)) {
+        closeEmojiMenu();
+      }
+    });
+
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") {
+        closeEmojiMenu();
+      }
+    });
+
+    window.addEventListener("resize", closeEmojiMenu);
+    window.addEventListener("scroll", closeEmojiMenu, true);
 
     insertAttachmentButton.addEventListener("click", () => {
       const filename = window.prompt("Arquivo do anexo:", "arquivo.pdf");
@@ -3007,23 +3367,7 @@ function renderGuiHtml() {
       syncTemplateHidden();
       renderTemplateTabs();
       renderTemplateHighlight();
-      scheduleTemplatePreview();
-      templateEditorInput.focus();
-    });
-
-    deleteTemplateTabButton.addEventListener("click", () => {
-      if (templateBlocks.length <= 1) {
-        templateBlocks = [""];
-        activeTemplateBlock = 0;
-      } else {
-        templateBlocks.splice(activeTemplateBlock, 1);
-        activeTemplateBlock = Math.max(0, activeTemplateBlock - 1);
-      }
-      templateEditorInput.value = templateBlocks[activeTemplateBlock] || "";
-      syncTemplateHidden();
-      renderTemplateTabs();
-      renderTemplateHighlight();
-      scheduleTemplatePreview();
+      refreshTemplatePreviewNow();
       templateEditorInput.focus();
     });
 
@@ -3146,6 +3490,7 @@ function renderGuiHtml() {
     refreshStatus().catch((err) => {
       showMessage("Não foi possível carregar o status: " + err.message, "error");
     });
+    renderEmojiMenu();
     setEditorContent("");
     startStatusPolling();
   </script>

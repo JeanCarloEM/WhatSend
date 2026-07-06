@@ -274,9 +274,9 @@ A GUI deve oferecer:
 
 - Modelo por editor textual especializado, persistindo somente texto cru compatível com WhatsApp/Markdown, sem HTML nem formato rico.
 - Modelo por arquivo `.md`.
-- Toolbar textual para inserir/remover marcadores crus de negrito, itálico, tachado, emoji, anexo e `$postagem$`, preservando seleção, cursor, foco, rolagem e composição IME sempre que possível.
+- Toolbar textual para inserir/remover marcadores crus de negrito, itálico, tachado, anexo e `$postagem$`, além de menu suspenso de emojis, preservando seleção, cursor, foco, rolagem e composição IME sempre que possível.
 - Abas visuais para blocos separados por `^^^`; ao salvar ou enviar, as abas devem ser recombinadas com o separador normatizado, sem criar blocos vazios automaticamente.
-- Prévia visual baseada no mesmo parser/plano de envio do backend para texto, postagens, anexos, legendas e áudio, sem substituir as validações finais.
+- Prévia visual baseada no mesmo parser/plano de envio do backend para texto, postagens, anexos, legendas e áudio, renderizando a marcação textual básica como resultado visual final, sem substituir as validações finais.
 - Bloqueio quando texto editado na GUI e arquivo `.md` divergente forem usados simultaneamente; quando um `.md` for carregado sem edição, o arquivo pode continuar sendo a fonte do envio para preservar resolução relativa de anexos.
 - Campo de filtro.
 - Arquivo `.csv` opcional de clientes.
@@ -285,7 +285,7 @@ A GUI deve oferecer:
 - Mensagens claras de erro e progresso.
 - Tipografia baseada em Noto Sans, com fallbacks sans-serif comuns do sistema.
 - Demonstração visual concisa da marcação textual crua e do resultado esperado.
-- Lista recolhível e equilibrada com exatamente 60 sugestões profissionais de emojis.
+- Menu suspenso equilibrado com exatamente 60 sugestões profissionais de emojis.
 
 Arquivos informados na GUI devem ser materializados temporariamente em área controlada pelo projeto ou sistema operacional, sem alterar `clientes.csv`, `texto.md` ou os modelos originais.
 
