@@ -14,7 +14,7 @@ const { MessageMedia } = require("whatsapp-web.js");
 
 const { PATHS, ROOT_DIR, readIntegerEnv } = require("./config");
 const { hashValue } = require("./utils");
-const { parseTemplateParts } = require("./template");
+const { parseTemplateParts, splitMessagePostings } = require("./template");
 
 const CAPTION_POSITION = Symbol("captionPosition");
 const MESSAGE_SEND_RETRIES = Math.max(1, readIntegerEnv("MESSAGE_SEND_RETRIES", 3));
@@ -452,46 +452,50 @@ async function sendRenderedTemplate(client, chatId, renderedTemplate, paths = PA
 }
 
 async function sendRenderedTemplateInOrder(client, chatId, renderedTemplate, paths = PATHS, progressOptions = {}) {
-  const parts = buildSendPlan(parseTemplateParts(renderedTemplate));
+  const postings = splitMessagePostings(renderedTemplate);
   const downloadCache = new Map();
 
-  for (const part of parts) {
-    if (part.type === "text") {
-      await sendTextMessageWithRetry(client, chatId, part.value, progressOptions);
-      continue;
-    }
+  for (const posting of postings) {
+    const parts = buildSendPlan(parseTemplateParts(posting));
 
-    const filePath = await resolveMediaPath(part.source, paths, downloadCache);
-    const filename = path.basename(filePath);
+    for (const part of parts) {
+      if (part.type === "text") {
+        await sendTextMessageWithRetry(client, chatId, part.value, progressOptions);
+        continue;
+      }
 
-    if (isOggAudioOnly(filePath)) {
+      const filePath = await resolveMediaPath(part.source, paths, downloadCache);
+      const filename = path.basename(filePath);
+
+      if (isOggAudioOnly(filePath)) {
+        emitMediaProgress(progressOptions, {
+          message: `Enviando áudio ${filename}.`,
+          type: "current",
+        });
+        await sendOggVoiceMessage(client, chatId, filePath, part, progressOptions);
+        continue;
+      }
+
+      const media = createMessageMediaFromFile(filePath);
       emitMediaProgress(progressOptions, {
-        message: `Enviando áudio ${filename}.`,
+        message: `Enviando anexo ${filename}.`,
         type: "current",
       });
-      await sendOggVoiceMessage(client, chatId, filePath, part, progressOptions);
-      continue;
+
+      const sendOptions = {
+        sendMediaAsDocument: shouldSendAsDocument(media),
+        waitUntilMsgSent: true,
+      };
+
+      if (part.caption) {
+        sendOptions.caption = part.caption;
+      }
+
+      await sendMediaMessageWithRetry(client, chatId, () => createMessageMediaFromFile(filePath), sendOptions, {
+        label: filename,
+        onProgress: progressOptions.onProgress,
+      });
     }
-
-    const media = createMessageMediaFromFile(filePath);
-    emitMediaProgress(progressOptions, {
-      message: `Enviando anexo ${filename}.`,
-      type: "current",
-    });
-
-    const sendOptions = {
-      sendMediaAsDocument: shouldSendAsDocument(media),
-      waitUntilMsgSent: true,
-    };
-
-    if (part.caption) {
-      sendOptions.caption = part.caption;
-    }
-
-    await sendMediaMessageWithRetry(client, chatId, () => createMessageMediaFromFile(filePath), sendOptions, {
-      label: filename,
-      onProgress: progressOptions.onProgress,
-    });
   }
 }
 

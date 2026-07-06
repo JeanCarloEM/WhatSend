@@ -422,6 +422,24 @@ MEDIA_SEND_RETRY_DELAY_MS
 MEDIA_SEND_RETRY_MAX_DELAY_MS
 ```
 
+### RN033 - Divisão Explícita de Postagens
+
+O autor do template pode forçar a divisão de uma mensagem em múltiplas postagens consecutivas usando o marcador literal:
+
+```text
+$postagem$
+```
+
+Esse marcador foi escolhido por ser legível, compatível com o padrão literal já usado por `$diatarde$` e por não conflitar com a gramática de variáveis e expressões `${...}`.
+
+Cada ocorrência de `$postagem$` deve atuar como ponto de divisão do conteúdo renderizado. Segmentos vazios ou compostos somente por espaços e quebras de linha não devem gerar envio.
+
+Quando o marcador estiver sozinho em uma linha, espaços ou tabulações ao redor do marcador e a quebra da própria linha separadora não devem ser enviados ao WhatsApp. Quando usado no meio de uma linha, a divisão deve ocorrer exatamente no ponto do marcador.
+
+Cada segmento resultante deve ser enviado como postagem independente, preservando a ordem original e usando o fluxo sequencial normatizado em RN032, incluindo confirmação de envio, retry, backoff, fila por destinatário e bloqueio do avanço para o próximo telefone até conclusão ou falha definitiva.
+
+A divisão por `$postagem$` é subordinada ao mecanismo de múltiplos modelos `^^^`: primeiro o sistema deve processar e selecionar os modelos válidos separados por `^^^`; somente depois a variante escolhida deve ser renderizada e dividida por `$postagem$`. O marcador `$postagem$` não pode alterar, invalidar ou interferir no comportamento de `^^^`.
+
 ## Requisitos Não Funcionais
 
 ### RNF001 - Plataforma

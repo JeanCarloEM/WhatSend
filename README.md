@@ -37,6 +37,7 @@ Principais recursos:
 - Expressoes matematicas e filtros logicos com funcoes.
 - Anexos via Markdown `![](CAMINHO_OU_URL)`, incluindo URL com cache temporario.
 - `.ogg` apenas de audio enviado como mensagem de voz.
+- Marcador `$postagem$` para dividir uma mensagem em postagens consecutivas.
 - Controle inteligente de reenvio por telefone, conteudo nativo e tempo.
 - Compatibilidade com Windows, macOS e Linux quando as dependencias tambem forem compativeis.
 
@@ -122,6 +123,18 @@ Seu valor atualizado e ${$.moeda(valor)}.
 
 ![](anexos/exemplo.pdf)
 ```
+
+Para forçar múltiplas postagens consecutivas ao mesmo destinatário, use o marcador literal `$postagem$`:
+
+```markdown
+Primeira postagem para ${nome}.
+
+$postagem$
+
+Segunda postagem, enviada somente após confirmação da primeira.
+```
+
+O marcador `$postagem$` é removido do texto enviado. Quando estiver sozinho em uma linha, a própria linha do marcador funciona como separador. Se o template também usar múltiplos modelos com `^^^`, o sistema primeiro seleciona a variante por `^^^` e só depois divide a variante escolhida por `$postagem$`.
 
 Anexos em `![](arquivo.pdf)` ou `![](./arquivo.pdf)` são buscados primeiro a partir da pasta do modelo `.md` em uso; se não forem encontrados ali, o sistema tenta a raiz do projeto. Caminhos absolutos e URLs `http/https` também são aceitos.
 

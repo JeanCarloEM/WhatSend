@@ -64,6 +64,10 @@ const HTML_NAMED_ENTITIES = new Map([
   ["Uacute", "Ú"],
   ["Uuml", "Ü"],
 ]);
+const POSTING_SPLIT_MARKER = "$postagem$";
+const POSTING_SPLIT_HAS_MARKER_PATTERN = /\$postagem\$/iu;
+const POSTING_SPLIT_INLINE_PATTERN = /\$postagem\$/giu;
+const POSTING_SPLIT_LINE_PATTERN = /(?:^|\n)[ \t]*\$postagem\$[ \t]*(?:\n|$)/giu;
 
 function applyTemplate(template, data, options = {}) {
   const missingVariables = new Set();
@@ -459,6 +463,23 @@ function parseTemplateParts(renderedTemplate) {
   return parts;
 }
 
+function splitMessagePostings(renderedTemplate) {
+  const source = normalizeTemplateText(renderedTemplate);
+
+  if (!POSTING_SPLIT_HAS_MARKER_PATTERN.test(source)) {
+    return [source];
+  }
+
+  const normalizedSource = source.replace(
+    POSTING_SPLIT_LINE_PATTERN,
+    (match, offset) => (offset === 0 || match.endsWith("\n") ? POSTING_SPLIT_MARKER : `\n${POSTING_SPLIT_MARKER}`),
+  );
+
+  return normalizedSource
+    .split(POSTING_SPLIT_INLINE_PATTERN)
+    .filter((part) => part.trim().length > 0);
+}
+
 function normalizeMediaSource(source) {
   return String(source || "")
     .trim()
@@ -489,5 +510,7 @@ module.exports = {
   replaceTemplateExpressions,
   normalizeMediaSource,
   parseTemplateParts,
+  POSTING_SPLIT_MARKER,
+  splitMessagePostings,
   splitTemplateVariants,
 };

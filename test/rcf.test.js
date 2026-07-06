@@ -61,6 +61,7 @@ const {
   parseExecutionOptions,
   parseExpression,
   parseTemplateParts,
+  POSTING_SPLIT_MARKER,
   resolveLocalMediaPath,
   resolveExecutionPaths,
   resolveCheckInputPath,
@@ -71,6 +72,7 @@ const {
   resetSentLog,
   renderGuiHtml,
   sendRenderedTemplate,
+  splitMessagePostings,
   splitTemplateVariants,
   toBoolean,
   sanitizePhone,
@@ -585,6 +587,21 @@ test("interpreta notação markdown de anexo preservando a ordem", () => {
     { type: "text", value: "Antes\n" },
     { type: "media", source: "arquivo.pdf", raw: "![](arquivo.pdf)" },
     { type: "text", value: "\nDepois" },
+  ]);
+});
+
+test("divide postagens pelo marcador explícito sem alterar texto sem marcador", () => {
+  assert.equal(POSTING_SPLIT_MARKER, "$postagem$");
+  assert.deepEqual(splitMessagePostings("Mensagem única\nsem divisão"), [
+    "Mensagem única\nsem divisão",
+  ]);
+  assert.deepEqual(splitMessagePostings(`Primeira\n${POSTING_SPLIT_MARKER}\nSegunda`), [
+    "Primeira",
+    "Segunda",
+  ]);
+  assert.deepEqual(splitMessagePostings(`A${POSTING_SPLIT_MARKER}B${POSTING_SPLIT_MARKER}`), [
+    "A",
+    "B",
   ]);
 });
 
@@ -1129,6 +1146,16 @@ test("divide múltiplos modelos válidos por separador ^^^", () => {
   assert.deepEqual(splitTemplateVariants("curto\n^^^\noutro curto"), [
     "curto\n^^^\noutro curto",
   ]);
+});
+
+test("divisão de postagens é subordinada ao separador de múltiplos modelos", () => {
+  const blockA = `${"A".repeat(96)}\n${POSTING_SPLIT_MARKER}\n${"B".repeat(96)}`;
+  const blockB = `${"C".repeat(96)}\n${POSTING_SPLIT_MARKER}\n${"D".repeat(96)}`;
+  const variants = splitTemplateVariants(`${blockA}\n\n^^^\n\n${blockB}`, 96);
+
+  assert.equal(variants.length, 2);
+  assert.deepEqual(splitMessagePostings(variants[0]), ["A".repeat(96), "B".repeat(96)]);
+  assert.deepEqual(splitMessagePostings(variants[1]), ["C".repeat(96), "D".repeat(96)]);
 });
 
 test("resolve sessão por nome ou últimos dígitos e rejeita ambiguidade", () => {
@@ -1731,6 +1758,70 @@ test("envia anexo local no ponto da notação markdown", async () => {
   ]);
   assert.equal(calls[1].mimetype, "application/pdf");
   assert.equal(calls[1].options.sendMediaAsDocument, true);
+  assert.equal(calls[1].options.waitUntilMsgSent, true);
+});
+
+test("envia postagens forçadas como mensagens consecutivas independentes", async () => {
+  const { paths } = createFixture();
+  const calls = [];
+  const client = {
+    async sendMessage(to, content, options) {
+      calls.push({
+        options,
+        text: content,
+        to,
+      });
+    },
+  };
+
+  await sendRenderedTemplate(
+    client,
+    "5511999999999@c.us",
+    `Primeira${POSTING_SPLIT_MARKER}Segunda\n${POSTING_SPLIT_MARKER}\nTerceira`,
+    paths,
+  );
+
+  assert.deepEqual(calls.map((call) => call.text), [
+    "Primeira",
+    "Segunda",
+    "Terceira",
+  ]);
+  assert.deepEqual(calls.map((call) => call.options), [
+    { waitUntilMsgSent: true },
+    { waitUntilMsgSent: true },
+    { waitUntilMsgSent: true },
+  ]);
+});
+
+test("marcador de postagem impede legenda automática entre segmentos", async () => {
+  const { paths } = createFixture();
+  const mediaPath = path.join(path.dirname(paths.template), "arquivo.pdf");
+  fs.writeFileSync(mediaPath, "conteúdo fictício", "utf8");
+
+  const calls = [];
+  const client = {
+    async sendMessage(to, content, options) {
+      calls.push({
+        filename: content && content.filename,
+        options,
+        text: typeof content === "string" ? content : undefined,
+        to,
+      });
+    },
+  };
+
+  await sendRenderedTemplate(
+    client,
+    "5511999999999@c.us",
+    `Texto separado\n${POSTING_SPLIT_MARKER}\n![](arquivo.pdf)`,
+    paths,
+  );
+
+  assert.deepEqual(calls.map((call) => call.text || call.filename), [
+    "Texto separado",
+    "arquivo.pdf",
+  ]);
+  assert.equal(calls[1].options.caption, undefined);
   assert.equal(calls[1].options.waitUntilMsgSent, true);
 });
 
