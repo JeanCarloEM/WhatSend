@@ -404,6 +404,8 @@ Chamadas simultâneas para o mesmo destinatário devem ser serializadas por fila
 
 Falhas transitórias do WhatsApp Web, navegador, contexto de execução, conexão ou transporte devem ser retentadas com quantidade de tentativas e atraso configuráveis, usando backoff entre tentativas. O sistema deve interromper a sequência daquele destinatário quando a mensagem atual falhar definitivamente após esgotar as tentativas, sem transmitir mensagens subsequentes desse mesmo plano.
 
+O lote só deve avançar para o próximo telefone após o destinatário atual ter todos os itens do plano confirmados como enviados ou após falha definitiva registrada para o item corrente. Um telefone só pode ser registrado em `enviados.csv` depois da confirmação de envio bem-sucedido de todos os textos, anexos, áudios e legendas previstos para aquele destinatário.
+
 As retentativas de texto devem ser configuráveis por:
 
 ```text

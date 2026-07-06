@@ -1611,6 +1611,94 @@ test("erro de envio registra nome do cliente no detalhe", async () => {
   assert.match(errors, /Cliente Maria: Falha simulada no WhatsApp Web/);
 });
 
+test("campanha só avança para próximo telefone após concluir todos os blocos atuais", async () => {
+  const { paths } = createFixture({
+    csv: "nome,telefone,conta\nMaria,(19) 99824-0000,12345\nJoão,(11) 91234-5678,54321\n",
+    template: "Antes ${nome}\n![](arquivo.pdf)\nDepois ${nome}",
+  });
+  const mediaPath = path.join(path.dirname(paths.template), "arquivo.pdf");
+  fs.writeFileSync(mediaPath, "conteúdo fictício", "utf8");
+
+  const firstTextSent = createDeferred();
+  const calls = [];
+  const client = {
+    async getNumberId(phone) {
+      calls.push(["getNumberId", phone]);
+      return { _serialized: `${phone}@c.us` };
+    },
+    async sendMessage(to, content, options) {
+      calls.push([
+        "sendMessage",
+        to,
+        typeof content === "string" ? content : content.filename,
+        options,
+      ]);
+
+      if (to === "5519998240000@c.us" && content === "Antes Maria\n") {
+        await firstTextSent.promise;
+      }
+    },
+  };
+
+  const campaign = processCampaign(client, paths);
+  await new Promise((resolve) => setImmediate(resolve));
+
+  assert.deepEqual(calls, [
+    ["getNumberId", "5519998240000"],
+    [
+      "sendMessage",
+      "5519998240000@c.us",
+      "Antes Maria\n",
+      { waitUntilMsgSent: true },
+    ],
+  ]);
+
+  firstTextSent.resolve();
+  await campaign;
+
+  assert.deepEqual(calls.map((call) => call[0] === "sendMessage" ? call.slice(0, 3) : call), [
+    ["getNumberId", "5519998240000"],
+    ["sendMessage", "5519998240000@c.us", "Antes Maria\n"],
+    ["sendMessage", "5519998240000@c.us", "arquivo.pdf"],
+    ["sendMessage", "5519998240000@c.us", "\nDepois Maria"],
+    ["getNumberId", "5511912345678"],
+    ["sendMessage", "5511912345678@c.us", "Antes João\n"],
+    ["sendMessage", "5511912345678@c.us", "arquivo.pdf"],
+    ["sendMessage", "5511912345678@c.us", "\nDepois João"],
+  ]);
+  assert.match(fs.readFileSync(paths.sent, "utf8"), /5519998240000/);
+  assert.match(fs.readFileSync(paths.sent, "utf8"), /5511912345678/);
+});
+
+test("não marca destinatário como enviado quando falha após envio parcial", async () => {
+  const { paths } = createFixture({
+    template: "Antes ${nome}\n![](arquivo.pdf)\nDepois ${nome}",
+  });
+  const mediaPath = path.join(path.dirname(paths.template), "arquivo.pdf");
+  fs.writeFileSync(mediaPath, "conteúdo fictício", "utf8");
+
+  const client = {
+    async getNumberId(phone) {
+      return { _serialized: `${phone}@c.us` };
+    },
+    async sendMessage(to, content) {
+      if (content && content.filename === "arquivo.pdf") {
+        throw new Error("Falha permanente no envio do anexo");
+      }
+    },
+  };
+
+  await processCampaign(client, paths);
+
+  const sentLog = fs.existsSync(paths.sent)
+    ? fs.readFileSync(paths.sent, "utf8")
+    : "";
+
+  assert.doesNotMatch(sentLog, /5519998240000/);
+  assert.match(fs.readFileSync(paths.errors, "utf8"), /ERRO_ENVIO/);
+  assert.match(fs.readFileSync(paths.errors, "utf8"), /Falha permanente no envio do anexo/);
+});
+
 test("envia anexo local no ponto da notação markdown", async () => {
   const { paths } = createFixture();
   const mediaPath = path.join(path.dirname(paths.template), "arquivo.pdf");
