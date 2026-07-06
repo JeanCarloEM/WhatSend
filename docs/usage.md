@@ -39,7 +39,7 @@ ${$.int(valor)}
 
 Um arquivo pode conter multiplas variacoes separadas por uma linha com `^^^`. Quando todos os blocos atingem o tamanho minimo configurado, a distribuicao entre destinatarios e circular. Na GUI, cada bloco separado por `^^^` aparece como uma aba visual do editor; salvar ou enviar recombina as abas com o mesmo separador, sem alterar a regra do backend.
 
-O editor da GUI trabalha sempre com texto cru. A toolbar apenas insere ou remove marcadores textuais, como `*`, `_`, `~`, `![](arquivo.pdf)` e `$postagem$`; emojis são escolhidos por menu suspenso. Nenhum HTML ou conteúdo rico é persistido no modelo. A prévia renderiza negrito, itálico e tachado para aproximar o resultado visual sem mudar o texto do editor.
+O editor da GUI trabalha sempre com texto cru. A toolbar apenas insere ou remove marcadores textuais, como `*`, `_`, `~`, três crases para monoespaçado, `![](arquivo.pdf)` e `$postagem$`; emojis são escolhidos por menu suspenso. Nenhum HTML ou conteúdo rico é persistido no modelo. A prévia renderiza negrito, itálico, tachado e monoespaçado para aproximar o resultado visual sem mudar o texto do editor, sempre limitada à aba ativa e com rolagem proporcional sincronizada.
 
 ## Emojis profissionais
 

@@ -274,9 +274,9 @@ A GUI deve oferecer:
 
 - Modelo por editor textual especializado, persistindo somente texto cru compatível com WhatsApp/Markdown, sem HTML nem formato rico.
 - Modelo por arquivo `.md`.
-- Toolbar textual para inserir/remover marcadores crus de negrito, itálico, tachado, anexo e `$postagem$`, além de menu suspenso de emojis, preservando seleção, cursor, foco, rolagem e composição IME sempre que possível.
-- Abas visuais para blocos separados por `^^^`; ao salvar ou enviar, as abas devem ser recombinadas com o separador normatizado, sem criar blocos vazios automaticamente.
-- Prévia visual baseada no mesmo parser/plano de envio do backend para texto, postagens, anexos, legendas e áudio, renderizando a marcação textual básica como resultado visual final, sem substituir as validações finais.
+- Toolbar textual para inserir/remover marcadores crus de negrito, itálico, tachado, monoespaçado, anexo e `$postagem$`, além de menu suspenso de emojis, preservando seleção, cursor, foco, rolagem e composição IME sempre que possível. Ao aplicar marcadores sobre seleção, espaços externos não devem ser envolvidos pelos delimitadores.
+- Abas visuais para blocos separados por `^^^`; ao salvar ou enviar, as abas devem ser recombinadas com o separador normatizado, sem criar blocos vazios automaticamente. A criação de novo modelo deve ficar junto das abas, e a exclusão deve pertencer à própria aba, com confirmação explícita.
+- Prévia visual baseada no mesmo parser/plano de envio do backend para texto, postagens, anexos, legendas e áudio, renderizando a marcação textual básica como resultado visual final, sem substituir as validações finais. A prévia deve refletir somente a aba ativa e manter rolagem proporcional sincronizada com o editor.
 - Bloqueio quando texto editado na GUI e arquivo `.md` divergente forem usados simultaneamente; quando um `.md` for carregado sem edição, o arquivo pode continuar sendo a fonte do envio para preservar resolução relativa de anexos.
 - Campo de filtro.
 - Arquivo `.csv` opcional de clientes.
@@ -286,6 +286,7 @@ A GUI deve oferecer:
 - Tipografia baseada em Noto Sans, com fallbacks sans-serif comuns do sistema.
 - Demonstração visual concisa da marcação textual crua e do resultado esperado.
 - Menu suspenso equilibrado com exatamente 60 sugestões profissionais de emojis.
+- Feedback visual discreto em hover para controles interativos.
 
 Arquivos informados na GUI devem ser materializados temporariamente em área controlada pelo projeto ou sistema operacional, sem alterar `clientes.csv`, `texto.md` ou os modelos originais.
 

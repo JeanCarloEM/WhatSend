@@ -33,7 +33,7 @@ O WhatSend usa `clientes.csv` como base de destinatarios e `texto.md` como model
 Principais recursos:
 
 - GUI local para configurar modelo, CSV, filtro, sessao e reenvio.
-- Editor textual na GUI com abas `^^^`, toolbar de marcadores crus, menu de emojis e prévia realista do plano de envio.
+- Editor textual na GUI com abas `^^^`, toolbar de marcadores crus, menu de emojis, monoespaçado e prévia realista da aba ativa.
 - CLI preservada para automacao.
 - Variaveis `${campo}` insensiveis a maiusculas/minusculas.
 - Apenas `nome` e `telefone` obrigatorios no CSV.
@@ -148,6 +148,7 @@ Demonstracao de sintaxe textual:
 | `*negrito exemplo*` | <strong>negrito exemplo</strong> |
 | `_italico exemplo_` | <em>italico exemplo</em> |
 | `~taxado exemplo~` | <del>taxado exemplo</del> |
+| `` ```mono exemplo``` `` | <code>mono exemplo</code> |
 | `1. item` | lista enumerada |
 | `- item` | lista simples |
 
@@ -173,7 +174,7 @@ A interface local abre no inicio do fluxo, mostra autenticacao/carregamento do W
 - forcar reenvio ou limpar historico de enviados;
 - acompanhar andamento sem inundar a tela.
 
-O editor da GUI não salva HTML nem formato rico: a toolbar apenas insere ou remove texto compatível com WhatsApp, como `*negrito*`, `_itálico_`, `~tachado~`, emoji pelo menu suspenso, `![](arquivo.pdf)` e `$postagem$`. Linhas `^^^` viram abas visuais automaticamente; ao salvar ou enviar, as abas são recombinadas com o mesmo separador. A prévia lateral renderiza a marcação básica como resultado visual, sem alterar o texto cru do editor.
+O editor da GUI não salva HTML nem formato rico: a toolbar apenas insere ou remove texto compatível com WhatsApp, como `*negrito*`, `_itálico_`, `~tachado~`, monoespaçado com três crases, emoji pelo menu suspenso, `![](arquivo.pdf)` e `$postagem$`. Linhas `^^^` viram abas visuais automaticamente; ao salvar ou enviar, as abas são recombinadas com o mesmo separador. A prévia lateral mostra somente a aba ativa, renderiza a marcação básica como resultado visual e mantém rolagem sincronizada com o editor.
 
 Ao selecionar um `.md`, a GUI carrega o conteúdo no editor, separa abas por `^^^`, atualiza a prévia e analisa anexos locais em segundo plano. Se algum não for localizado, aparece um aviso ao lado do seletor e um campo para informar a pasta de referência dos anexos. Se o arquivo for enviado sem edição, ele continua podendo ser usado como fonte para preservar a resolução relativa de anexos; se houver edição no editor, o texto editado passa a ser a fonte da execução.
 
