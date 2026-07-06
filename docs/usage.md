@@ -168,7 +168,7 @@ Se `GUI_PORT` estiver ocupada, a interface tenta automaticamente portas próxima
 
 ## Atualizacao
 
-Os inicializadores de atualizacao nao dependem de `git` nem de existir `.git` na pasta local. Eles consultam `https://github.com/JeanCarloEM/WhatSend`, baixam a release mais recente quando houver release publicada e, se nao houver release, baixam a branch `main`.
+Os inicializadores de atualizacao nao dependem de `git` nem de existir `.git` na pasta local. Eles consultam a API oficial de `https://github.com/JeanCarloEM/WhatSend`, priorizam a Release marcada como Latest e usam a branch `main` somente quando nao houver release valida.
 
 ```powershell
 .\atualizar.cmd
@@ -178,7 +178,9 @@ Os inicializadores de atualizacao nao dependem de `git` nem de existir `.git` na
 sh ./atualizar.sh
 ```
 
-Durante a copia, arquivos operacionais locais sao preservados, incluindo `clientes.csv`, `texto.md`, `.env`, `logs/`, `.wwebjs_auth/`, `.runtime/` e `node_modules/`. Depois disso, o script roda `npm install` com download automatico do Puppeteer desativado e valida o navegador com `scripts/ensure-browser.js`.
+Antes de baixar o pacote remoto, o atualizador compara os metadados da API com `whatsend-version.json`, arquivo operacional pequeno mantido no root. Para Releases, a comparacao usa `tag` e commit SHA; para `main`, usa o commit SHA da branch. Se a versao instalada ja corresponder a remota, o pacote nao e baixado e `npm install` nao e executado.
+
+Durante a copia, arquivos operacionais locais sao preservados, incluindo `clientes.csv`, `texto.md`, `.env`, `logs/`, `.wwebjs_auth/`, `.runtime/` e `node_modules/`. Depois disso, o script roda `npm install` com download automatico do Puppeteer desativado, valida o navegador com `scripts/ensure-browser.js` e so entao grava o novo `whatsend-version.json`.
 
 ## Validacao
 

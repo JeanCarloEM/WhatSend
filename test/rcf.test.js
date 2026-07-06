@@ -87,8 +87,14 @@ const {
 } = require("../main");
 const {
   MAIN_TARBALL_URL,
+  VERSION_FILE_NAME,
+  createVersionId,
+  isSameInstalledVersion,
+  readInstalledVersion,
   safeTarPath,
   shouldSkip,
+  resolveUpdateSource,
+  writeInstalledVersion,
 } = require("../scripts/update-project");
 const {
   splitLeadingLegalHeader,
@@ -174,6 +180,14 @@ function createDeferred() {
   });
 
   return { promise, reject, resolve };
+}
+
+function createJsonResponse(data, statusCode = 200) {
+  return {
+    body: Buffer.from(JSON.stringify(data), "utf8"),
+    headers: {},
+    statusCode,
+  };
 }
 
 function createFakeOggAudio() {
@@ -302,6 +316,7 @@ test("explica perfil de navegador já em uso", () => {
 
 test("atualizador não depende de .git e preserva arquivos operacionais", () => {
   assert.match(MAIN_TARBALL_URL, /JeanCarloEM\/WhatSend\/tar\.gz\/refs\/heads\/main/);
+  assert.equal(VERSION_FILE_NAME, "whatsend-version.json");
   assert.equal(shouldSkip("clientes.csv"), true);
   assert.equal(shouldSkip("texto.md"), true);
   assert.equal(shouldSkip(".env"), true);
@@ -310,6 +325,126 @@ test("atualizador não depende de .git e preserva arquivos operacionais", () => 
   assert.equal(shouldSkip("src/app.js"), false);
   assert.equal(safeTarPath("JeanCarloEM-WhatSend-abc123/src/app.js"), "src/app.js");
   assert.equal(safeTarPath("JeanCarloEM-WhatSend-abc123/../segredo.txt"), "");
+});
+
+test("atualizador prioriza release latest e identifica versão remota pelo commit do tag", async () => {
+  const commitSha = "a".repeat(40);
+  const calls = [];
+  const source = await resolveUpdateSource({
+    async request(url) {
+      calls.push(url);
+
+      if (url.endsWith("/releases/latest")) {
+        return createJsonResponse({
+          id: 123,
+          tag_name: "v2.0.0",
+          tarball_url: "https://api.github.com/repos/JeanCarloEM/WhatSend/tarball/v2.0.0",
+        });
+      }
+
+      if (url.endsWith("/commits/v2.0.0")) {
+        return createJsonResponse({ sha: commitSha });
+      }
+
+      throw new Error(`URL inesperada: ${url}`);
+    },
+  });
+
+  assert.equal(source.sourceType, "release");
+  assert.equal(source.tagName, "v2.0.0");
+  assert.equal(source.commitSha, commitSha);
+  assert.equal(source.versionId, `release:v2.0.0:${commitSha}`);
+  assert.equal(source.url, "https://api.github.com/repos/JeanCarloEM/WhatSend/tarball/v2.0.0");
+  assert.deepEqual(calls.map((url) => url.replace(/^https:\/\/api\.github\.com\/repos\/JeanCarloEM\/WhatSend/u, "")), [
+    "/releases/latest",
+    "/commits/v2.0.0",
+  ]);
+});
+
+test("atualizador evita consulta extra quando release já informa SHA completo", async () => {
+  const commitSha = "e".repeat(40);
+  const calls = [];
+  const source = await resolveUpdateSource({
+    async request(url) {
+      calls.push(url);
+
+      if (url.endsWith("/releases/latest")) {
+        return createJsonResponse({
+          id: 456,
+          tag_name: "v2.1.0",
+          target_commitish: commitSha,
+          tarball_url: "https://api.github.com/repos/JeanCarloEM/WhatSend/tarball/v2.1.0",
+        });
+      }
+
+      throw new Error(`URL inesperada: ${url}`);
+    },
+  });
+
+  assert.equal(source.commitSha, commitSha);
+  assert.deepEqual(calls.map((url) => url.replace(/^https:\/\/api\.github\.com\/repos\/JeanCarloEM\/WhatSend/u, "")), [
+    "/releases/latest",
+  ]);
+});
+
+test("atualizador usa branch main somente quando não há release válida", async () => {
+  const commitSha = "b".repeat(40);
+  const calls = [];
+  const source = await resolveUpdateSource({
+    async request(url) {
+      calls.push(url);
+
+      if (url.endsWith("/releases/latest")) {
+        return createJsonResponse({ message: "Not Found" }, 404);
+      }
+
+      if (url.endsWith("/branches/main")) {
+        return createJsonResponse({
+          commit: {
+            sha: commitSha,
+          },
+        });
+      }
+
+      throw new Error(`URL inesperada: ${url}`);
+    },
+  });
+
+  assert.equal(source.sourceType, "main");
+  assert.equal(source.commitSha, commitSha);
+  assert.equal(source.versionId, `main:${commitSha}`);
+  assert.equal(source.url, MAIN_TARBALL_URL);
+  assert.deepEqual(calls.map((url) => url.replace(/^https:\/\/api\.github\.com\/repos\/JeanCarloEM\/WhatSend/u, "")), [
+    "/releases/latest",
+    "/branches/main",
+  ]);
+});
+
+test("atualizador compara versão instalada sem baixar pacote remoto", () => {
+  const { root } = createFixture();
+  const commitSha = "c".repeat(40);
+  const source = {
+    commitSha,
+    sourceType: "release",
+    tagName: "v3.0.0",
+    versionId: createVersionId("release", commitSha, "v3.0.0"),
+  };
+
+  assert.equal(readInstalledVersion(root), null);
+
+  writeInstalledVersion(source, root);
+
+  const installed = readInstalledVersion(root);
+  assert.equal(installed.repository, "JeanCarloEM/WhatSend");
+  assert.equal(installed.versionId, source.versionId);
+  assert.equal(isSameInstalledVersion(installed, source), true);
+  assert.equal(
+    isSameInstalledVersion(installed, {
+      ...source,
+      versionId: createVersionId("main", "d".repeat(40)),
+    }),
+    false,
+  );
 });
 
 test("build dist preserva cabeçalho legal e limita exclusão operacional à raiz", () => {

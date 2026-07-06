@@ -17,6 +17,8 @@ const REPO = "WhatSend";
 const ROOT_DIR = path.resolve(__dirname, "..");
 const GITHUB_API = `https://api.github.com/repos/${OWNER}/${REPO}`;
 const MAIN_TARBALL_URL = `https://codeload.github.com/${OWNER}/${REPO}/tar.gz/refs/heads/main`;
+const VERSION_FILE_NAME = "whatsend-version.json";
+const GITHUB_API_VERSION = "2022-11-28";
 
 const PROTECTED_ROOT_ENTRIES = new Set([
   ".env",
@@ -42,7 +44,9 @@ function requestBuffer(url, options = {}, redirectCount = 0) {
       {
         headers: {
           Accept: options.accept || "application/octet-stream",
+          "X-GitHub-Api-Version": GITHUB_API_VERSION,
           "User-Agent": `${REPO}-updater`,
+          ...(options.headers || {}),
         },
       },
       (res) => {
@@ -60,6 +64,7 @@ function requestBuffer(url, options = {}, redirectCount = 0) {
         res.on("end", () => {
           resolve({
             body: Buffer.concat(chunks),
+            headers: res.headers,
             statusCode,
           });
         });
@@ -73,31 +78,183 @@ function requestBuffer(url, options = {}, redirectCount = 0) {
   });
 }
 
-async function resolveUpdateSource() {
-  const response = await requestBuffer(`${GITHUB_API}/releases/latest`, {
+async function requestJson(url, options = {}) {
+  const response = await (options.request || requestBuffer)(url, {
     accept: "application/vnd.github+json",
+    headers: options.headers,
   });
 
-  if (response.statusCode === 200) {
-    const release = JSON.parse(response.body.toString("utf8"));
-
-    if (release.tarball_url) {
-      return {
-        label: `release ${release.tag_name || "mais recente"}`,
-        url: release.tarball_url,
-      };
-    }
-  }
-
-  if (response.statusCode === 404) {
+  if (response.statusCode === 404 && options.allowNotFound) {
     return {
-      label: "branch main (nenhuma release publicada)",
-      url: MAIN_TARBALL_URL,
+      data: null,
+      headers: response.headers || {},
+      statusCode: response.statusCode,
     };
   }
 
-  throw new Error(
-    `Falha ao consultar releases do GitHub (${response.statusCode}): ${response.body.toString("utf8").slice(0, 300)}`,
+  if (response.statusCode < 200 || response.statusCode >= 300) {
+    throw new Error(
+      `Falha ao consultar GitHub (${response.statusCode}): ${response.body.toString("utf8").slice(0, 300)}`,
+    );
+  }
+
+  try {
+    return {
+      data: JSON.parse(response.body.toString("utf8")),
+      headers: response.headers || {},
+      statusCode: response.statusCode,
+    };
+  } catch (err) {
+    throw new Error(`Resposta inválida do GitHub em ${url}: ${err.message}`);
+  }
+}
+
+async function resolveUpdateSource(options = {}) {
+  const latestRelease = await requestJson(`${GITHUB_API}/releases/latest`, {
+    allowNotFound: true,
+    request: options.request,
+  });
+
+  if (latestRelease.statusCode === 404) {
+    return resolveMainSource(options);
+  }
+
+  const release = latestRelease.data;
+
+  if (isValidRelease(release)) {
+    const commitSha = await resolveReleaseCommitSha(release, options);
+
+    return {
+      commitSha,
+      label: `release ${release.tag_name}`,
+      releaseId: release.id,
+      sourceType: "release",
+      tagName: release.tag_name,
+      url: release.tarball_url,
+      versionId: createVersionId("release", commitSha, release.tag_name),
+    };
+  }
+
+  return resolveMainSource(options);
+}
+
+function isValidRelease(release) {
+  return Boolean(
+    release &&
+    typeof release.tag_name === "string" &&
+    release.tag_name.trim() &&
+    typeof release.tarball_url === "string" &&
+    release.tarball_url.trim(),
+  );
+}
+
+async function resolveCommitSha(ref, options = {}) {
+  const response = await requestJson(`${GITHUB_API}/commits/${encodeURIComponent(ref)}`, {
+    request: options.request,
+  });
+  const sha = response.data && response.data.sha;
+
+  if (!isCommitSha(sha)) {
+    throw new Error(`Não foi possível identificar o commit remoto para ${ref}.`);
+  }
+
+  return sha;
+}
+
+async function resolveReleaseCommitSha(release, options = {}) {
+  if (isCommitSha(release.target_commitish)) {
+    return release.target_commitish;
+  }
+
+  return resolveCommitSha(release.tag_name, options);
+}
+
+async function resolveMainSource(options = {}) {
+  const response = await requestJson(`${GITHUB_API}/branches/main`, {
+    request: options.request,
+  });
+  const commitSha = response.data && response.data.commit && response.data.commit.sha;
+
+  if (!isCommitSha(commitSha)) {
+    throw new Error("Não foi possível identificar o commit remoto da branch main.");
+  }
+
+  return {
+    commitSha,
+    label: "branch main (nenhuma release válida publicada)",
+    sourceType: "main",
+    url: MAIN_TARBALL_URL,
+    versionId: createVersionId("main", commitSha),
+  };
+}
+
+function createVersionId(sourceType, commitSha, tagName = "") {
+  const normalizedSource = String(sourceType || "").trim().toLowerCase();
+  const normalizedSha = String(commitSha || "").trim().toLowerCase();
+  const normalizedTag = String(tagName || "").trim();
+
+  if (normalizedSource === "release") {
+    return `release:${normalizedTag}:${normalizedSha}`;
+  }
+
+  return `main:${normalizedSha}`;
+}
+
+function isCommitSha(value) {
+  return typeof value === "string" && /^[a-f0-9]{40}$/iu.test(value);
+}
+
+function readInstalledVersion(rootDir = ROOT_DIR) {
+  const filePath = path.join(rootDir, VERSION_FILE_NAME);
+
+  if (!fs.existsSync(filePath) || !fs.statSync(filePath).isFile()) {
+    return null;
+  }
+
+  try {
+    return JSON.parse(fs.readFileSync(filePath, "utf8"));
+  } catch (err) {
+    console.warn(`Aviso: ${VERSION_FILE_NAME} inválido será ignorado (${err.message}).`);
+    return null;
+  }
+}
+
+function isSameInstalledVersion(installed, source) {
+  return Boolean(
+    installed &&
+    source &&
+    typeof installed.versionId === "string" &&
+    installed.versionId === source.versionId,
+  );
+}
+
+function writeInstalledVersion(source, rootDir = ROOT_DIR) {
+  const packageJsonPath = path.join(rootDir, "package.json");
+  let packageVersion = "";
+
+  if (fs.existsSync(packageJsonPath)) {
+    try {
+      packageVersion = JSON.parse(fs.readFileSync(packageJsonPath, "utf8")).version || "";
+    } catch {
+      packageVersion = "";
+    }
+  }
+
+  const version = {
+    schema: 1,
+    repository: `${OWNER}/${REPO}`,
+    sourceType: source.sourceType,
+    tagName: source.tagName || "",
+    commitSha: source.commitSha,
+    versionId: source.versionId,
+    packageVersion,
+    updatedAt: new Date().toISOString(),
+  };
+
+  fs.writeFileSync(
+    path.join(rootDir, VERSION_FILE_NAME),
+    `${JSON.stringify(version, null, 2)}\n`,
+    "utf8",
   );
 }
 
@@ -243,18 +400,31 @@ async function updateProject() {
   const source = await resolveUpdateSource();
   console.log(`Fonte da atualização: ${source.label}`);
 
+  const installed = readInstalledVersion();
+
+  if (isSameInstalledVersion(installed, source)) {
+    console.log(`WhatSend já está atualizado (${source.versionId}).`);
+    return false;
+  }
+
   const tarball = await downloadTarball(source);
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), `${REPO}-update-`));
   const extractDir = path.join(tempDir, "source");
 
-  fs.mkdirSync(extractDir, { recursive: true });
-  extractTarGz(tarball, extractDir);
-  copyTree(extractDir, ROOT_DIR);
+  try {
+    fs.mkdirSync(extractDir, { recursive: true });
+    extractTarGz(tarball, extractDir);
+    copyTree(extractDir, ROOT_DIR);
+  } finally {
+    fs.rmSync(tempDir, { force: true, maxRetries: 5, recursive: true, retryDelay: 200 });
+  }
 
   run("npm", ["install"]);
   run("node", ["scripts/ensure-browser.js"]);
+  writeInstalledVersion(source);
 
-  console.log("Atualização concluída.");
+  console.log(`Atualização concluída (${source.versionId}).`);
+  return true;
 }
 
 if (require.main === module) {
@@ -267,10 +437,15 @@ if (require.main === module) {
 module.exports = {
   MAIN_TARBALL_URL,
   PROTECTED_ROOT_ENTRIES,
+  VERSION_FILE_NAME,
   copyTree,
+  createVersionId,
   extractTarGz,
+  isSameInstalledVersion,
+  readInstalledVersion,
   resolveUpdateSource,
   safeTarPath,
   shouldSkip,
   updateProject,
+  writeInstalledVersion,
 };

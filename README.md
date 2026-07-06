@@ -20,6 +20,7 @@ Todos os nomes, telefones, contas, caminhos e URLs deste README sao exemplos fic
 - [CLI](#cli)
 - [Sessoes](#sessoes)
 - [Logs e reenvio](#logs-e-reenvio)
+- [Atualizacao](#atualizacao)
 - [Testes](#testes)
 - [Documentacao](#documentacao)
 - [Licenca e disclaimer](#licenca-e-disclaimer)
@@ -206,8 +207,8 @@ Comandos principais:
 | `npm run validate:dist` | Valida estrutura, segurança e execução do `dist`. |
 | `npm run release-notes:generate -- HASH_INICIAL HASH_FINAL` | Gera `dist/release-notes.md` para uma release formal. |
 | `npm run release-notes:validate` | Valida localmente que `dist/release-notes.md` esteja em commit exclusivo. |
-| `.\atualizar.cmd` | Atualiza pelo GitHub Releases, ou por `main` se nao houver release, no Windows. |
-| `sh ./atualizar.sh` | Atualiza pelo GitHub Releases, ou por `main` se nao houver release, no macOS/Linux. |
+| `.\atualizar.cmd` | Atualiza pela Release Latest do GitHub, ou por `main` se nao houver release valida, no Windows. |
+| `sh ./atualizar.sh` | Atualiza pela Release Latest do GitHub, ou por `main` se nao houver release valida, no macOS/Linux. |
 
 Use `npm run <script> -- argumento` quando passar parametros por scripts npm. Exemplo: `npm run start:force -- faturamento`.
 
@@ -250,6 +251,12 @@ MEDIA_SEND_RETRIES=5
 MEDIA_SEND_RETRY_DELAY_MS=1200
 MEDIA_SEND_RETRY_MAX_DELAY_MS=10000
 ```
+
+## Atualizacao
+
+Os scripts `.\atualizar.cmd` e `sh ./atualizar.sh` nao dependem de Git nem de um clone local. Eles consultam a API oficial do GitHub, priorizam a Release marcada como Latest e usam a branch `main` apenas se nao houver release valida.
+
+Antes de baixar o pacote, o atualizador compara a versao remota com `whatsend-version.json`, arquivo operacional pequeno mantido no root. Quando o identificador local corresponde ao `tag`/commit da Release ou ao commit da `main`, o download e a reinstalacao de dependencias sao pulados.
 
 ## Testes
 

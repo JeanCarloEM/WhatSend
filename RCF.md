@@ -330,7 +330,15 @@ Devem existir scripts de atualização no root para Windows e macOS/Linux.
 
 A atualização não deve depender da existência de `git` nem de diretório local `./.git`.
 
-O atualizador deve consultar `https://github.com/JeanCarloEM/WhatSend`, baixar a release mais recente quando houver release publicada e, se não houver release, baixar a branch `main`.
+O atualizador deve consultar `https://github.com/JeanCarloEM/WhatSend` por APIs oficiais do GitHub, priorizando a Release marcada como Latest. Somente quando não houver Release válida publicada deve usar a branch `main`.
+
+Antes de baixar qualquer pacote, o atualizador deve identificar a versão remota por metadados leves da API do GitHub. Para Release, o identificador deve usar o `tag_name` e o commit SHA associado ao tag ou ao `target_commitish` quando este já for um SHA completo. Para `main`, o identificador deve usar o commit SHA retornado pela API da branch.
+
+O atualizador deve manter no root o arquivo `whatsend-version.json`, contendo o repositório, tipo de origem, tag quando aplicável, commit SHA, `versionId` determinístico e data de atualização. Esse arquivo é operacional, pequeno e serve para comparar a instalação local com a versão remota sem depender de Git nem baixar o pacote completo.
+
+Quando `whatsend-version.json` indicar a mesma versão remota disponível, a atualização deve ser encerrada sem download do pacote, sem reinstalação de dependências e sem alteração de arquivos locais.
+
+Quando o arquivo de versão não existir, estiver inválido ou não corresponder à versão remota, o pacote remoto deve ser baixado e aplicado. O arquivo `whatsend-version.json` só deve ser gravado após a cópia dos arquivos, a sincronização das dependências npm e a validação do navegador terminarem com sucesso.
 
 Arquivos operacionais locais devem ser preservados durante a atualização, incluindo `clientes.csv`, `texto.md`, `.env`, logs, sessões do WhatsApp, runtime local e `node_modules`.
 
