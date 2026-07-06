@@ -1,0 +1,113 @@
+# Autor: JeanCarloEM.com
+# Site do Autor: https://jeancarloem.com
+# Licenca: Mozilla Public License 2.0
+# Site da Licenca: https://www.mozilla.org/MPL/2.0/
+# Resumo da Licenca: uso, copia, modificacao e distribuicao permitidos conforme os termos da MPL-2.0.
+# Disclaimer: fornecido "AS IS", sem garantias de qualquer tipo.
+
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Versão sem prefixo v. Exemplo: 1.2.0"
+        required: true
+        type: string
+      channel:
+        description: "Canal da release"
+        required: true
+        default: stable
+        type: choice
+        options:
+          - stable
+          - beta
+          - alpha
+          - rc
+      confirm_official_release:
+        description: "Confirma publicação como Release oficial Latest"
+        required: true
+        default: true
+        type: boolean
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      GH_TOKEN: ${{ github.token }}
+      PUPPETEER_SKIP_DOWNLOAD: "true"
+
+    steps:
+      - name: Validate confirmation
+        if: ${{ !inputs.confirm_official_release }}
+        run: |
+          echo "A publicação oficial precisa ser confirmada no workflow_dispatch."
+          exit 1
+
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests
+        run: npm test
+
+      - name: Run RCF check with fixtures
+        run: npm run check:test
+
+      - name: Build release package
+        run: >
+          node scripts/build-dist.js
+          --version "${{ inputs.version }}"
+          --channel "${{ inputs.channel }}"
+          --official-release
+          --commit-sha "${{ github.sha }}"
+
+      - name: Validate distributable dist
+        run: npm run validate:dist
+
+      - name: Resolve release outputs
+        id: release
+        run: node scripts/print-release-outputs.js
+
+      - name: Publish GitHub Release
+        run: |
+          set -eu
+          TAG="${{ steps.release.outputs.tag_name }}"
+          TITLE="${{ steps.release.outputs.release_title }}"
+          ZIP_PATH="${{ steps.release.outputs.zip_path }}"
+          VERSION_PATH="${{ steps.release.outputs.metadata_path }}"
+          release_args=(--target "${{ github.sha }}" --title "$TITLE" --latest)
+          if [ -f "dist/release-notes.md" ]; then
+            notes_args=(-F dist/release-notes.md)
+          else
+            notes_args=(--generate-notes)
+          fi
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release edit "$TAG" "${release_args[@]}" "${notes_args[@]}"
+            gh release upload "$TAG" "$ZIP_PATH" "$VERSION_PATH" --clobber
+          else
+            gh release create "$TAG" "$ZIP_PATH" "$VERSION_PATH" "${release_args[@]}" "${notes_args[@]}"
+          fi
+
+      - name: Upload release build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.release.outputs.artifact_name }}
+          path: |
+            ${{ steps.release.outputs.zip_path }}
+            ${{ steps.release.outputs.metadata_path }}
+          if-no-files-found: error

@@ -8,7 +8,15 @@
 const fs = require("fs");
 const path = require("path");
 const terser = require("terser");
+const { createZipFromDirectory } = require("./archive");
 const { RELEASE_NOTES_PATH, validateReleaseNotesContent } = require("./release-notes-policy");
+const {
+  VERSION_FILE_NAME,
+  collectReleaseOptions,
+  parseReleaseArgs,
+  resolveReleaseMetadata,
+  writeVersionFile,
+} = require("./release-metadata");
 
 const ROOT_DIR = path.resolve(__dirname, "..");
 const DIST_DIR = path.join(ROOT_DIR, "dist");
@@ -67,7 +75,9 @@ const LEGAL_HEADER_KEYWORDS = [
   /notice/iu,
 ];
 
-async function buildDist() {
+async function buildDist(options = {}) {
+  const collectedOptions = await collectReleaseOptions(options, { rootDir: ROOT_DIR });
+  const releaseMetadata = resolveReleaseMetadata(collectedOptions, { rootDir: ROOT_DIR });
   const releaseNotesSnapshot = readExistingReleaseNotes();
 
   cleanDistDirectory();
@@ -88,10 +98,17 @@ async function buildDist() {
   }
 
   ensureEnvExample();
+  writeVersionFile(releaseMetadata, path.join(DIST_DIR, VERSION_FILE_NAME));
   await minifyJavaScriptFiles(DIST_DIR);
   restoreExistingReleaseNotes(releaseNotesSnapshot);
   validateBuiltDist();
+  const archivePath = createDistributionArchive(releaseMetadata);
   console.log(`Release distribuível gerada em ${path.relative(ROOT_DIR, DIST_DIR)}`);
+  console.log(`Pacote ZIP gerado em ${path.relative(ROOT_DIR, archivePath)}`);
+  return {
+    archivePath,
+    metadata: releaseMetadata,
+  };
 }
 
 function readExistingReleaseNotes() {
@@ -247,8 +264,33 @@ function shouldExcludeRootFile(name) {
 
 function validateBuiltDist() {
   validateRootOperationalFilesExcluded();
+  validateVersionMetadata();
   validateReleaseNotesIfPresent();
   validateMinifiedLegalHeaders();
+}
+
+function validateVersionMetadata() {
+  const versionPath = path.join(DIST_DIR, VERSION_FILE_NAME);
+
+  if (!fs.existsSync(versionPath) || !fs.statSync(versionPath).isFile()) {
+    throw new Error(`${VERSION_FILE_NAME} obrigatório ausente em dist.`);
+  }
+
+  const metadata = JSON.parse(fs.readFileSync(versionPath, "utf8"));
+
+  if (!metadata.versionId || !metadata.tagName || !metadata.artifactName) {
+    throw new Error(`${VERSION_FILE_NAME} não contém metadados de release suficientes.`);
+  }
+}
+
+function createDistributionArchive(releaseMetadata) {
+  const archivePath = path.join(DIST_DIR, releaseMetadata.artifactName);
+
+  createZipFromDirectory(DIST_DIR, archivePath, {
+    exclude: [/^WhatSend-v.+\.zip$/u],
+  });
+
+  return archivePath;
 }
 
 function validateReleaseNotesIfPresent() {
@@ -419,7 +461,7 @@ function sortedDirents(dirPath) {
 }
 
 if (require.main === module) {
-  buildDist().catch((err) => {
+  buildDist(parseReleaseArgs()).catch((err) => {
     console.error(`Falha ao gerar dist: ${err.message}`);
     process.exitCode = 1;
   });
@@ -428,8 +470,10 @@ if (require.main === module) {
 module.exports = {
   DIST_DIR,
   buildDist,
+  createDistributionArchive,
   listFiles,
   splitLeadingLegalHeader,
   shouldExcludeEntry,
   shouldExcludeRootFile,
+  validateVersionMetadata,
 };

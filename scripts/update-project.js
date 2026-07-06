@@ -11,13 +11,14 @@ const https = require("https");
 const os = require("os");
 const path = require("path");
 const zlib = require("zlib");
+const { extractZip } = require("./archive");
+const { VERSION_FILE_NAME, buildVersionId } = require("./release-metadata");
 
 const OWNER = "JeanCarloEM";
 const REPO = "WhatSend";
 const ROOT_DIR = path.resolve(__dirname, "..");
 const GITHUB_API = `https://api.github.com/repos/${OWNER}/${REPO}`;
 const MAIN_TARBALL_URL = `https://codeload.github.com/${OWNER}/${REPO}/tar.gz/refs/heads/main`;
-const VERSION_FILE_NAME = "whatsend-version.json";
 const GITHUB_API_VERSION = "2022-11-28";
 
 const PROTECTED_ROOT_ENTRIES = new Set([
@@ -123,14 +124,18 @@ async function resolveUpdateSource(options = {}) {
 
   if (isValidRelease(release)) {
     const commitSha = await resolveReleaseCommitSha(release, options);
+    const asset = selectReleaseAsset(release);
 
     return {
+      archiveType: asset ? "zip" : "tar.gz",
+      assetDigest: asset ? asset.digest || "" : "",
+      assetName: asset ? asset.name : "",
       commitSha,
       label: `release ${release.tag_name}`,
       releaseId: release.id,
       sourceType: "release",
       tagName: release.tag_name,
-      url: release.tarball_url,
+      url: asset ? asset.browser_download_url : release.tarball_url,
       versionId: createVersionId("release", commitSha, release.tag_name),
     };
   }
@@ -146,6 +151,20 @@ function isValidRelease(release) {
     typeof release.tarball_url === "string" &&
     release.tarball_url.trim(),
   );
+}
+
+function selectReleaseAsset(release) {
+  const assets = Array.isArray(release.assets) ? release.assets : [];
+
+  return assets
+    .filter((asset) => (
+      asset &&
+      typeof asset.name === "string" &&
+      /^WhatSend-v.+\.zip$/u.test(asset.name) &&
+      typeof asset.browser_download_url === "string" &&
+      asset.browser_download_url
+    ))
+    .sort((a, b) => a.name.localeCompare(b.name, "en"))[0] || null;
 }
 
 async function resolveCommitSha(ref, options = {}) {
@@ -194,7 +213,7 @@ function createVersionId(sourceType, commitSha, tagName = "") {
   const normalizedTag = String(tagName || "").trim();
 
   if (normalizedSource === "release") {
-    return `release:${normalizedTag}:${normalizedSha}`;
+    return buildVersionId(normalizedTag, normalizedSha);
   }
 
   return `main:${normalizedSha}`;
@@ -230,7 +249,17 @@ function isSameInstalledVersion(installed, source) {
 
 function writeInstalledVersion(source, rootDir = ROOT_DIR) {
   const packageJsonPath = path.join(rootDir, "package.json");
+  const currentVersionPath = path.join(rootDir, VERSION_FILE_NAME);
+  let currentVersion = {};
   let packageVersion = "";
+
+  if (fs.existsSync(currentVersionPath) && fs.statSync(currentVersionPath).isFile()) {
+    try {
+      currentVersion = JSON.parse(fs.readFileSync(currentVersionPath, "utf8"));
+    } catch {
+      currentVersion = {};
+    }
+  }
 
   if (fs.existsSync(packageJsonPath)) {
     try {
@@ -243,6 +272,7 @@ function writeInstalledVersion(source, rootDir = ROOT_DIR) {
   const version = {
     schema: 1,
     repository: `${OWNER}/${REPO}`,
+    ...currentVersion,
     sourceType: source.sourceType,
     tagName: source.tagName || "",
     commitSha: source.commitSha,
@@ -266,6 +296,15 @@ async function downloadTarball(source) {
   }
 
   return response.body;
+}
+
+function extractArchive(archiveBuffer, source, destinationDir) {
+  if (source.archiveType === "zip") {
+    extractZip(archiveBuffer, destinationDir);
+    return;
+  }
+
+  extractTarGz(archiveBuffer, destinationDir);
 }
 
 function readTarString(buffer, start, length) {
@@ -413,7 +452,7 @@ async function updateProject() {
 
   try {
     fs.mkdirSync(extractDir, { recursive: true });
-    extractTarGz(tarball, extractDir);
+    extractArchive(tarball, source, extractDir);
     copyTree(extractDir, ROOT_DIR);
   } finally {
     fs.rmSync(tempDir, { force: true, maxRetries: 5, recursive: true, retryDelay: 200 });
@@ -440,11 +479,13 @@ module.exports = {
   VERSION_FILE_NAME,
   copyTree,
   createVersionId,
+  extractArchive,
   extractTarGz,
   isSameInstalledVersion,
   readInstalledVersion,
   resolveUpdateSource,
   safeTarPath,
+  selectReleaseAsset,
   shouldSkip,
   updateProject,
   writeInstalledVersion,

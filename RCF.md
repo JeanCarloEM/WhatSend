@@ -330,11 +330,11 @@ Devem existir scripts de atualização no root para Windows e macOS/Linux.
 
 A atualização não deve depender da existência de `git` nem de diretório local `./.git`.
 
-O atualizador deve consultar `https://github.com/JeanCarloEM/WhatSend` por APIs oficiais do GitHub, priorizando a Release marcada como Latest. Somente quando não houver Release válida publicada deve usar a branch `main`.
+O atualizador deve consultar `https://github.com/JeanCarloEM/WhatSend` por APIs oficiais do GitHub, priorizando a Release marcada como Latest. Quando a Release possuir asset distribuível `WhatSend-v<versão>[-<canal>].zip`, esse ZIP deve ser preferido ao tarball de código-fonte da release. Somente quando não houver Release válida publicada deve usar a branch `main`.
 
 Antes de baixar qualquer pacote, o atualizador deve identificar a versão remota por metadados leves da API do GitHub. Para Release, o identificador deve usar o `tag_name` e o commit SHA associado ao tag ou ao `target_commitish` quando este já for um SHA completo. Para `main`, o identificador deve usar o commit SHA retornado pela API da branch.
 
-O atualizador deve manter no root o arquivo `whatsend-version.json`, contendo o repositório, tipo de origem, tag quando aplicável, commit SHA, `versionId` determinístico e data de atualização. Esse arquivo é operacional, pequeno e serve para comparar a instalação local com a versão remota sem depender de Git nem baixar o pacote completo.
+O atualizador deve manter no root o arquivo `whatsend-version.json`, contendo o repositório, tipo de origem, versão, canal, tag quando aplicável, commit SHA, nome do artefato, `versionId` determinístico e datas relevantes. Esse arquivo é operacional, pequeno, deve ser gerado pelo build distribuível e serve para comparar a instalação local com a versão remota sem depender de Git nem baixar o pacote completo.
 
 Quando `whatsend-version.json` indicar a mesma versão remota disponível, a atualização deve ser encerrada sem download do pacote, sem reinstalação de dependências e sem alteração de arquivos locais.
 
@@ -350,7 +350,11 @@ Quando o projeto estiver hospedado no GitHub, deve existir workflow de CI para p
 
 Todos os jobs do workflow devem possuir `timeout-minutes` explícito de no máximo 5 minutos.
 
-O workflow deve executar testes, checagem RCF com fixtures, geração de `./dist`, validação do `./dist` e publicação do diretório `dist/` como artefato da execução.
+O workflow de CI deve executar testes, checagem RCF com fixtures, geração de `./dist`, validação do `./dist` e publicação do diretório `dist/` como artefato da execução.
+
+Deve existir workflow de Release com disparo manual por `workflow_dispatch`, usando campos explícitos para versão, canal e confirmação de publicação oficial. Esse fluxo deve permitir execução integral pela interface web do GitHub, sem prompts interativos.
+
+O workflow de Release deve usar a mesma lógica de versionamento do `build:dist`, criar automaticamente a tag `v<versão>[-<canal>]`, criar ou atualizar a Release correspondente, anexar o ZIP distribuível e `whatsend-version.json`, e marcar a Release como Latest por mecanismo oficial do GitHub. Como Releases marcadas como prerelease não são elegíveis a Latest no fluxo esperado, canais como `beta` e `alpha` devem ser representados no nome/tag/canal, sem marcar a publicação GitHub como prerelease.
 
 ### RN029 - Reutilização de Instância Local
 
@@ -364,7 +368,21 @@ Se os scripts tiverem mudado, a nova execução deve encerrar a instância regis
 
 O comando `npm run build:dist` deve gerar `./dist` de forma limpa, reproduzível e funcional, removendo conteúdo anterior antes de recriar a release.
 
+Além da pasta `./dist`, o comando deve gerar automaticamente o pacote ZIP distribuível dentro de `./dist`, pronto para anexação em Release. O nome deve seguir o padrão:
+
+```text
+WhatSend-v<versão>[-<canal>].zip
+```
+
+O canal `stable` não deve gerar sufixo. Canais como `beta`, `alpha` e `rc` devem gerar sufixo, por exemplo `WhatSend-v1.2.0-beta.zip`.
+
+O build deve aceitar `--version`, `--channel`, `--commit-sha`, `--tag`, `--official-release` e `--no-official-release`. Em execução local interativa, informações ausentes devem ser solicitadas ao operador. Em execução não interativa, os valores devem ser inferidos de forma determinística quando possível, usando `package.json`, `stable`, variáveis do GitHub Actions e Git local apenas como conveniência, sem criar dependência operacional para o atualizador.
+
+Quando `--official-release` for usado, o build deve exigir commit SHA completo e validar que tag, nome do ZIP, canal e `versionId` estejam consistentes.
+
 A release deve incluir somente arquivos necessários à execução e documentação: `LICENSE`, `README*`, `RCF.md`, `docs/`, `main.js`, `src/`, `scripts/`, inicializadores, `package.json`, `package-lock.json`, arquivos `.env.*` não sensíveis e arquivos de configuração/formatação explicitamente permitidos.
+
+O arquivo `whatsend-version.json` deve ser gerado automaticamente em `./dist` antes do empacotamento e deve integrar tanto o ZIP distribuível quanto os assets independentes da Release quando publicados pelo workflow.
 
 Arquivos JavaScript distribuídos devem ser minificados por biblioteca Open Source mantida. Documentação, arquivos de configuração, scripts shell/batch e formatos em que a minificação possa alterar semântica não devem ser minificados.
 

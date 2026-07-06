@@ -92,15 +92,27 @@ const {
   isSameInstalledVersion,
   readInstalledVersion,
   safeTarPath,
+  selectReleaseAsset,
   shouldSkip,
   resolveUpdateSource,
   writeInstalledVersion,
 } = require("../scripts/update-project");
 const {
+  createZipFromDirectory,
+  extractZip,
+  safeZipPath,
+} = require("../scripts/archive");
+const {
   splitLeadingLegalHeader,
   shouldExcludeEntry: shouldExcludeDistEntry,
   shouldExcludeRootFile,
 } = require("../scripts/build-dist");
+const {
+  buildArtifactName,
+  buildTagName,
+  parseReleaseArgs,
+  resolveReleaseMetadata,
+} = require("../scripts/release-metadata");
 const {
   buildReleaseNotesMarkdown,
   categorizeCommitMessages,
@@ -336,6 +348,13 @@ test("atualizador prioriza release latest e identifica versão remota pelo commi
 
       if (url.endsWith("/releases/latest")) {
         return createJsonResponse({
+          assets: [
+            {
+              browser_download_url: "https://github.com/JeanCarloEM/WhatSend/releases/download/v2.0.0/WhatSend-v2.0.0.zip",
+              digest: "sha256:abc",
+              name: "WhatSend-v2.0.0.zip",
+            },
+          ],
           id: 123,
           tag_name: "v2.0.0",
           tarball_url: "https://api.github.com/repos/JeanCarloEM/WhatSend/tarball/v2.0.0",
@@ -354,11 +373,46 @@ test("atualizador prioriza release latest e identifica versão remota pelo commi
   assert.equal(source.tagName, "v2.0.0");
   assert.equal(source.commitSha, commitSha);
   assert.equal(source.versionId, `release:v2.0.0:${commitSha}`);
-  assert.equal(source.url, "https://api.github.com/repos/JeanCarloEM/WhatSend/tarball/v2.0.0");
+  assert.equal(source.archiveType, "zip");
+  assert.equal(source.assetName, "WhatSend-v2.0.0.zip");
+  assert.equal(source.url, "https://github.com/JeanCarloEM/WhatSend/releases/download/v2.0.0/WhatSend-v2.0.0.zip");
   assert.deepEqual(calls.map((url) => url.replace(/^https:\/\/api\.github\.com\/repos\/JeanCarloEM\/WhatSend/u, "")), [
     "/releases/latest",
     "/commits/v2.0.0",
   ]);
+});
+
+test("release metadata mantém tag, zip e versionId consistentes", () => {
+  const commitSha = "f".repeat(40);
+  const metadata = resolveReleaseMetadata({
+    channel: "beta",
+    commitSha,
+    generatedAt: "2026-07-06T00:00:00.000Z",
+    officialRelease: true,
+    version: "1.2.0",
+  });
+
+  assert.equal(buildTagName("1.2.0", "stable"), "v1.2.0");
+  assert.equal(buildTagName("1.2.0", "beta"), "v1.2.0-beta");
+  assert.equal(buildArtifactName("1.2.0", "beta"), "WhatSend-v1.2.0-beta.zip");
+  assert.equal(metadata.tagName, "v1.2.0-beta");
+  assert.equal(metadata.artifactName, "WhatSend-v1.2.0-beta.zip");
+  assert.equal(metadata.versionId, `release:v1.2.0-beta:${commitSha}`);
+  assert.deepEqual(parseReleaseArgs(["--version", "1.2.0", "--channel=alpha", "--official-release"]), {
+    channel: "alpha",
+    officialRelease: true,
+    version: "1.2.0",
+  });
+  assert.throws(
+    () => resolveReleaseMetadata({
+      channel: "beta",
+      commitSha,
+      officialRelease: true,
+      tagName: "v1.2.0-alpha",
+      version: "1.2.0",
+    }),
+    /divergente/,
+  );
 });
 
 test("atualizador evita consulta extra quando release já informa SHA completo", async () => {
@@ -385,6 +439,17 @@ test("atualizador evita consulta extra quando release já informa SHA completo",
   assert.deepEqual(calls.map((url) => url.replace(/^https:\/\/api\.github\.com\/repos\/JeanCarloEM\/WhatSend/u, "")), [
     "/releases/latest",
   ]);
+});
+
+test("seleciona ZIP distribuível da release e ignora assets inadequados", () => {
+  const asset = selectReleaseAsset({
+    assets: [
+      { browser_download_url: "https://example.invalid/source.zip", name: "Source.zip" },
+      { browser_download_url: "https://example.invalid/app.zip", name: "WhatSend-v1.0.0.zip" },
+    ],
+  });
+
+  assert.equal(asset.name, "WhatSend-v1.0.0.zip");
 });
 
 test("atualizador usa branch main somente quando não há release válida", async () => {
@@ -418,6 +483,28 @@ test("atualizador usa branch main somente quando não há release válida", asyn
     "/releases/latest",
     "/branches/main",
   ]);
+});
+
+test("zip distribuível extrai caminhos seguros sem permitir traversal", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "whatsapp-zip-"));
+  const sourceDir = path.join(root, "source");
+  const extractDir = path.join(root, "extract");
+  const zipPath = path.join(root, "WhatSend-v1.0.0.zip");
+
+  fs.mkdirSync(path.join(sourceDir, "src"), { recursive: true });
+  fs.mkdirSync(path.join(sourceDir, "logs"), { recursive: true });
+  fs.writeFileSync(path.join(sourceDir, "main.js"), "module.exports = true;\n", "utf8");
+  fs.writeFileSync(path.join(sourceDir, "src", "app.js"), "exports.ok = true;\n", "utf8");
+
+  createZipFromDirectory(sourceDir, zipPath);
+  extractZip(fs.readFileSync(zipPath), extractDir);
+
+  assert.equal(fs.readFileSync(path.join(extractDir, "main.js"), "utf8"), "module.exports = true;\n");
+  assert.equal(fs.readFileSync(path.join(extractDir, "src", "app.js"), "utf8"), "exports.ok = true;\n");
+  assert.equal(fs.statSync(path.join(extractDir, "logs")).isDirectory(), true);
+  assert.equal(safeZipPath("../segredo.txt"), "");
+  assert.equal(safeZipPath("C:/segredo.txt"), "");
+  assert.equal(safeZipPath("src/app.js"), "src/app.js");
 });
 
 test("atualizador compara versão instalada sem baixar pacote remoto", () => {
@@ -529,6 +616,23 @@ test("scripts start instalam dependências sem acionar download implícito do Pu
   assert.match(startSh, /sleep 5/);
   assert.match(detachedLauncher, /detached: true/);
   assert.match(detachedLauncher, /windowsHide: true/);
+});
+
+test("workflow de release usa workflow_dispatch, build único e GitHub CLI", () => {
+  const releaseWorkflow = fs.readFileSync(
+    path.join(PROJECT_ROOT, ".github", "workflows", "release.yml"),
+    "utf8",
+  );
+
+  assert.match(releaseWorkflow, /workflow_dispatch:/);
+  assert.match(releaseWorkflow, /version:/);
+  assert.match(releaseWorkflow, /channel:/);
+  assert.match(releaseWorkflow, /confirm_official_release:/);
+  assert.match(releaseWorkflow, /node scripts\/build-dist\.js/);
+  assert.match(releaseWorkflow, /node scripts\/print-release-outputs\.js/);
+  assert.match(releaseWorkflow, /gh release (create|edit)/);
+  assert.match(releaseWorkflow, /--latest/);
+  assert.match(releaseWorkflow, /whatsend-version\.json|metadata_path/);
 });
 
 test("status interativo renderiza sem erro", () => {

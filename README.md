@@ -21,6 +21,7 @@ Todos os nomes, telefones, contas, caminhos e URLs deste README sao exemplos fic
 - [Sessoes](#sessoes)
 - [Logs e reenvio](#logs-e-reenvio)
 - [Atualizacao](#atualizacao)
+- [Releases](#releases)
 - [Testes](#testes)
 - [Documentacao](#documentacao)
 - [Licenca e disclaimer](#licenca-e-disclaimer)
@@ -203,7 +204,7 @@ Comandos principais:
 | `node main.js --rename-session Comercial Financeiro` | Renomeia uma sessao. |
 | `node main.js --remove-session Comercial` | Remove sessao e autenticacao local correspondente. |
 | `npm test` | Roda a suite automatizada. |
-| `npm run build:dist` | Gera a release distribuível em `dist/`. |
+| `npm run build:dist` | Gera `dist/`, `dist/whatsend-version.json` e o ZIP distribuível. |
 | `npm run validate:dist` | Valida estrutura, segurança e execução do `dist`. |
 | `npm run release-notes:generate -- HASH_INICIAL HASH_FINAL` | Gera `dist/release-notes.md` para uma release formal. |
 | `npm run release-notes:validate` | Valida localmente que `dist/release-notes.md` esteja em commit exclusivo. |
@@ -256,7 +257,24 @@ MEDIA_SEND_RETRY_MAX_DELAY_MS=10000
 
 Os scripts `.\atualizar.cmd` e `sh ./atualizar.sh` nao dependem de Git nem de um clone local. Eles consultam a API oficial do GitHub, priorizam a Release marcada como Latest e usam a branch `main` apenas se nao houver release valida.
 
-Antes de baixar o pacote, o atualizador compara a versao remota com `whatsend-version.json`, arquivo operacional pequeno mantido no root. Quando o identificador local corresponde ao `tag`/commit da Release ou ao commit da `main`, o download e a reinstalacao de dependencias sao pulados.
+Quando a Release Latest possuir asset `WhatSend-v<versao>[-<canal>].zip`, o atualizador baixa esse pacote distribuivel. Antes de baixar o pacote, ele compara a versao remota com `whatsend-version.json`, arquivo operacional pequeno mantido no root e tambem publicado na release. Quando o identificador local corresponde ao `tag`/commit da Release ou ao commit da `main`, o download e a reinstalacao de dependencias sao pulados.
+
+## Releases
+
+Para gerar um pacote local:
+
+```powershell
+npm run build:dist -- --version 1.2.0 --channel beta --commit-sha HASH_COMPLETO --official-release
+```
+
+O build gera:
+
+- `dist/whatsend-version.json`
+- `dist/WhatSend-v1.2.0-beta.zip`
+
+Sem parametros e em terminal interativo, o comando pergunta versao, canal e se o artefato e uma Release oficial. Em automacao, passe os parametros explicitamente.
+
+A publicacao oficial deve usar o workflow GitHub Actions `Release`, executado por `workflow_dispatch` na interface web do GitHub. Ele recebe versao, canal e confirmacao, roda testes e validacoes, gera o mesmo ZIP pelo `build:dist`, cria ou atualiza a tag e a Release correspondente, anexa o ZIP e `whatsend-version.json`, e marca a Release como Latest.
 
 ## Testes
 

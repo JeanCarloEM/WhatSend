@@ -168,7 +168,7 @@ Se `GUI_PORT` estiver ocupada, a interface tenta automaticamente portas próxima
 
 ## Atualizacao
 
-Os inicializadores de atualizacao nao dependem de `git` nem de existir `.git` na pasta local. Eles consultam a API oficial de `https://github.com/JeanCarloEM/WhatSend`, priorizam a Release marcada como Latest e usam a branch `main` somente quando nao houver release valida.
+Os inicializadores de atualizacao nao dependem de `git` nem de existir `.git` na pasta local. Eles consultam a API oficial de `https://github.com/JeanCarloEM/WhatSend`, priorizam a Release marcada como Latest e usam a branch `main` somente quando nao houver release valida. Quando a Release tiver asset `WhatSend-v<versao>[-<canal>].zip`, esse ZIP distribuivel e preferido ao tarball de codigo-fonte.
 
 ```powershell
 .\atualizar.cmd
@@ -178,9 +178,29 @@ Os inicializadores de atualizacao nao dependem de `git` nem de existir `.git` na
 sh ./atualizar.sh
 ```
 
-Antes de baixar o pacote remoto, o atualizador compara os metadados da API com `whatsend-version.json`, arquivo operacional pequeno mantido no root. Para Releases, a comparacao usa `tag` e commit SHA; para `main`, usa o commit SHA da branch. Se a versao instalada ja corresponder a remota, o pacote nao e baixado e `npm install` nao e executado.
+Antes de baixar o pacote remoto, o atualizador compara os metadados da API com `whatsend-version.json`, arquivo operacional pequeno mantido no root e publicado junto da release. Para Releases, a comparacao usa `tag` e commit SHA; para `main`, usa o commit SHA da branch. Se a versao instalada ja corresponder a remota, o pacote nao e baixado e `npm install` nao e executado.
 
 Durante a copia, arquivos operacionais locais sao preservados, incluindo `clientes.csv`, `texto.md`, `.env`, `logs/`, `.wwebjs_auth/`, `.runtime/` e `node_modules/`. Depois disso, o script roda `npm install` com download automatico do Puppeteer desativado, valida o navegador com `scripts/ensure-browser.js` e so entao grava o novo `whatsend-version.json`.
+
+## Releases
+
+O comando abaixo gera `dist/`, `dist/whatsend-version.json` e o ZIP distribuivel:
+
+```powershell
+npm run build:dist -- --version 1.2.0 --channel beta --commit-sha HASH_COMPLETO --official-release
+```
+
+Regras de nome:
+
+```text
+stable -> WhatSend-v1.2.0.zip
+beta   -> WhatSend-v1.2.0-beta.zip
+alpha  -> WhatSend-v1.2.0-alpha.zip
+```
+
+Em terminal local, dados ausentes sao perguntados interativamente. Em CI ou scripts, informe `--version`, `--channel`, `--commit-sha` e `--official-release` para um build oficial deterministico.
+
+Para publicar pelo GitHub Web, use o workflow `Release`. Ele e acionado por `workflow_dispatch`, exibindo campos para versao, canal e confirmacao. O workflow roda testes, checagem RCF, build, validacao do dist, cria ou atualiza a Release/tag, anexa o ZIP e `whatsend-version.json`, e marca a Release como Latest.
 
 ## Validacao
 

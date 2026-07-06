@@ -10,6 +10,7 @@ const fs = require("fs");
 const os = require("os");
 const path = require("path");
 const { RELEASE_NOTES_RELATIVE_PATH, validateReleaseNotesContent } = require("./release-notes-policy");
+const { VERSION_FILE_NAME } = require("./release-metadata");
 
 const ROOT_DIR = path.resolve(__dirname, "..");
 const DIST_DIR = path.join(ROOT_DIR, "dist");
@@ -20,6 +21,7 @@ const REQUIRED_FILES = [
   "package.json",
   "RCF.md",
   "README.md",
+  VERSION_FILE_NAME,
   "src/index.js",
 ];
 const REQUIRED_DIRS = ["docs", "scripts", "src", "logs", "modelos", "listas"];
@@ -59,10 +61,39 @@ function validateDist() {
   validateStructure(DIST_DIR);
   validateNoSensitiveFiles(DIST_DIR);
   validateStructureOnlyDirs(DIST_DIR);
+  validateVersionMetadata(DIST_DIR);
   validateReleaseNotesIfPresent(DIST_DIR);
   validateLegalHeaders(DIST_DIR);
   validateExecutableDist(DIST_DIR);
   console.log("Dist validado com sucesso.");
+}
+
+function validateVersionMetadata(distDir) {
+  const versionPath = path.join(distDir, VERSION_FILE_NAME);
+
+  if (!fs.existsSync(versionPath) || !fs.statSync(versionPath).isFile()) {
+    throw new Error(`${VERSION_FILE_NAME} ausente em dist.`);
+  }
+
+  const metadata = JSON.parse(fs.readFileSync(versionPath, "utf8"));
+
+  if (
+    metadata.repository !== "JeanCarloEM/WhatSend" ||
+    metadata.sourceType !== "release" ||
+    !metadata.version ||
+    !metadata.channel ||
+    !metadata.tagName ||
+    !metadata.versionId ||
+    !metadata.artifactName
+  ) {
+    throw new Error(`${VERSION_FILE_NAME} em dist não possui metadados de release consistentes.`);
+  }
+
+  const archivePath = path.join(distDir, metadata.artifactName);
+
+  if (!fs.existsSync(archivePath) || !fs.statSync(archivePath).isFile()) {
+    throw new Error(`Pacote ZIP obrigatório ausente em dist: ${metadata.artifactName}`);
+  }
 }
 
 function validateReleaseNotesIfPresent(distDir) {
@@ -420,4 +451,5 @@ module.exports = {
   validateNoSensitiveFiles,
   validateReleaseNotesIfPresent,
   validateStructure,
+  validateVersionMetadata,
 };
