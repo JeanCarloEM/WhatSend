@@ -33,6 +33,7 @@ O WhatSend usa `clientes.csv` como base de destinatarios e `texto.md` como model
 Principais recursos:
 
 - GUI local para configurar modelo, CSV, filtro, sessao e reenvio.
+- Editor textual na GUI com abas `^^^`, toolbar de marcadores crus e prévia do plano de envio.
 - CLI preservada para automacao.
 - Variaveis `${campo}` insensiveis a maiusculas/minusculas.
 - Apenas `nome` e `telefone` obrigatorios no CSV.
@@ -166,13 +167,15 @@ npm run start:gui
 A interface local abre no inicio do fluxo, mostra autenticacao/carregamento do WhatsApp e libera o botao de envio somente quando o WhatsApp estiver pronto. Ela permite:
 
 - selecionar, criar, renomear e remover sessoes;
-- informar modelo por textarea ou arquivo `.md`;
+- informar modelo por editor textual cru ou arquivo `.md`;
 - informar filtro;
 - anexar CSV opcional;
 - forcar reenvio ou limpar historico de enviados;
 - acompanhar andamento sem inundar a tela.
 
-Ao selecionar um `.md`, a GUI analisa anexos locais em segundo plano. Se algum não for localizado, aparece um aviso ao lado do seletor e um campo para informar a pasta de referência dos anexos.
+O editor da GUI não salva HTML nem formato rico: a toolbar apenas insere ou remove texto compatível com WhatsApp, como `*negrito*`, `_itálico_`, `~tachado~`, emoji, `![](arquivo.pdf)` e `$postagem$`. Linhas `^^^` viram abas visuais automaticamente; ao salvar ou enviar, as abas são recombinadas com o mesmo separador.
+
+Ao selecionar um `.md`, a GUI carrega o conteúdo no editor, separa abas por `^^^`, atualiza a prévia e analisa anexos locais em segundo plano. Se algum não for localizado, aparece um aviso ao lado do seletor e um campo para informar a pasta de referência dos anexos. Se o arquivo for enviado sem edição, ele continua podendo ser usado como fonte para preservar a resolução relativa de anexos; se houver edição no editor, o texto editado passa a ser a fonte da execução.
 
 ## CLI
 

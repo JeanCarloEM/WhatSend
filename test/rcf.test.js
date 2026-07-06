@@ -26,6 +26,7 @@ const {
   analyzeGuiTemplateMedia,
   applyListFilter,
   applyTemplate,
+  buildGuiTemplatePreview,
   buildSendPlan,
   buildPuppeteerConfig,
   createMessageMediaFromFile,
@@ -893,7 +894,7 @@ test("pré-validação cria arquivos de auditoria sem iniciar WhatsApp", () => {
   assert.equal(fs.existsSync(paths.warnings), true);
 });
 
-test("GUI bloqueia textarea e arquivo de modelo usados ao mesmo tempo", () => {
+test("GUI bloqueia texto da GUI e arquivo de modelo usados ao mesmo tempo", () => {
   const { paths } = createFixture();
   const result = validateGuiPayload(
     {
@@ -1522,6 +1523,55 @@ test("GUI renderiza desligamento e confirmação contextual de execução", () =
   assert.match(html, /shouldConfirmExecutionContext/);
   assert.match(html, /payloadCsvLabel/);
   assert.match(html, /mantenha a aba do WhatsApp Web visível/);
+});
+
+test("GUI renderiza editor textual com abas, toolbar e preview", () => {
+  const html = renderGuiHtml();
+
+  assert.match(html, /id="templateEditorInput"/);
+  assert.match(html, /id="templateText" class="visually-hidden-field"/);
+  assert.match(html, /id="templateTabs"/);
+  assert.match(html, /id="templatePreview"/);
+  assert.match(html, /data-wrap="\*"/);
+  assert.match(html, /id="insertPostingButton"/);
+  assert.match(html, /setEditorContent/);
+  assert.match(html, /\/api\/template\/preview/);
+});
+
+test("preview da GUI usa plano de envio para postagens e anexos", () => {
+  const preview = buildGuiTemplatePreview({
+    templateText: "Mensagem inicial\n\n$postagem$\n\n![](foto.png)\nLegenda",
+  });
+
+  assert.equal(preview.ok, true);
+  assert.equal(preview.variants.length, 1);
+  assert.equal(preview.variants[0].postings.length, 2);
+  assert.deepEqual(preview.variants[0].postings[0].items, [
+    {
+      type: "text",
+      value: "Mensagem inicial\n",
+    },
+  ]);
+  assert.deepEqual(preview.variants[0].postings[1].items, [
+    {
+      caption: "Legenda",
+      filename: "foto.png",
+      source: "foto.png",
+      type: "image",
+    },
+  ]);
+});
+
+test("preview da GUI respeita abas visuais fornecidas pelo editor", () => {
+  const preview = buildGuiTemplatePreview({
+    editorBlocks: ["Curto A", "Curto B"],
+    templateText: "Curto A\n\n^^^\n\nCurto B",
+  });
+
+  assert.equal(preview.ok, true);
+  assert.equal(preview.variants.length, 2);
+  assert.equal(preview.variants[0].postings[0].items[0].value, "Curto A");
+  assert.equal(preview.variants[1].postings[0].items[0].value, "Curto B");
 });
 
 test("parser avalia filtros complexos contra fixture versionada", () => {

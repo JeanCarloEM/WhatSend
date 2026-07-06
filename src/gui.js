@@ -25,9 +25,14 @@ const {
 const { loadCsv, normalizeTextContent } = require("./data");
 const { initLogFiles, resetSentLog } = require("./logs");
 const { processCampaign, validateRuntimeFiles } = require("./campaign");
-const { isUrl, validateTemplateMediaReferences } = require("./media");
+const { buildSendPlan, isOggSource, isUrl, validateTemplateMediaReferences } = require("./media");
 const { parseListFilter } = require("./data");
-const { inspectTemplateSyntax, parseTemplateParts } = require("./template");
+const {
+  inspectTemplateSyntax,
+  parseTemplateParts,
+  splitMessagePostings,
+  splitTemplateVariants,
+} = require("./template");
 const {
   createSession,
   listPersistedSessions,
@@ -443,6 +448,13 @@ async function routeGuiRequest(req, res, context) {
     return;
   }
 
+  if (req.method === "POST" && url.pathname === "/api/template/preview") {
+    const payload = await readJsonBody(req);
+    const result = buildGuiTemplatePreview(payload, context.basePaths);
+    sendJson(res, result.ok ? 200 : 400, result);
+    return;
+  }
+
   if (req.method === "POST" && url.pathname === "/api/run") {
     const payload = await readJsonBody(req);
     const validation = validateGuiPayload(payload, context.basePaths);
@@ -642,7 +654,7 @@ function validateGuiPayload(payload = {}, basePaths = PATHS) {
   validateGuiTemplateBaseDir(payload.templateBaseDir, errors);
 
   if (templateText.trim() && templateFile && String(templateFile.content || "").trim()) {
-    errors.push("Use apenas uma fonte de modelo: textarea ou arquivo .md.");
+    errors.push("Use apenas uma fonte de modelo: texto da GUI ou arquivo .md.");
   }
 
   if (templateFile) {
@@ -744,6 +756,90 @@ function analyzeGuiTemplateMedia(payload = {}, basePaths = PATHS) {
     mediaIssues,
     ok: errors.length === 0,
     needsTemplateBaseDir: mediaIssues.length > 0 && !explicitTemplateBaseDir,
+  };
+}
+
+function buildGuiTemplatePreview(payload = {}, basePaths = PATHS) {
+  const errors = [];
+  const templateText = String(payload.templateText || "");
+  const templateFile = payload.templateFile || null;
+  const templateFileContent = templateFile ? String(templateFile.content || "") : "";
+  const editorBlocks = Array.isArray(payload.editorBlocks)
+    ? payload.editorBlocks
+        .map((block) => normalizeTextContent(String(block || "")))
+        .filter((block) => block.trim())
+    : [];
+  const templateCandidate =
+    templateText.trim() ||
+    templateFileContent.trim() ||
+    readOptionalFile(basePaths.template) ||
+    "";
+  const normalized = normalizeTextContent(templateCandidate);
+
+  if (!normalized.trim() && editorBlocks.length === 0) {
+    return {
+      errors,
+      ok: true,
+      variants: [],
+    };
+  }
+
+  try {
+    const variantSources = editorBlocks.length ? editorBlocks : splitTemplateVariants(normalized);
+    const variants = variantSources.map((variant, variantIndex) => {
+      const postings = splitMessagePostings(variant).map((posting, postingIndex) => {
+        const plan = buildSendPlan(parseTemplateParts(posting)).map((part) =>
+          describePreviewPart(part),
+        );
+
+        return {
+          index: postingIndex,
+          items: plan,
+        };
+      });
+
+      return {
+        index: variantIndex,
+        postings,
+      };
+    });
+
+    return {
+      errors,
+      ok: true,
+      variants,
+    };
+  } catch (err) {
+    errors.push(err.message || String(err));
+    return {
+      errors,
+      ok: false,
+      variants: [],
+    };
+  }
+}
+
+function describePreviewPart(part) {
+  if (part.type === "text") {
+    return {
+      type: "text",
+      value: part.value,
+    };
+  }
+
+  const source = String(part.source || "");
+  const extension = path.extname(source.split("?")[0]).toLocaleLowerCase("pt-BR");
+  const mediaType = isOggSource(source)
+    ? "audio"
+    : [".jpg", ".jpeg", ".png", ".gif", ".webp"].includes(extension)
+      ? "image"
+      : "document";
+
+  return {
+    caption: part.caption || "",
+    filename: path.basename(source) || source,
+    source,
+    type: mediaType,
   };
 }
 
@@ -1337,6 +1433,198 @@ function renderGuiHtml() {
       font-size: 14px;
     }
 
+    .wa-editor {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fff;
+      overflow: hidden;
+    }
+
+    .wa-toolbar,
+    .wa-tabs {
+      align-items: center;
+      background: #f8fafc;
+      border-bottom: 1px solid var(--line);
+      display: flex;
+      gap: 6px;
+      min-height: 42px;
+      overflow-x: auto;
+      padding: 7px;
+    }
+
+    .wa-toolbar button,
+    .wa-tab,
+    .wa-tab-action {
+      align-items: center;
+      background: #fff;
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      color: var(--text);
+      cursor: pointer;
+      display: inline-flex;
+      font-weight: 800;
+      gap: 6px;
+      justify-content: center;
+      min-height: 30px;
+      min-width: 32px;
+      padding: 5px 9px;
+      white-space: nowrap;
+    }
+
+    .wa-toolbar button:hover,
+    .wa-tab:hover,
+    .wa-tab-action:hover {
+      border-color: #98a2b3;
+    }
+
+    .wa-tab.active {
+      background: #ecfdf3;
+      border-color: #12b76a;
+      color: #067647;
+    }
+
+    .wa-tab-action.danger {
+      color: var(--danger);
+    }
+
+    .wa-editor-shell {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(280px, 0.78fr);
+      min-height: 330px;
+    }
+
+    .wa-input-pane {
+      position: relative;
+      min-height: 330px;
+    }
+
+    .wa-highlight,
+    .wa-input {
+      border: 0;
+      border-radius: 0;
+      font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
+      font-size: 13px;
+      inset: 0;
+      line-height: 1.55;
+      margin: 0;
+      min-height: 330px;
+      overflow: auto;
+      padding: 13px 14px;
+      position: absolute;
+      resize: none;
+      tab-size: 2;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    .wa-highlight {
+      color: var(--text);
+      pointer-events: none;
+      z-index: 1;
+    }
+
+    .wa-input {
+      background: transparent;
+      caret-color: var(--text);
+      color: transparent;
+      outline: none;
+      z-index: 2;
+    }
+
+    .wa-input::placeholder {
+      color: var(--muted);
+    }
+
+    .wa-input::selection {
+      background: rgba(23, 92, 211, 0.22);
+      color: transparent;
+    }
+
+    .wa-marker {
+      color: #d92d20;
+      font-weight: 900;
+    }
+
+    .wa-placeholder-token {
+      color: #175cd3;
+      font-weight: 800;
+    }
+
+    .wa-preview {
+      background: #eef7f0;
+      border-left: 1px solid var(--line);
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      max-height: 430px;
+      overflow: auto;
+      padding: 14px;
+    }
+
+    .wa-preview-empty {
+      color: var(--muted);
+      font-size: 13px;
+      margin: auto;
+      text-align: center;
+    }
+
+    .wa-preview-group {
+      display: grid;
+      gap: 7px;
+    }
+
+    .wa-preview-variant {
+      color: #475467;
+      font-size: 11px;
+      font-weight: 800;
+      text-transform: uppercase;
+    }
+
+    .wa-bubble {
+      align-self: start;
+      background: #fff;
+      border: 1px solid rgba(16, 24, 40, 0.08);
+      border-radius: 8px;
+      box-shadow: 0 1px 2px rgba(16, 24, 40, 0.08);
+      max-width: 92%;
+      padding: 8px 10px;
+      white-space: pre-wrap;
+    }
+
+    .wa-bubble.media {
+      min-width: 190px;
+    }
+
+    .wa-media-card {
+      align-items: center;
+      background: #f2f4f7;
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      display: flex;
+      gap: 9px;
+      min-height: 46px;
+      padding: 9px;
+    }
+
+    .wa-media-icon {
+      align-items: center;
+      background: #fff;
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      display: inline-flex;
+      height: 30px;
+      justify-content: center;
+      width: 30px;
+    }
+
+    .wa-caption {
+      margin-top: 7px;
+    }
+
+    .visually-hidden-field {
+      display: none;
+    }
+
     .hint {
       margin-top: 8px;
       font-size: 13px;
@@ -1681,6 +1969,16 @@ function renderGuiHtml() {
         border-right: 0;
         border-bottom: 1px solid var(--line);
       }
+
+      .wa-editor-shell {
+        grid-template-columns: 1fr;
+      }
+
+      .wa-preview {
+        border-left: 0;
+        border-top: 1px solid var(--line);
+        max-height: 320px;
+      }
     }
   </style>
 </head>
@@ -1727,9 +2025,32 @@ function renderGuiHtml() {
 
         <section>
           <h2>Modelo de mensagem</h2>
-          <label for="templateText">Texto do modelo</label>
-          <textarea id="templateText" spellcheck="false" placeholder="$diatarde$, \${nome}.&#10;&#10;Seu valor atualizado é \${(valor+taxa)}."></textarea>
-          <div class="hint">\${campo} aceita colunas/expressões. Pode usar emoji, listas 1., 2., - e *, e marcação textual com o marcador colado na palavra. Anexos em ![](arquivo.pdf) usam a pasta do modelo quando disponível; se o navegador ocultar a pasta, use a raiz do projeto ou fullpath.</div>
+          <label for="templateEditorInput">Texto do modelo</label>
+          <div class="wa-editor">
+            <div class="wa-toolbar" aria-label="Ferramentas de edição textual">
+              <button type="button" data-wrap="*" title="Negrito">B</button>
+              <button type="button" data-wrap="_" title="Itálico"><em>I</em></button>
+              <button type="button" data-wrap="~" title="Tachado"><s>S</s></button>
+              <button type="button" id="insertEmojiButton" title="Inserir emoji">☺</button>
+              <button type="button" id="insertAttachmentButton" title="Inserir anexo">📎</button>
+              <button type="button" id="insertPostingButton" title="Dividir postagem">$postagem$</button>
+            </div>
+            <div class="wa-tabs" id="templateTabs" aria-label="Blocos do modelo"></div>
+            <div class="wa-editor-shell">
+              <div class="wa-input-pane">
+                <pre id="templateHighlight" class="wa-highlight" aria-hidden="true"></pre>
+                <textarea id="templateEditorInput" class="wa-input" spellcheck="false" autocomplete="off" autocapitalize="off" placeholder="$diatarde$, \${nome}.&#10;&#10;Seu valor atualizado é \${(valor+taxa)}."></textarea>
+              </div>
+              <div id="templatePreview" class="wa-preview" aria-live="polite"></div>
+            </div>
+          </div>
+          <textarea id="templateText" class="visually-hidden-field" tabindex="-1" aria-hidden="true"></textarea>
+          <div class="hint">\${campo} aceita colunas/expressões. Use a toolbar para inserir apenas marcação textual do WhatsApp. Anexos em ![](arquivo.pdf), $postagem$ e separadores ^^^ permanecem texto puro.</div>
+          <div class="actions" style="margin-top:10px">
+            <button id="newTemplateTabButton" type="button">Nova aba</button>
+            <button id="deleteTemplateTabButton" type="button" class="secondary">Excluir aba</button>
+            <button id="saveTemplateButton" type="button" class="secondary">Salvar como</button>
+          </div>
           <div class="syntax-demo" aria-label="Demonstração de sintaxe textual">
             <div>*negrito exemplo*</div>
             <div><strong>negrito exemplo</strong></div>
@@ -1885,6 +2206,17 @@ function renderGuiHtml() {
     const templateBaseDirInput = document.getElementById("templateBaseDir");
     const templateBaseDirBox = document.getElementById("templateBaseDirBox");
     const templateMediaStatus = document.getElementById("templateMediaStatus");
+    const templateTextHidden = document.getElementById("templateText");
+    const templateEditorInput = document.getElementById("templateEditorInput");
+    const templateHighlight = document.getElementById("templateHighlight");
+    const templatePreview = document.getElementById("templatePreview");
+    const templateTabs = document.getElementById("templateTabs");
+    const newTemplateTabButton = document.getElementById("newTemplateTabButton");
+    const deleteTemplateTabButton = document.getElementById("deleteTemplateTabButton");
+    const saveTemplateButton = document.getElementById("saveTemplateButton");
+    const insertEmojiButton = document.getElementById("insertEmojiButton");
+    const insertAttachmentButton = document.getElementById("insertAttachmentButton");
+    const insertPostingButton = document.getElementById("insertPostingButton");
     const executionConfirmOverlay = document.getElementById("executionConfirmOverlay");
     const executionConfirmRows = document.getElementById("executionConfirmRows");
     const executionConfirmOk = document.getElementById("executionConfirmOk");
@@ -1895,6 +2227,12 @@ function renderGuiHtml() {
     let pollTimer = null;
     let templateAnalysisTimer = null;
     let templateAnalysisToken = 0;
+    let templatePreviewTimer = null;
+    let templatePreviewToken = 0;
+    let templateFileLoadToken = 0;
+    let templateBlocks = [""];
+    let activeTemplateBlock = 0;
+    let isComposingTemplate = false;
 
     function showMessage(text, type) {
       message.textContent = text;
@@ -1969,11 +2307,316 @@ function renderGuiHtml() {
         .replace(/[\\u2028\\u2029]/gu, "\\n");
     }
 
+    function escapeMarkup(value) {
+      return String(value || "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+    }
+
+    function hasTemplateSeparator(text) {
+      return /^[ \\t]*\\^{3,}[ \\t]*$/mu.test(String(text || ""));
+    }
+
+    function splitEditorBlocks(text) {
+      const normalized = normalizeUploadedText(text);
+
+      if (!hasTemplateSeparator(normalized)) {
+        return [normalized];
+      }
+
+      const blocks = normalized
+        .split(/^[ \\t]*\\^{3,}[ \\t]*$/gmu)
+        .filter((block) => block.trim());
+
+      return blocks.length ? blocks : [""];
+    }
+
+    function getPersistableTemplateBlocks() {
+      const blocks = templateBlocks.map((block) => String(block || ""));
+      const nonEmpty = blocks.filter((block) => block.trim());
+      return nonEmpty.length ? nonEmpty : [blocks[0] || ""];
+    }
+
+    function joinEditorBlocks() {
+      return getPersistableTemplateBlocks().join("\\n\\n^^^\\n\\n");
+    }
+
+    function saveActiveTemplateBlock() {
+      if (!templateEditorInput) return;
+      templateBlocks[activeTemplateBlock] = templateEditorInput.value;
+    }
+
+    function syncTemplateHidden() {
+      saveActiveTemplateBlock();
+      templateTextHidden.value = joinEditorBlocks();
+    }
+
+    function highlightTemplateText(text) {
+      const source = String(text || "");
+      const highlighted = escapeMarkup(source || " ")
+        .replace(/(\\$\\{[^}]*\\})/g, '<span class="wa-placeholder-token">$1</span>')
+        .replace(/(\\*|_|~)/g, '<span class="wa-marker">$1</span>');
+      return highlighted + (source.endsWith("\\n") ? " " : "\\n");
+    }
+
+    function renderTemplateHighlight() {
+      templateHighlight.innerHTML = highlightTemplateText(templateEditorInput.value);
+      syncHighlightScroll();
+    }
+
+    function syncHighlightScroll() {
+      templateHighlight.scrollTop = templateEditorInput.scrollTop;
+      templateHighlight.scrollLeft = templateEditorInput.scrollLeft;
+    }
+
+    function renderTemplateTabs() {
+      templateTabs.innerHTML = "";
+      templateBlocks.forEach((block, index) => {
+        const tab = document.createElement("button");
+        tab.type = "button";
+        tab.className = "wa-tab" + (index === activeTemplateBlock ? " active" : "");
+        tab.textContent = "Modelo " + (index + 1);
+        tab.title = block.trim() ? "Editar modelo " + (index + 1) : "Modelo vazio";
+        tab.addEventListener("click", () => {
+          if (index === activeTemplateBlock) return;
+          saveActiveTemplateBlock();
+          activeTemplateBlock = index;
+          templateEditorInput.value = templateBlocks[activeTemplateBlock] || "";
+          syncTemplateHidden();
+          renderTemplateTabs();
+          renderTemplateHighlight();
+          scheduleTemplatePreview();
+          window.requestAnimationFrame(() => templateEditorInput.focus());
+        });
+        templateTabs.append(tab);
+      });
+    }
+
+    function setEditorContent(text, options = {}) {
+      const blocks = splitEditorBlocks(text);
+      templateBlocks = blocks.length ? blocks : [""];
+      activeTemplateBlock = Math.min(
+        Math.max(0, Number(options.activeIndex || 0)),
+        templateBlocks.length - 1,
+      );
+      templateEditorInput.value = templateBlocks[activeTemplateBlock] || "";
+      syncTemplateHidden();
+      renderTemplateTabs();
+      renderTemplateHighlight();
+      scheduleTemplatePreview();
+    }
+
+    function handleTemplateInputChanged() {
+      if (!isComposingTemplate && hasTemplateSeparator(templateEditorInput.value)) {
+        const splitBlocks = splitEditorBlocks(templateEditorInput.value);
+        templateBlocks.splice(activeTemplateBlock, 1, ...splitBlocks);
+        activeTemplateBlock = Math.min(activeTemplateBlock, templateBlocks.length - 1);
+        templateEditorInput.value = templateBlocks[activeTemplateBlock] || "";
+        syncTemplateHidden();
+        renderTemplateTabs();
+        renderTemplateHighlight();
+        scheduleTemplatePreview();
+        return;
+      }
+
+      syncTemplateHidden();
+      renderTemplateHighlight();
+      scheduleTemplatePreview();
+    }
+
+    function insertTextAtCursor(text) {
+      const start = templateEditorInput.selectionStart;
+      const end = templateEditorInput.selectionEnd;
+      templateEditorInput.setRangeText(text, start, end, "end");
+      handleTemplateInputChanged();
+      templateEditorInput.focus();
+    }
+
+    function wrapSelection(marker) {
+      const start = templateEditorInput.selectionStart;
+      const end = templateEditorInput.selectionEnd;
+      const value = templateEditorInput.value;
+      const selected = value.slice(start, end);
+      const hasWrappedSelection =
+        selected.startsWith(marker) && selected.endsWith(marker) && selected.length >= marker.length * 2;
+      const before = value.slice(Math.max(0, start - marker.length), start);
+      const after = value.slice(end, end + marker.length);
+
+      if (hasWrappedSelection) {
+        const replacement = selected.slice(marker.length, selected.length - marker.length);
+        templateEditorInput.setRangeText(replacement, start, end, "select");
+      } else if (!selected && before === marker && after === marker) {
+        templateEditorInput.setSelectionRange(start - marker.length, end + marker.length);
+        templateEditorInput.setRangeText("", start - marker.length, end + marker.length, "end");
+      } else {
+        templateEditorInput.setRangeText(marker + selected + marker, start, end, selected ? "select" : "end");
+        if (selected) {
+          templateEditorInput.setSelectionRange(start + marker.length, end + marker.length);
+        }
+      }
+
+      handleTemplateInputChanged();
+      templateEditorInput.focus();
+    }
+
+    function renderTemplatePreviewLoading() {
+      templatePreview.innerHTML = "";
+      const empty = document.createElement("div");
+      empty.className = "wa-preview-empty";
+      empty.textContent = "Atualizando prévia...";
+      templatePreview.append(empty);
+    }
+
+    function renderTemplatePreview(result) {
+      templatePreview.innerHTML = "";
+
+      if (!result || result.ok === false) {
+        const empty = document.createElement("div");
+        empty.className = "wa-preview-empty";
+        empty.textContent = result && result.errors && result.errors.length
+          ? result.errors.join("\\n")
+          : "Não foi possível gerar a prévia.";
+        templatePreview.append(empty);
+        return;
+      }
+
+      const variants = result.variants || [];
+      if (!variants.length) {
+        const empty = document.createElement("div");
+        empty.className = "wa-preview-empty";
+        empty.textContent = "Digite um modelo para visualizar as postagens.";
+        templatePreview.append(empty);
+        return;
+      }
+
+      variants.forEach((variant) => {
+        const group = document.createElement("div");
+        group.className = "wa-preview-group";
+
+        if (variants.length > 1) {
+          const label = document.createElement("div");
+          label.className = "wa-preview-variant";
+          label.textContent = "Modelo " + (variant.index + 1);
+          group.append(label);
+        }
+
+        (variant.postings || []).forEach((posting) => {
+          (posting.items || []).forEach((item) => {
+            group.append(renderPreviewItem(item));
+          });
+        });
+
+        templatePreview.append(group);
+      });
+    }
+
+    function renderPreviewItem(item) {
+      const bubble = document.createElement("div");
+      bubble.className = "wa-bubble" + (item.type === "text" ? "" : " media");
+
+      if (item.type === "text") {
+        bubble.textContent = item.value || "";
+        return bubble;
+      }
+
+      const card = document.createElement("div");
+      card.className = "wa-media-card";
+
+      const icon = document.createElement("span");
+      icon.className = "wa-media-icon";
+      icon.textContent = item.type === "audio" ? "♪" : item.type === "image" ? "▧" : "▤";
+
+      const name = document.createElement("strong");
+      name.textContent = item.filename || item.source || "anexo";
+      card.append(icon, name);
+      bubble.append(card);
+
+      if (item.caption) {
+        const caption = document.createElement("div");
+        caption.className = "wa-caption";
+        caption.textContent = item.caption;
+        bubble.append(caption);
+      }
+
+      return bubble;
+    }
+
+    function scheduleTemplatePreview() {
+      window.clearTimeout(templatePreviewTimer);
+      templatePreviewTimer = window.setTimeout(() => {
+        updateTemplatePreview().catch((err) => {
+          renderTemplatePreview({ errors: [err.message], ok: false, variants: [] });
+        });
+      }, 250);
+    }
+
+    async function updateTemplatePreview() {
+      if (isComposingTemplate) return;
+
+      const token = ++templatePreviewToken;
+      syncTemplateHidden();
+
+      if (!templateTextHidden.value.trim()) {
+        renderTemplatePreview({ errors: [], ok: true, variants: [] });
+        return;
+      }
+
+      renderTemplatePreviewLoading();
+      const result = await postJson("/api/template/preview", {
+        editorBlocks: getPersistableTemplateBlocks(),
+        templateBaseDir: templateBaseDirInput.value,
+        templateText: templateTextHidden.value,
+      });
+
+      if (token !== templatePreviewToken) return;
+
+      renderTemplatePreview(result);
+    }
+
+    function shouldUseSelectedTemplateFile(templateFile, templateText) {
+      if (!templateFile) return false;
+      const fileContent = normalizeUploadedText(templateFile.content || "");
+      const currentText = normalizeUploadedText(templateText || "");
+      return !currentText.trim() || (fileContent.trim() && currentText === fileContent);
+    }
+
+    async function loadSelectedTemplateFile() {
+      const token = ++templateFileLoadToken;
+      const templateFile = await readFile(templateFileInput);
+
+      if (token !== templateFileLoadToken) return;
+
+      if (!templateFile || !String(templateFile.content || "").trim()) {
+        resetTemplateMediaAnalysis();
+        setEditorContent("");
+        return;
+      }
+
+      setEditorContent(normalizeUploadedText(templateFile.content));
+      scheduleTemplateMediaAnalysis();
+    }
+
+    function downloadTemplateAsFile() {
+      syncTemplateHidden();
+      const blob = new Blob([templateTextHidden.value], { type: "text/markdown;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = "modelo-whatsend.md";
+      document.body.append(link);
+      link.click();
+      link.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+    }
+
     function validateLocal(payload) {
       const errors = [];
 
       if (payload.templateText.trim() && payload.templateFile && payload.templateFile.content.trim()) {
-        errors.push("Escolha textarea ou arquivo .md, não ambos.");
+        errors.push("Escolha texto do editor ou arquivo .md, não ambos.");
       }
 
       if (payload.templateFile && !payload.templateFile.name.toLowerCase().endsWith(".md")) {
@@ -2078,10 +2721,11 @@ function renderGuiHtml() {
     async function analyzeTemplateMedia() {
       const token = ++templateAnalysisToken;
       const templateFile = await readFile(templateFileInput);
+      syncTemplateHidden();
 
       if (token !== templateAnalysisToken) return;
 
-      if (!templateFile || !String(templateFile.content || "").trim()) {
+      if (!templateTextHidden.value.trim() && (!templateFile || !String(templateFile.content || "").trim())) {
         resetTemplateMediaAnalysis();
         return;
       }
@@ -2090,8 +2734,10 @@ function renderGuiHtml() {
 
       const result = await postJson("/api/template/analyze", {
         templateBaseDir: templateBaseDirInput.value,
-        templateFile,
-        templateText: "",
+        templateFile: shouldUseSelectedTemplateFile(templateFile, templateTextHidden.value) ? templateFile : null,
+        templateText: shouldUseSelectedTemplateFile(templateFile, templateTextHidden.value)
+          ? ""
+          : templateTextHidden.value,
       });
 
       if (token !== templateAnalysisToken) return;
@@ -2132,14 +2778,18 @@ function renderGuiHtml() {
     }
 
     async function buildPayload() {
+      syncTemplateHidden();
+      const templateFile = await readFile(templateFileInput);
+      const useTemplateFile = shouldUseSelectedTemplateFile(templateFile, templateTextHidden.value);
+
       return {
         csvFile: await readFile(document.getElementById("csvFile")),
         filter: document.getElementById("filter").value,
         forceResend: document.getElementById("forceResend").checked,
         resetSent: document.getElementById("resetSent").checked,
         templateBaseDir: templateBaseDirInput.value,
-        templateFile: await readFile(templateFileInput),
-        templateText: document.getElementById("templateText").value,
+        templateFile: useTemplateFile ? templateFile : null,
+        templateText: useTemplateFile ? "" : templateTextHidden.value,
       };
     }
 
@@ -2316,17 +2966,84 @@ function renderGuiHtml() {
       }
     });
 
+    templateEditorInput.addEventListener("input", handleTemplateInputChanged);
+    templateEditorInput.addEventListener("paste", () => {
+      window.setTimeout(handleTemplateInputChanged, 0);
+    });
+    templateEditorInput.addEventListener("scroll", syncHighlightScroll);
+    templateEditorInput.addEventListener("compositionstart", () => {
+      isComposingTemplate = true;
+    });
+    templateEditorInput.addEventListener("compositionend", () => {
+      isComposingTemplate = false;
+      handleTemplateInputChanged();
+    });
+
+    document.querySelectorAll("[data-wrap]").forEach((button) => {
+      button.addEventListener("click", () => wrapSelection(button.getAttribute("data-wrap") || ""));
+    });
+
+    insertEmojiButton.addEventListener("click", () => {
+      const emoji = window.prompt("Emoji:", "✅");
+      if (emoji) insertTextAtCursor(emoji);
+    });
+
+    insertAttachmentButton.addEventListener("click", () => {
+      const filename = window.prompt("Arquivo do anexo:", "arquivo.pdf");
+      if (filename && filename.trim()) {
+        insertTextAtCursor("![](" + filename.trim() + ")");
+      }
+    });
+
+    insertPostingButton.addEventListener("click", () => {
+      insertTextAtCursor("\\n\\n$postagem$\\n\\n");
+    });
+
+    newTemplateTabButton.addEventListener("click", () => {
+      saveActiveTemplateBlock();
+      templateBlocks.push("");
+      activeTemplateBlock = templateBlocks.length - 1;
+      templateEditorInput.value = "";
+      syncTemplateHidden();
+      renderTemplateTabs();
+      renderTemplateHighlight();
+      scheduleTemplatePreview();
+      templateEditorInput.focus();
+    });
+
+    deleteTemplateTabButton.addEventListener("click", () => {
+      if (templateBlocks.length <= 1) {
+        templateBlocks = [""];
+        activeTemplateBlock = 0;
+      } else {
+        templateBlocks.splice(activeTemplateBlock, 1);
+        activeTemplateBlock = Math.max(0, activeTemplateBlock - 1);
+      }
+      templateEditorInput.value = templateBlocks[activeTemplateBlock] || "";
+      syncTemplateHidden();
+      renderTemplateTabs();
+      renderTemplateHighlight();
+      scheduleTemplatePreview();
+      templateEditorInput.focus();
+    });
+
+    saveTemplateButton.addEventListener("click", downloadTemplateAsFile);
+
     templateFileInput.addEventListener("change", () => {
       if (!templateFileInput.files || !templateFileInput.files.length) {
         resetTemplateMediaAnalysis();
+        setEditorContent("");
         return;
       }
 
-      scheduleTemplateMediaAnalysis();
+      loadSelectedTemplateFile().catch((err) => {
+        setTemplateBaseDirVisible(true);
+        setTemplateMediaStatus(err.message, "error");
+      });
     });
 
     templateBaseDirInput.addEventListener("input", () => {
-      if (!templateFileInput.files || !templateFileInput.files.length) {
+      if (!templateTextHidden.value.trim() && (!templateFileInput.files || !templateFileInput.files.length)) {
         setTemplateBaseDirVisible(Boolean(templateBaseDirInput.value.trim()));
         return;
       }
@@ -2429,6 +3146,7 @@ function renderGuiHtml() {
     refreshStatus().catch((err) => {
       showMessage("Não foi possível carregar o status: " + err.message, "error");
     });
+    setEditorContent("");
     startStatusPolling();
   </script>
 </body>
@@ -2470,6 +3188,7 @@ function escapeHtml(value) {
 
 module.exports = {
   analyzeGuiTemplateMedia,
+  buildGuiTemplatePreview,
   materializeGuiExecutionPaths,
   openGuiWhenBrowserIsAvailable,
   registerGuiClientHandlers,

@@ -37,7 +37,9 @@ ${$.floor(valor)}
 ${$.int(valor)}
 ```
 
-Um arquivo pode conter multiplas variacoes separadas por uma linha com `^^^`. Quando todos os blocos atingem o tamanho minimo configurado, a distribuicao entre destinatarios e circular.
+Um arquivo pode conter multiplas variacoes separadas por uma linha com `^^^`. Quando todos os blocos atingem o tamanho minimo configurado, a distribuicao entre destinatarios e circular. Na GUI, cada bloco separado por `^^^` aparece como uma aba visual do editor; salvar ou enviar recombina as abas com o mesmo separador, sem alterar a regra do backend.
+
+O editor da GUI trabalha sempre com texto cru. A toolbar apenas insere ou remove marcadores textuais, como `*`, `_`, `~`, emoji, `![](arquivo.pdf)` e `$postagem$`; nenhum HTML ou conteúdo rico é persistido no modelo.
 
 ## Emojis profissionais
 
@@ -108,7 +110,7 @@ O caminho pode ser:
 
 Quando o caminho for relativo, com ou sem `./` ou `.\`, a busca usa primeiro a pasta do `.md` selecionado. Se o arquivo não existir ali, o sistema faz uma segunda tentativa na raiz do projeto. Na GUI, isso funciona com o diretório real do `.md` quando ele estiver disponível; uploads feitos pelo navegador podem ocultar esse caminho por segurança, então o fallback para a raiz do projeto continua disponível.
 
-Na GUI, ao escolher um arquivo `.md`, os anexos locais são analisados em segundo plano. Se algum não for localizado, a própria seção do arquivo exibe um alerta e abre um campo para informar a pasta local de referência dos anexos. O campo aceita apenas diretório local existente; URLs ou caminhos inexistentes são rejeitados antes do envio.
+Na GUI, ao escolher um arquivo `.md`, o conteúdo é carregado no editor textual, as variações `^^^` são exibidas como abas e os anexos locais são analisados em segundo plano. Se algum não for localizado, a própria seção do arquivo exibe um alerta e abre um campo para informar a pasta local de referência dos anexos. O campo aceita apenas diretório local existente; URLs ou caminhos inexistentes são rejeitados antes do envio.
 
 URLs sao baixadas uma vez para cache temporario e reutilizadas quando a mesma URL aparece novamente. Arquivos locais inexistentes falham na pre-validacao.
 

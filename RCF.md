@@ -51,7 +51,7 @@ O template padrão deve ser carregado de `./texto.md`.
 
 Opcionalmente, a execução pode receber um nome de modelo sem extensão, fazendo o template ser carregado de `./modelos/NOME.md`.
 
-Quando a GUI fornecer conteúdo via textarea ou arquivo `.md`, esse conteúdo deve substituir o uso de `texto.md` somente naquela execução.
+Quando a GUI fornecer conteúdo via editor textual ou arquivo `.md`, esse conteúdo deve substituir o uso de `texto.md` somente naquela execução.
 
 O conteúdo textual deve ser preservado conforme definido no arquivo, após substituição de variáveis e interpretação dos anexos Markdown.
 
@@ -266,15 +266,18 @@ Ao executar pela GUI, se houver arquivo CSV selecionado manualmente ou múltipla
 
 Quando possível, a GUI deve ser aberta como aba no mesmo navegador controlado pelo WhatsApp Web. Se o navegador controlado ainda não estiver disponível ou não permitir nova aba, a GUI pode ser aberta no navegador padrão, registrando esse fallback de forma clara.
 
-Ao selecionar um arquivo `.md`, a GUI deve executar pré-análise assíncrona dos anexos locais referenciados no modelo, sem iniciar envio e sem bloquear a interface. Se algum anexo não for localizado, a tela deve exibir aviso curto em vermelho próximo ao seletor do arquivo e disponibilizar campo para informar a pasta local de referência dos anexos. Essa pasta deve ser validada como diretório local existente antes da execução.
+Ao selecionar um arquivo `.md`, a GUI deve carregar seu conteúdo no editor de modelo, separar automaticamente abas visuais por linhas `^^^`, executar pré-análise assíncrona dos anexos locais referenciados, sem iniciar envio e sem bloquear a interface. Se algum anexo não for localizado, a tela deve exibir aviso curto em vermelho próximo ao seletor do arquivo e disponibilizar campo para informar a pasta local de referência dos anexos. Essa pasta deve ser validada como diretório local existente antes da execução.
 
 Se a porta local configurada para a GUI estiver ocupada, o servidor deve tentar automaticamente portas próximas antes de falhar, registrando a porta efetivamente usada.
 
 A GUI deve oferecer:
 
-- Modelo por textarea.
+- Modelo por editor textual especializado, persistindo somente texto cru compatível com WhatsApp/Markdown, sem HTML nem formato rico.
 - Modelo por arquivo `.md`.
-- Bloqueio quando textarea e arquivo forem usados simultaneamente.
+- Toolbar textual para inserir/remover marcadores crus de negrito, itálico, tachado, emoji, anexo e `$postagem$`, preservando seleção, cursor, foco, rolagem e composição IME sempre que possível.
+- Abas visuais para blocos separados por `^^^`; ao salvar ou enviar, as abas devem ser recombinadas com o separador normatizado, sem criar blocos vazios automaticamente.
+- Prévia visual baseada no mesmo parser/plano de envio do backend para texto, postagens, anexos, legendas e áudio, sem substituir as validações finais.
+- Bloqueio quando texto editado na GUI e arquivo `.md` divergente forem usados simultaneamente; quando um `.md` for carregado sem edição, o arquivo pode continuar sendo a fonte do envio para preservar resolução relativa de anexos.
 - Campo de filtro.
 - Arquivo `.csv` opcional de clientes.
 - Opções de reenviar ignorando histórico e limpar histórico.
