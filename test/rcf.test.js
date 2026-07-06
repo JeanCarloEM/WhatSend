@@ -7,6 +7,9 @@
 
 process.env.MIN_DELAY_MS = "0";
 process.env.MAX_DELAY_MS = "0";
+process.env.MESSAGE_SEND_RETRIES = "3";
+process.env.MESSAGE_SEND_RETRY_DELAY_MS = "0";
+process.env.MESSAGE_SEND_RETRY_MAX_DELAY_MS = "0";
 process.env.MEDIA_CONTEXT_READY_TIMEOUT_MS = "60";
 process.env.MEDIA_CONTEXT_STABLE_MS = "0";
 process.env.MEDIA_SEND_RETRY_DELAY_MS = "0";
@@ -158,6 +161,17 @@ function withEnv(values, fn) {
       }
     }
   }
+}
+
+function createDeferred() {
+  let resolve;
+  let reject;
+  const promise = new Promise((promiseResolve, promiseReject) => {
+    resolve = promiseResolve;
+    reject = promiseReject;
+  });
+
+  return { promise, reject, resolve };
 }
 
 function createFakeOggAudio() {
@@ -1629,6 +1643,88 @@ test("envia anexo local no ponto da notação markdown", async () => {
   ]);
   assert.equal(calls[1].mimetype, "application/pdf");
   assert.equal(calls[1].options.sendMediaAsDocument, true);
+  assert.equal(calls[1].options.waitUntilMsgSent, true);
+});
+
+test("retenta texto transitório antes de avançar para o próximo bloco", async () => {
+  const { paths } = createFixture();
+  const mediaPath = path.join(path.dirname(paths.template), "arquivo.pdf");
+  fs.writeFileSync(mediaPath, "conteúdo fictício", "utf8");
+
+  let textAttempts = 0;
+  const calls = [];
+  const events = [];
+  const client = {
+    async sendMessage(to, content, options) {
+      calls.push({
+        filename: content && content.filename,
+        options,
+        text: typeof content === "string" ? content : undefined,
+        to,
+      });
+
+      if (content === "Antes\n") {
+        textAttempts += 1;
+
+        if (textAttempts === 1) {
+          throw new Error("Protocol error (Runtime.callFunctionOn): Target closed");
+        }
+      }
+    },
+  };
+
+  await sendRenderedTemplate(
+    client,
+    "5511999999999@c.us",
+    "Antes\n![](arquivo.pdf)\nDepois",
+    paths,
+    {
+      onProgress: (event) => events.push(event.message),
+    },
+  );
+
+  assert.deepEqual(calls.map((call) => call.text || call.filename), [
+    "Antes\n",
+    "Antes\n",
+    "arquivo.pdf",
+    "\nDepois",
+  ]);
+  assert.equal(calls[0].options.waitUntilMsgSent, true);
+  assert.equal(calls[1].options.waitUntilMsgSent, true);
+  assert.match(events.join("\n"), /Retentando mensagem de texto/);
+});
+
+test("serializa envios concorrentes para o mesmo destinatário", async () => {
+  const { paths } = createFixture();
+  const firstSend = createDeferred();
+  const calls = [];
+  const client = {
+    async sendMessage(to, content, options) {
+      calls.push({
+        options,
+        text: content,
+        to,
+      });
+
+      if (content === "Primeiro") {
+        await firstSend.promise;
+      }
+    },
+  };
+
+  const first = sendRenderedTemplate(client, "5511999999999@c.us", "Primeiro", paths);
+  await new Promise((resolve) => setImmediate(resolve));
+
+  const second = sendRenderedTemplate(client, "5511999999999@c.us", "Segundo", paths);
+  await new Promise((resolve) => setImmediate(resolve));
+
+  assert.deepEqual(calls.map((call) => call.text), ["Primeiro"]);
+
+  firstSend.resolve();
+  await Promise.all([first, second]);
+
+  assert.deepEqual(calls.map((call) => call.text), ["Primeiro", "Segundo"]);
+  assert.equal(calls[0].options.waitUntilMsgSent, true);
   assert.equal(calls[1].options.waitUntilMsgSent, true);
 });
 

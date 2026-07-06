@@ -17,10 +17,15 @@ const { hashValue } = require("./utils");
 const { parseTemplateParts } = require("./template");
 
 const CAPTION_POSITION = Symbol("captionPosition");
+const MESSAGE_SEND_RETRIES = Math.max(1, readIntegerEnv("MESSAGE_SEND_RETRIES", 3));
+const MESSAGE_SEND_RETRY_DELAY_MS = readIntegerEnv("MESSAGE_SEND_RETRY_DELAY_MS", 1200);
+const MESSAGE_SEND_RETRY_MAX_DELAY_MS = readIntegerEnv("MESSAGE_SEND_RETRY_MAX_DELAY_MS", 10000);
 const MEDIA_SEND_RETRIES = Math.max(1, readIntegerEnv("MEDIA_SEND_RETRIES", 5));
 const MEDIA_SEND_RETRY_DELAY_MS = readIntegerEnv("MEDIA_SEND_RETRY_DELAY_MS", 1200);
+const MEDIA_SEND_RETRY_MAX_DELAY_MS = readIntegerEnv("MEDIA_SEND_RETRY_MAX_DELAY_MS", 10000);
 const MEDIA_CONTEXT_READY_TIMEOUT_MS = readIntegerEnv("MEDIA_CONTEXT_READY_TIMEOUT_MS", 15000);
 const MEDIA_CONTEXT_STABLE_MS = readIntegerEnv("MEDIA_CONTEXT_STABLE_MS", 500);
+const chatSendQueues = new Map();
 const AUDIO_OGG_MARKERS = [
   Buffer.from("OpusHead", "ascii"),
   Buffer.from([0x01, 0x76, 0x6f, 0x72, 0x62, 0x69, 0x73]),
@@ -441,12 +446,18 @@ function validateTemplateMediaReferences(template, paths = PATHS) {
 }
 
 async function sendRenderedTemplate(client, chatId, renderedTemplate, paths = PATHS, progressOptions = {}) {
+  return enqueueChatSend(chatId, () =>
+    sendRenderedTemplateInOrder(client, chatId, renderedTemplate, paths, progressOptions),
+  );
+}
+
+async function sendRenderedTemplateInOrder(client, chatId, renderedTemplate, paths = PATHS, progressOptions = {}) {
   const parts = buildSendPlan(parseTemplateParts(renderedTemplate));
   const downloadCache = new Map();
 
   for (const part of parts) {
     if (part.type === "text") {
-      await client.sendMessage(chatId, part.value);
+      await sendTextMessageWithRetry(client, chatId, part.value, progressOptions);
       continue;
     }
 
@@ -490,7 +501,7 @@ async function sendOggVoiceMessage(client, chatId, filePath, part, progressOptio
   const filename = path.basename(filePath);
 
   if (caption && captionPosition === "before") {
-    await client.sendMessage(chatId, caption);
+    await sendTextMessageWithRetry(client, chatId, caption, progressOptions);
   }
 
   try {
@@ -533,30 +544,62 @@ async function sendOggVoiceMessage(client, chatId, filePath, part, progressOptio
   }
 
   if (caption && captionPosition === "after") {
-    await client.sendMessage(chatId, caption);
+    await sendTextMessageWithRetry(client, chatId, caption, progressOptions);
   }
 }
 
+async function sendTextMessageWithRetry(client, chatId, text, progressOptions = {}) {
+  return sendConfirmedMessageWithRetry(
+    client,
+    chatId,
+    () => text,
+    {
+      waitUntilMsgSent: true,
+    },
+    {
+      kind: "text",
+      label: "mensagem de texto",
+      maxDelayMs: MESSAGE_SEND_RETRY_MAX_DELAY_MS,
+      onProgress: progressOptions.onProgress,
+      retryDelayMs: MESSAGE_SEND_RETRY_DELAY_MS,
+      retries: MESSAGE_SEND_RETRIES,
+      wrapError: false,
+    },
+  );
+}
+
 async function sendMediaMessageWithRetry(client, chatId, mediaFactory, options = {}, context = {}) {
+  return sendConfirmedMessageWithRetry(client, chatId, mediaFactory, options, {
+    ...context,
+    maxDelayMs: MEDIA_SEND_RETRY_MAX_DELAY_MS,
+    retryDelayMs: MEDIA_SEND_RETRY_DELAY_MS,
+    retries: MEDIA_SEND_RETRIES,
+  });
+}
+
+async function sendConfirmedMessageWithRetry(client, chatId, contentFactory, options = {}, context = {}) {
+  const retries = Math.max(1, context.retries || MESSAGE_SEND_RETRIES);
+  const retryDelayMs = context.retryDelayMs ?? MESSAGE_SEND_RETRY_DELAY_MS;
+  const maxDelayMs = context.maxDelayMs ?? MESSAGE_SEND_RETRY_MAX_DELAY_MS;
   let lastError;
 
-  for (let attempt = 1; attempt <= MEDIA_SEND_RETRIES; attempt += 1) {
+  for (let attempt = 1; attempt <= retries; attempt += 1) {
     try {
-      await waitForWhatsAppMediaContext(client);
-      return await client.sendMessage(chatId, mediaFactory(), options);
+      await assertWhatsAppSendContextReady(client);
+      return await client.sendMessage(chatId, contentFactory(), options);
     } catch (err) {
       lastError = err;
 
-      if (attempt >= MEDIA_SEND_RETRIES || !isTransientMediaSendError(err)) {
+      if (attempt >= retries || !isTransientSendError(err)) {
         break;
       }
 
       emitMediaProgress(context, {
         attempt: attempt + 1,
-        message: `Retentando ${describeMediaSend(context)} após instabilidade do WhatsApp Web (${attempt + 1}/${MEDIA_SEND_RETRIES}).`,
+        message: `Retentando ${describeMediaSend(context)} após instabilidade do WhatsApp Web (${attempt + 1}/${retries}).`,
         type: "warning",
       });
-      await delay(MEDIA_SEND_RETRY_DELAY_MS * attempt);
+      await delay(getRetryDelay(retryDelayMs, maxDelayMs, attempt));
       emitMediaProgress(context, {
         attempt: attempt + 1,
         message: `Aguardando WhatsApp Web estabilizar para ${describeMediaSend(context)}.`,
@@ -569,11 +612,56 @@ async function sendMediaMessageWithRetry(client, chatId, mediaFactory, options =
   const previous = context.previousError
     ? ` Tentativa como áudio de voz falhou antes: ${context.previousError.message || context.previousError}.`
     : "";
+
+  if (context.wrapError === false) {
+    throw lastError;
+  }
+
   const label = context.label ? ` (${context.label})` : "";
   throw new Error(`Falha ao enviar anexo${label}: ${lastError.message || lastError}.${previous}`);
 }
 
+function enqueueChatSend(chatId, task) {
+  const key = String(chatId || "");
+  const previous = chatSendQueues.get(key) || Promise.resolve();
+  const queued = previous.catch(() => undefined).then(task);
+  const tracked = queued
+    .catch(() => undefined)
+    .finally(() => {
+      if (chatSendQueues.get(key) === tracked) {
+        chatSendQueues.delete(key);
+      }
+    });
+
+  chatSendQueues.set(key, tracked);
+  return queued;
+}
+
+async function assertWhatsAppSendContextReady(client) {
+  const ready = await waitForWhatsAppMediaContext(client);
+
+  if (!ready) {
+    throw new Error("WhatsApp Web não estabilizou para envio dentro do tempo limite.");
+  }
+
+  return true;
+}
+
+function getRetryDelay(baseDelayMs, maxDelayMs, attempt) {
+  const exponentialDelay = Math.max(0, baseDelayMs) * (2 ** Math.max(0, attempt - 1));
+
+  if (!Number.isFinite(maxDelayMs) || maxDelayMs <= 0) {
+    return exponentialDelay;
+  }
+
+  return Math.min(exponentialDelay, maxDelayMs);
+}
+
 function describeMediaSend(context = {}) {
+  if (context.kind === "text") {
+    return context.label || "mensagem de texto";
+  }
+
   const label = context.label ? `anexo ${context.label}` : "anexo";
 
   if (context.mode === "voice") {
@@ -594,7 +682,7 @@ function emitMediaProgress(context = {}, event = {}) {
 
   try {
     context.onProgress({
-      media: true,
+      ...(context.kind === "text" ? {} : { media: true }),
       ...event,
     });
   } catch (_) {
@@ -602,9 +690,13 @@ function emitMediaProgress(context = {}, event = {}) {
   }
 }
 
-function isTransientMediaSendError(err) {
+function isTransientSendError(err) {
   const message = err && err.message ? err.message : String(err || "");
-  return /Protocol error|Runtime\.callFunctionOn|Promise was collected|Execution context was destroyed|detached Frame|Target closed|Session closed|Navigation|Timeout|ERR_|window\.require is not a function|sendIq called before startComms/iu.test(message);
+  return /Protocol error|Runtime\.callFunctionOn|Promise was collected|Execution context was destroyed|detached Frame|Target closed|Session closed|Navigation|Timeout|ERR_|ECONNRESET|ECONNREFUSED|ETIMEDOUT|ENETDOWN|ENETUNREACH|EPIPE|WebSocket|window\.require is not a function|sendIq called before startComms|não estabilizou para envio/iu.test(message);
+}
+
+function isTransientMediaSendError(err) {
+  return isTransientSendError(err);
 }
 
 async function waitForWhatsAppMediaContext(client, timeoutMs = MEDIA_CONTEXT_READY_TIMEOUT_MS) {
@@ -698,8 +790,11 @@ module.exports = {
   resolveLocalMediaPath,
   resolveMediaPath,
   sendRenderedTemplate,
+  sendTextMessageWithRetry,
+  sendConfirmedMessageWithRetry,
   sendMediaMessageWithRetry,
   focusWhatsAppPage,
+  isTransientSendError,
   waitForWhatsAppMediaContext,
   validateTemplateMediaReferences,
 };

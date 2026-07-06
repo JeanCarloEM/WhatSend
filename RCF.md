@@ -394,6 +394,32 @@ Toda alteração em `./dist/release-notes.md` deve ocorrer em commit exclusivo, 
 
 Commits que misturem `./dist/release-notes.md` com código, documentação, configuração ou qualquer outro arquivo são proibidos. A regra deve ser validada em camadas, incluindo hook Git local quando possível, workflow do GitHub e scripts de validação. A mensagem de bloqueio deve explicar o motivo e indicar comandos compatíveis com Windows, Linux e macOS para remover apenas `./dist/release-notes.md` do commit, preservando as demais alterações.
 
+### RN032 - Sequenciamento e Retentativas de Envio
+
+Quando um template renderizado resultar em múltiplas mensagens, anexos, áudios ou legendas para o mesmo destinatário, o sistema deve preservar a ordem original do plano de envio e transmitir somente um item por vez.
+
+A próxima mensagem do mesmo destinatário só pode ser iniciada após a biblioteca/API confirmar o envio bem-sucedido da mensagem anterior. Não é exigida confirmação de entrega ou leitura pelo destinatário.
+
+Chamadas simultâneas para o mesmo destinatário devem ser serializadas por fila local, evitando interleaving, inversão de ordem ou concorrência entre mensagens do mesmo chat.
+
+Falhas transitórias do WhatsApp Web, navegador, contexto de execução, conexão ou transporte devem ser retentadas com quantidade de tentativas e atraso configuráveis, usando backoff entre tentativas. O sistema deve interromper a sequência daquele destinatário quando a mensagem atual falhar definitivamente após esgotar as tentativas, sem transmitir mensagens subsequentes desse mesmo plano.
+
+As retentativas de texto devem ser configuráveis por:
+
+```text
+MESSAGE_SEND_RETRIES
+MESSAGE_SEND_RETRY_DELAY_MS
+MESSAGE_SEND_RETRY_MAX_DELAY_MS
+```
+
+As retentativas de mídia devem permanecer configuráveis por:
+
+```text
+MEDIA_SEND_RETRIES
+MEDIA_SEND_RETRY_DELAY_MS
+MEDIA_SEND_RETRY_MAX_DELAY_MS
+```
+
 ## Requisitos Não Funcionais
 
 ### RNF001 - Plataforma
