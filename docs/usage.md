@@ -72,13 +72,31 @@ Comparadores aceitos:
 =  !=  <  <=  >  >=
 ```
 
+| Operador | EN-US | PT-BR | Descrição |
+|:---------:|:-----:|:------:|-----------|
+| `=` | EQUAL TO | IGUAL A | Verdadeiro se os operandos forem iguais. |
+| `!=` | NOT EQUAL TO | DIFERENTE DE | Verdadeiro se os operandos forem diferentes. |
+| `<` | LESS THAN | MENOR QUE | Verdadeiro se o operando à esquerda for menor que o da direita. |
+| `<=` | LESS THAN OR EQUAL TO | MENOR OU IGUAL A | Verdadeiro se o operando à esquerda for menor ou igual ao da direita. |
+| `>` | GREATER THAN | MAIOR QUE | Verdadeiro se o operando à esquerda for maior que o da direita. |
+| `>=` | GREATER THAN OR EQUAL TO | MAIOR OU IGUAL A | Verdadeiro se o operando à esquerda for maior ou igual ao da direita. |
+
 Operadores logicos:
 
 ```text
 &&  ||  ^^  !
 ```
 
-Tambem sao aceitos parenteses, `+`, `-`, `*`, `/` e funcoes:
+Tambem sao aceitos parenteses, `+`, `-`, `*`, `/`, conforme tabela:
+
+| Operador | EN-US | PT-BR | Descrição |
+|:---------:|:-----:|:------:|-----------|
+| `&&` | AND | E | Verdadeiro apenas se ambas as expressões forem verdadeiras. |
+| `\|\|` | OR | OU | Verdadeiro se pelo menos uma das expressões for verdadeira. |
+| `^^` | XOR (Exclusive OR) | OU Exclusivo (XOU) | Verdadeiro apenas se exatamente uma das expressões for verdadeira. |
+| `!` | NOT | NÃO | Inverte o valor lógico da expressão. |
+
+E funcoes:
 
 ```text
 $.vazio(coluna)
