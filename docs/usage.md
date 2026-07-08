@@ -66,7 +66,11 @@ node main.js --lista "valor>=10,5 && status!=cancelado"
 node main.js --lista "($.isnum(valor) && valor>0) || $.istrue(vigente)"
 ```
 
-Comparadores aceitos:
+Numeros podem usar `.` ou `,` como separador decimal. Valores booleanos reconhecem variacoes comuns como `sim`, `nao`, `true`, `false`, `1`, `0`, `ativo`, `inativo`, `vigente`, `cancelado`, `valido` e `invalido`, com tratamento de acentos quando aplicavel.
+
+## Estrutura de Decisão e ação
+
+### Comparadores aceitos
 
 ```text
 =  !=  <  <=  >  >=
@@ -81,7 +85,7 @@ Comparadores aceitos:
 | `>` | GREATER THAN | MAIOR QUE | Verdadeiro se o operando à esquerda for maior que o da direita. |
 | `>=` | GREATER THAN OR EQUAL TO | MAIOR OU IGUAL A | Verdadeiro se o operando à esquerda for maior ou igual ao da direita. |
 
-Operadores logicos:
+### Operadores logicos
 
 ```text
 &&  ||  ^^  !
@@ -96,7 +100,7 @@ Tambem sao aceitos parenteses, `+`, `-`, `*`, `/`, conforme tabela:
 | `^^` | XOR (Exclusive OR) | OU Exclusivo (XOU) | Verdadeiro apenas se exatamente uma das expressões for verdadeira. |
 | `!` | NOT | NÃO | Inverte o valor lógico da expressão. |
 
-E funcoes:
+### Funções
 
 ```text
 $.vazio(coluna)
@@ -107,8 +111,6 @@ $.isbool(coluna)
 $.istrue(coluna)
 $.istring(coluna)
 ```
-
-Numeros podem usar `.` ou `,` como separador decimal. Valores booleanos reconhecem variacoes comuns como `sim`, `nao`, `true`, `false`, `1`, `0`, `ativo`, `inativo`, `vigente`, `cancelado`, `valido` e `invalido`, com tratamento de acentos quando aplicavel.
 
 ## Anexos
 
