@@ -13,7 +13,7 @@ Planejamento:
 1/12 Levantamento normativo e retomada
 Objetivo: ler AGENTS.md, RCF.md, README.md, continue.ia, package/build/workflows e classificar a solicitação.
 Dependências: nenhuma.
-Status: concluída parcialmente nesta retomada; continue.ia estava vazio.
+Status: concluída parcialmente nesta retomada; commit entre etapas realizado conforme determinado na solicitação; continue.ia estava vazio.
 
 2/12 Centralização de configuração e ajustes de UX
 Objetivo: aplicar normalização por postagem, toolbar com ícones, hints, painel retrátil de notações, links de ajuda e hierarquia de configuração.
@@ -87,6 +87,7 @@ Decisões arquiteturais:
 - Centralizar valores de ENV e validações em arquivo de configuração próprio em src.
 - Evitar depender de CDN.
 - Evitar expor node_modules pela GUI quando houver alternativa incorporada.
+- Commit a cada (micro)etapa concluída.
 
 Comandos relevantes:
 - npm install @fortawesome/fontawesome-svg-core @fortawesome/free-solid-svg-icons tippy.js
