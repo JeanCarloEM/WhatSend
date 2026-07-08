@@ -73,7 +73,7 @@ Numeros podem usar `.` ou `,` como separador decimal. Valores booleanos reconhec
 ### Operadoras matemáticos
 
 ```text
-+ - * / % **
++  -  *  /  %  **
 ```
 
 | Operador | EN-US | PT-BR | Descrição |
@@ -83,7 +83,7 @@ Numeros podem usar `.` ou `,` como separador decimal. Valores booleanos reconhec
 | `*` | MULTIPLICATION | MULTIPLICAÇÃO | Multiplica os operandos. |
 | `/` | DIVISION | DIVISÃO | Divide o operando da esquerda pelo da direita. |
 | `%` | MODULO | MÓDULO | Retorna o resto da divisão inteira entre os operandos. |
-| `**` | EXPONENTIATION (POWER) | EXPONENCIAÇÃO (POTENCIAÇÃO) | Eleva o operando da esquerda à potência do operando da direita, prefira usar dentro de (). |
+| `**` | EXPONENTIATION (POWER) | EXPONENCIAÇÃO (POTENCIAÇÃO) | Eleva o operando da esquerda à potência do operando da direita,  prefira usar o conjunto dentro de ```()```. |
 
 
 ### Comparadores aceitos
