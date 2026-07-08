@@ -56,6 +56,7 @@ const {
   loadCsv,
   loadTemplate,
   loadSentRecords,
+  normalizeMessagePosting,
   materializeGuiExecutionPaths,
   normalizeTemplateText,
   normalizeYesNoAnswer,
@@ -843,6 +844,17 @@ test("divide postagens pelo marcador explícito sem alterar texto sem marcador",
     "A",
     "B",
   ]);
+});
+
+test("normaliza cada postagem antes da prévia e do envio", () => {
+  assert.equal(
+    normalizeMessagePosting("\u0000  Primeira linha  \n   recuo casual\n    recuo intencional\n\n"),
+    "Primeira linha\nrecuo casual\n    recuo intencional",
+  );
+  assert.deepEqual(
+    splitMessagePostings(`\n  A  \n${POSTING_SPLIT_MARKER}\n\u0007  B  \n`),
+    ["A", "B"],
+  );
 });
 
 test("converte entidade HTML em caminho de anexo antes de interpretar markdown", () => {

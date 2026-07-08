@@ -1,0 +1,106 @@
+{
+  "env": {
+    "GUI_PORT": {
+      "default": 3137,
+      "label": "Porta inicial da GUI",
+      "max": 65535,
+      "min": 1024,
+      "type": "integer"
+    },
+    "MAX_DELAY_MS": {
+      "allowEqualWhenZero": true,
+      "default": 20000,
+      "greaterThan": "MIN_DELAY_MS",
+      "label": "Intervalo máximo entre envios (ms)",
+      "min": 0,
+      "minDifference": 1000,
+      "type": "integer"
+    },
+    "MEDIA_CONTEXT_READY_TIMEOUT_MS": {
+      "default": 15000,
+      "label": "Timeout de estabilização de mídia (ms)",
+      "max": 120000,
+      "min": 1000,
+      "type": "integer"
+    },
+    "MEDIA_CONTEXT_STABLE_MS": {
+      "default": 500,
+      "label": "Janela estável de mídia (ms)",
+      "max": 10000,
+      "min": 0,
+      "type": "integer"
+    },
+    "MEDIA_SEND_RETRIES": {
+      "default": 5,
+      "label": "Tentativas de mídia",
+      "max": 20,
+      "min": 1,
+      "type": "integer"
+    },
+    "MEDIA_SEND_RETRY_DELAY_MS": {
+      "default": 1200,
+      "label": "Espera inicial de mídia (ms)",
+      "max": 60000,
+      "min": 0,
+      "type": "integer"
+    },
+    "MEDIA_SEND_RETRY_MAX_DELAY_MS": {
+      "default": 10000,
+      "greaterThanOrEqual": "MEDIA_SEND_RETRY_DELAY_MS",
+      "label": "Espera máxima de mídia (ms)",
+      "max": 120000,
+      "min": 0,
+      "type": "integer"
+    },
+    "MESSAGE_DIFF_THRESHOLD_PERCENT": {
+      "default": 10,
+      "label": "Diferença mínima para reenviar (%)",
+      "max": 100,
+      "min": 0,
+      "type": "number"
+    },
+    "MESSAGE_SEND_RETRIES": {
+      "default": 3,
+      "label": "Tentativas de texto",
+      "max": 20,
+      "min": 1,
+      "type": "integer"
+    },
+    "MESSAGE_SEND_RETRY_DELAY_MS": {
+      "default": 1200,
+      "label": "Espera inicial de texto (ms)",
+      "max": 60000,
+      "min": 0,
+      "type": "integer"
+    },
+    "MESSAGE_SEND_RETRY_MAX_DELAY_MS": {
+      "default": 10000,
+      "greaterThanOrEqual": "MESSAGE_SEND_RETRY_DELAY_MS",
+      "label": "Espera máxima de texto (ms)",
+      "max": 120000,
+      "min": 0,
+      "type": "integer"
+    },
+    "MIN_DELAY_MS": {
+      "default": 8000,
+      "label": "Intervalo mínimo entre envios (ms)",
+      "max": 3600000,
+      "min": 0,
+      "type": "integer"
+    },
+    "RESEND_AFTER_HOURS": {
+      "default": 48,
+      "label": "Reenvio permitido após (horas)",
+      "max": 8760,
+      "min": 0,
+      "type": "number"
+    },
+    "TEMPLATE_VARIANT_MIN_LENGTH": {
+      "default": 96,
+      "label": "Tamanho mínimo de modelo ^^^",
+      "max": 10000,
+      "min": 1,
+      "type": "integer"
+    }
+  }
+}

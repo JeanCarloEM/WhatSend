@@ -87,6 +87,7 @@ async function buildDist(options = {}) {
     copyRootFile(fileName);
   }
 
+  writeRuntimePackageFiles();
   copyOptionalRootConfigFiles();
 
   for (const dirName of ROOT_DIRS) {
@@ -171,6 +172,79 @@ function copyOptionalRootConfigFiles() {
       copyFile(path.join(ROOT_DIR, entry.name), path.join(DIST_DIR, entry.name));
     }
   }
+}
+
+function writeRuntimePackageFiles() {
+  const packageJson = JSON.parse(fs.readFileSync(path.join(ROOT_DIR, "package.json"), "utf8"));
+  const runtimePackage = {
+    author: packageJson.author,
+    dependencies: packageJson.dependencies || {},
+    description: packageJson.description,
+    license: packageJson.license,
+    main: packageJson.main,
+    name: packageJson.name,
+    scripts: pickRuntimeScripts(packageJson.scripts || {}),
+    type: packageJson.type,
+    version: packageJson.version,
+  };
+
+  fs.writeFileSync(
+    path.join(DIST_DIR, "package.json"),
+    `${JSON.stringify(runtimePackage, null, 2)}\n`,
+    "utf8",
+  );
+
+  const lockPath = path.join(ROOT_DIR, "package-lock.json");
+  if (!fs.existsSync(lockPath)) {
+    return;
+  }
+
+  const lock = JSON.parse(fs.readFileSync(lockPath, "utf8"));
+  if (lock.packages && lock.packages[""]) {
+    lock.packages[""] = {
+      ...lock.packages[""],
+      dependencies: runtimePackage.dependencies,
+    };
+    delete lock.packages[""].devDependencies;
+  }
+
+  if (lock.packages) {
+    for (const [name, metadata] of Object.entries(lock.packages)) {
+      if (name && metadata && metadata.dev === true && metadata.optional !== true) {
+        delete lock.packages[name];
+      }
+    }
+  }
+
+  fs.writeFileSync(
+    path.join(DIST_DIR, "package-lock.json"),
+    `${JSON.stringify(lock, null, 2)}\n`,
+    "utf8",
+  );
+}
+
+function pickRuntimeScripts(scripts) {
+  const allowed = [
+    "browser:ensure",
+    "check",
+    "gui",
+    "start",
+    "start:clear",
+    "start:force",
+    "start:gui",
+    "start:reset",
+    "sent:clear",
+    "update",
+  ];
+  const result = {};
+
+  for (const name of allowed) {
+    if (scripts[name]) {
+      result[name] = scripts[name];
+    }
+  }
+
+  return result;
 }
 
 function copyDirectory(sourceDir, targetDir) {

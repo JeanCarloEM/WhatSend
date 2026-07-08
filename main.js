@@ -6,6 +6,7 @@
 // Disclaimer: fornecido "AS IS", sem garantias de qualquer tipo.
 
 // RCF operacional: consulte ./RCF.md.
+require("./src/env-settings").applyStartupEnvSettings(__dirname, process.argv.slice(2));
 const app = require("./src");
 
 if (require.main === module) {

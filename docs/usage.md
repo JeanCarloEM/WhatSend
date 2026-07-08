@@ -39,7 +39,11 @@ ${$.int(valor)}
 
 Um arquivo pode conter multiplas variacoes separadas por uma linha com `^^^`. Quando todos os blocos atingem o tamanho minimo configurado, a distribuicao entre destinatarios e circular. Na GUI, cada bloco separado por `^^^` aparece como uma aba visual do editor; salvar ou enviar recombina as abas com o mesmo separador, sem alterar a regra do backend.
 
-O editor da GUI trabalha sempre com texto cru. A toolbar apenas insere ou remove marcadores textuais, como `*`, `_`, `~`, três crases para monoespaçado, `![](arquivo.pdf)` e `$postagem$`; emojis são escolhidos por menu suspenso. Nenhum HTML ou conteúdo rico é persistido no modelo. A prévia renderiza negrito, itálico, tachado e monoespaçado para aproximar o resultado visual sem mudar o texto do editor, sempre limitada à aba ativa e com rolagem proporcional sincronizada.
+O editor da GUI trabalha sempre com texto cru. A toolbar por ícones apenas insere ou remove marcadores textuais, como `*`, `_`, `~`, três crases para monoespaçado, `![](arquivo.pdf)`, `$diatarde$`, `$postagem$` e `^^^`; emojis são escolhidos por menu suspenso. Nenhum HTML ou conteúdo rico é persistido no modelo. A prévia renderiza negrito, itálico, tachado e monoespaçado para aproximar o resultado visual sem mudar o texto do editor, sempre limitada à aba ativa e com rolagem proporcional sincronizada.
+
+O quadro de notações da GUI é retrátil e recolhido por padrão. Ao adicionar novas marcações, a implementação, a GUI, o RCF, o README e este guia devem ser atualizados na mesma alteração para evitar divergência.
+
+Cada postagem gerada por `$postagem$` é normalizada individualmente antes da prévia e do envio: sobras no início/fim e caracteres não imprimíveis excedentes são removidos, enquanto recuos intencionais de pelo menos quatro espaços em linha de conteúdo são preservados.
 
 ## Emojis profissionais
 
@@ -203,6 +207,8 @@ WA_CLIENT_ID=campanha_teste
 ```
 
 Se `GUI_PORT` estiver ocupada, a interface tenta automaticamente portas próximas, como `3138` e `3139`, e informa a URL efetiva no console.
+
+A GUI permite ajustar parâmetros operacionais em três escopos: execução atual, global e sessão. A herança efetiva é execução, sessão, global e default. Configurações de sessão são persistidas em JSON local e carregadas automaticamente na próxima abertura da sessão correspondente. As restrições de mínimos, máximos e relações entre parâmetros são centralizadas em `src/config-restrictions.json`.
 
 ## Atualizacao
 

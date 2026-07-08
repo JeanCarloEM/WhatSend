@@ -288,6 +288,12 @@ A GUI deve oferecer:
 - Menu suspenso equilibrado com exatamente 60 sugestões profissionais de emojis.
 - Feedback visual discreto em hover para controles interativos.
 
+Ícones de controles da GUI devem usar Font Awesome Free como padrão visual quando houver ícone correspondente, incorporando somente os SVGs efetivamente usados ao código distribuído, sem CDN e sem duplicar o mesmo ícone em múltiplos formatos. Emojis inseridos no conteúdo da mensagem não devem ser substituídos por ícones.
+
+Todos os controles interativos da GUI devem possuir hint visual centralizado por configuração ou atributo equivalente, sem depender de serviços externos. A documentação resumida de marcações deve ser exibida em painel retrátil HTML sem JavaScript, recolhido por padrão, com link discreto por ícone para o Markdown oficial no GitHub e links de ajuda em vídeo quando definidos.
+
+Configurações operacionais antes controladas por ENV podem ser ajustadas pela GUI nos escopos execução atual, global e sessão. Configurações por sessão devem ser persistidas em JSON local e carregadas automaticamente na próxima execução da sessão correspondente.
+
 Arquivos informados na GUI devem ser materializados temporariamente em área controlada pelo projeto ou sistema operacional, sem alterar `clientes.csv`, `texto.md` ou os modelos originais.
 
 ### RN023 - Scripts de Inicialização
@@ -394,6 +400,10 @@ Quando um arquivo minificado possuir cabeçalho inicial de licença, copyright, 
 
 A release não deve incluir `node_modules/`, `.git/`, diretórios iniciados por `.`, `AGENTS.md`, testes, caches, logs com conteúdo, sessões, `.wwebjs_sessions.json`, `.env` real ou qualquer arquivo operacional/sensível.
 
+O `package.json` distribuído em `dist` deve conter apenas dependências de runtime e scripts necessários à execução/atualização. Dependências exclusivas de desenvolvimento, testes, documentação, build, minificação, geração de assets ou validação não devem integrar o manifesto de runtime da distribuição nem ser instaladas por validações executadas dentro de `dist`.
+
+Recursos usados apenas para composição visual ou build, como ícones, CSS ou assets de bibliotecas, devem ser incorporados na distribuição somente nos subconjuntos efetivamente utilizados quando isso for tecnicamente viável. A biblioteca completa não deve permanecer como dependência de runtime quando sua função tiver sido absorvida pelo artefato distribuído.
+
 Os arquivos operacionais `clientes.csv` e `texto.md` localizados na raiz do projeto nunca devem ser copiados para a raiz de `./dist`. Essa regra deve proteger os arquivos reais do usuário sem bloquear automaticamente arquivos homônimos em outros diretórios que sejam necessários à documentação, testes internos de empacotamento ou funcionamento distribuível.
 
 Os diretórios operacionais `logs/`, `modelos/` e `listas/` devem existir na release apenas como diretórios vazios de topo, sem copiar arquivos nem subdiretórios do ambiente local.
@@ -469,6 +479,31 @@ Quando o marcador estiver sozinho em uma linha, espaços ou tabulações ao redo
 Cada segmento resultante deve ser enviado como postagem independente, preservando a ordem original e usando o fluxo sequencial normatizado em RN032, incluindo confirmação de envio, retry, backoff, fila por destinatário e bloqueio do avanço para o próximo telefone até conclusão ou falha definitiva.
 
 A divisão por `$postagem$` é subordinada ao mecanismo de múltiplos modelos `^^^`: primeiro o sistema deve processar e selecionar os modelos válidos separados por `^^^`; somente depois a variante escolhida deve ser renderizada e dividida por `$postagem$`. O marcador `$postagem$` não pode alterar, invalidar ou interferir no comportamento de `^^^`.
+
+Antes da prévia e do envio, cada postagem resultante deve ser normalizada individualmente, removendo espaços e quebras excedentes no início e no fim, caracteres não imprimíveis excedentes e recuos acidentais. Recuos intencionais de pelo menos quatro espaços na própria linha de conteúdo devem ser preservados quando não forem precedidos por linha em branco. Essa normalização não deve recombinar postagens, anexos, áudio ou variantes `^^^`.
+
+### RN034 - Governança por Frentes de Trabalho
+
+Toda implementação relevante deve ser organizada em Frente de Trabalho registrada em `continue.ia`, com identificador permanente, nome, objetivo, prioridade, status, etapas planejadas e microetapas quando aplicável.
+
+`continue.ia` é a memória operacional oficial do projeto. Deve registrar retomada, decisões, comandos relevantes, verificações, falhas objetivas, hipóteses descartadas, pendências e mudanças de planejamento sempre que essas informações forem úteis para evitar retrabalho.
+
+Quando arquitetura, regras, UX, build, distribuição, documentação ou fluxos mudarem, a implementação deve sincronizar código, GUI/CLI quando aplicável, `AGENTS.md`, `RCF.md`, `README.md`, documentação pertinente e `continue.ia`.
+
+### RN035 - Configurações Centralizadas
+
+Restrições de configuração operacional devem ser centralizadas em arquivo JSON dentro de `src`, contendo defaults, mínimos, máximos e relações obrigatórias quando existirem.
+
+A resolução de configuração deve seguir a hierarquia:
+
+```text
+Execução
+Sessão
+Global
+Default
+```
+
+O usuário pode informar apenas os parâmetros que deseja alterar. Os demais devem ser herdados automaticamente. Após a resolução, o conjunto aplicável deve ser validado contra as restrições centralizadas antes de ser persistido ou aplicado.
 
 ## Requisitos Não Funcionais
 

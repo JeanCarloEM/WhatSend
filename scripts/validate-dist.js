@@ -59,6 +59,7 @@ const LEGAL_HEADER_KEYWORDS = [
 
 function validateDist() {
   validateStructure(DIST_DIR);
+  validateRuntimePackageFiles(DIST_DIR);
   validateNoSensitiveFiles(DIST_DIR);
   validateStructureOnlyDirs(DIST_DIR);
   validateVersionMetadata(DIST_DIR);
@@ -128,6 +129,37 @@ function validateStructure(distDir) {
 
     if (!fs.existsSync(dirPath) || !fs.statSync(dirPath).isDirectory()) {
       throw new Error(`Diretório obrigatório ausente em dist: ${dirName}`);
+    }
+  }
+}
+
+function validateRuntimePackageFiles(distDir) {
+  const packageJson = JSON.parse(fs.readFileSync(path.join(distDir, "package.json"), "utf8"));
+
+  if (packageJson.devDependencies || packageJson.optionalDependencies || packageJson.peerDependencies) {
+    throw new Error("package.json de dist deve conter apenas dependências de runtime.");
+  }
+
+  const forbiddenScripts = ["build:dist", "test", "validate:dist", "release-notes:generate", "release-notes:validate"];
+  for (const scriptName of forbiddenScripts) {
+    if (packageJson.scripts && packageJson.scripts[scriptName]) {
+      throw new Error(`Script exclusivo de desenvolvimento proibido em dist: ${scriptName}`);
+    }
+  }
+
+  const lockPath = path.join(distDir, "package-lock.json");
+  if (!fs.existsSync(lockPath)) {
+    return;
+  }
+
+  const lock = JSON.parse(fs.readFileSync(lockPath, "utf8"));
+  if (lock.packages && lock.packages[""] && lock.packages[""].devDependencies) {
+    throw new Error("package-lock.json de dist não pode declarar devDependencies na raiz.");
+  }
+
+  for (const [entryName, metadata] of Object.entries(lock.packages || {})) {
+    if (entryName && metadata && metadata.dev === true && metadata.optional !== true) {
+      throw new Error(`Dependência de desenvolvimento proibida em package-lock de dist: ${entryName}`);
     }
   }
 }
@@ -450,6 +482,7 @@ module.exports = {
   validateLegalHeaders,
   validateNoSensitiveFiles,
   validateReleaseNotesIfPresent,
+  validateRuntimePackageFiles,
   validateStructure,
   validateVersionMetadata,
 };

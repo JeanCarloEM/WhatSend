@@ -11,7 +11,8 @@ const http = require("http");
 const os = require("os");
 const path = require("path");
 
-const { PATHS, ROOT_DIR } = require("./config");
+const { PATHS, ROOT_DIR, readIntegerEnv } = require("./config");
+const { renderGuiIcon, renderGuiIconSprite } = require("./gui-icons");
 const {
   AUTHOR,
   AUTHOR_URL,
@@ -43,12 +44,56 @@ const {
   updateSessionPhone,
 } = require("./sessions");
 const { destroyWhatsAppClient, readClientPhone } = require("./whatsapp");
+const { getEnvSettingsSnapshot, saveEnvSettings } = require("./env-settings");
 
 const GUI_HOST = "127.0.0.1";
-const GUI_PORT = Number.parseInt(process.env.GUI_PORT || "3137", 10);
+const GUI_PORT = readIntegerEnv("GUI_PORT", 3137);
 const GUI_PORT_ATTEMPTS = 20;
 const GUI_RUNTIME_DIR = path.join(ROOT_DIR, ".runtime", "gui");
 const MAX_JSON_BODY_BYTES = 15 * 1024 * 1024;
+const DOCS_USAGE_GITHUB_URL = "https://github.com/JeanCarloEM/WhatSend/blob/main/docs/usage.md";
+const HELP_VIDEO_URLS = Object.freeze({
+  clients: "https://tools.jcem.pro/to/csv-rapido",
+  expression: "https://tools.jcem.pro/to/operadores",
+  template: "https://tools.jcem.pro/to/markdown-w",
+});
+const GUI_HINTS = Object.freeze({
+  attachment: "Inserir anexo Markdown no ponto atual.",
+  bold: "Aplicar ou remover negrito do WhatsApp na seleção.",
+  code: "Aplicar ou remover monoespaçado na seleção.",
+  dayPeriod: "Inserir $diatarde$, substituído por bom dia ou boa tarde no envio.",
+  emoji: "Abrir menu de emojis profissionais.",
+  italic: "Aplicar ou remover itálico do WhatsApp na seleção.",
+  newModel: "Criar novo modelo separado por ^^^.",
+  newPosting: "Inserir $postagem$ para enviar uma nova postagem sequencial.",
+  open: "Abrir arquivo Markdown no editor.",
+  removeModel: "Excluir este modelo.",
+  save: "Salvar todas as abas em um arquivo .md separado por ^^^.",
+  settings: "Abrir configurações desta execução.",
+  shutdown: "Desligar o processo local e fechar o navegador controlado.",
+  strikethrough: "Aplicar ou remover tachado do WhatsApp na seleção.",
+  variant: "Inserir separador ^^^ entre modelos.",
+  docs: "Abrir documentação Markdown no GitHub.",
+  videoClients: "Abrir ajuda em vídeo sobre base de clientes.",
+  videoExpression: "Abrir ajuda em vídeo sobre expressões.",
+  videoTemplate: "Abrir ajuda em vídeo sobre modelos Markdown.",
+});
+const TEMPLATE_MARKER_ACTIONS = Object.freeze([
+  {
+    hint: GUI_HINTS.dayPeriod,
+    icon: "sun",
+    id: "insertDayPeriodButton",
+    insert: "$diatarde$",
+    label: "Inserir saudação por horário",
+  },
+  {
+    hint: GUI_HINTS.variant,
+    icon: "layerGroup",
+    id: "insertVariantButton",
+    insert: "\n\n^^^\n\n",
+    label: "Inserir separador de modelos",
+  },
+]);
 
 function registerGuiClientHandlers(client, basePaths = PATHS, baseOptions = {}) {
   const serverInfo = baseOptions.guiServerInfo;
@@ -228,6 +273,11 @@ async function routeGuiRequest(req, res, context) {
     return;
   }
 
+  if (req.method === "GET" && url.pathname === "/docs/usage.md") {
+    sendText(res, readOptionalFile(path.join(ROOT_DIR, "docs", "usage.md")) || "Documentação não encontrada.");
+    return;
+  }
+
   if (req.method === "GET" && url.pathname === "/api/runtime/identity") {
     sendJson(res, 200, {
       ok: true,
@@ -244,6 +294,46 @@ async function routeGuiRequest(req, res, context) {
       ok: true,
       state: context.state,
     });
+    return;
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/settings") {
+    const sessionId =
+      (context.state.activeSession && context.state.activeSession.id) ||
+      (context.basePaths.activeSession && context.basePaths.activeSession.id) ||
+      "default";
+    sendJson(res, 200, {
+      ok: true,
+      settings: getEnvSettingsSnapshot(ROOT_DIR, sessionId),
+    });
+    return;
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/settings") {
+    const payload = await readJsonBody(req);
+    const sessionId =
+      String(payload.sessionId || "").trim() ||
+      (context.state.activeSession && context.state.activeSession.id) ||
+      "default";
+
+    try {
+      const result = saveEnvSettings(
+        ROOT_DIR,
+        String(payload.scope || "").trim(),
+        sessionId,
+        payload.values || {},
+      );
+      sendJson(res, 200, {
+        message: "Configurações salvas.",
+        ok: true,
+        result,
+      });
+    } catch (err) {
+      sendJson(res, 400, {
+        error: err.message,
+        ok: false,
+      });
+    }
     return;
   }
 
@@ -1281,6 +1371,62 @@ function renderGuiHtml() {
 
     * { box-sizing: border-box; }
 
+    .wa-icon-sprite {
+      height: 0;
+      overflow: hidden;
+      position: absolute;
+      width: 0;
+    }
+
+    .wa-icon {
+      display: inline-block;
+      fill: currentColor;
+      flex: 0 0 auto;
+      height: 1em;
+      pointer-events: none;
+      vertical-align: -0.125em;
+      width: 1em;
+    }
+
+    [data-hint] {
+      position: relative;
+    }
+
+    [data-hint]:hover::after,
+    [data-hint]:focus-visible::after {
+      background: #101828;
+      border-radius: 6px;
+      bottom: calc(100% + 8px);
+      color: #fff;
+      content: attr(data-hint);
+      font-size: 12px;
+      font-weight: 600;
+      left: 50%;
+      line-height: 1.35;
+      max-width: min(280px, calc(100vw - 24px));
+      padding: 7px 9px;
+      pointer-events: none;
+      position: absolute;
+      text-align: center;
+      transform: translateX(-50%);
+      white-space: normal;
+      width: max-content;
+      z-index: 1200;
+    }
+
+    [data-hint]:hover::before,
+    [data-hint]:focus-visible::before {
+      border: 6px solid transparent;
+      border-top-color: #101828;
+      bottom: calc(100% - 3px);
+      content: "";
+      left: 50%;
+      pointer-events: none;
+      position: absolute;
+      transform: translateX(-50%);
+      z-index: 1201;
+    }
+
     body {
       margin: 0;
       background: var(--bg);
@@ -1459,10 +1605,11 @@ function renderGuiHtml() {
       border-bottom: 1px solid var(--line);
       display: flex;
       gap: 4px;
-      min-height: 43px;
+      min-height: 35px;
       overflow-x: auto;
-      overflow-y: visible;
-      padding: 7px 7px 0;
+      overflow-y: hidden;
+      padding: 5px 7px 0;
+      scrollbar-width: thin;
     }
 
     .wa-toolbar button,
@@ -1493,6 +1640,15 @@ function renderGuiHtml() {
 
     .wa-toolbar-group {
       position: relative;
+    }
+
+    .toolbar-separator {
+      align-self: stretch;
+      background: #d8dde6;
+      display: inline-block;
+      flex: 0 0 1px;
+      margin: 4px 4px;
+      min-height: 24px;
     }
 
     .emoji-menu {
@@ -1533,9 +1689,11 @@ function renderGuiHtml() {
     .wa-tab {
       border-bottom-left-radius: 0;
       border-bottom-right-radius: 0;
-      gap: 8px;
-      min-height: 36px;
-      padding: 6px 10px;
+      font-size: 13px;
+      gap: 5px;
+      min-height: 30px;
+      min-width: 0;
+      padding: 4px 7px;
       position: relative;
       top: 1px;
     }
@@ -1551,8 +1709,8 @@ function renderGuiHtml() {
     .wa-tab-create {
       border-radius: 7px 7px 0 0;
       color: #067647;
-      font-size: 18px;
-      min-width: 36px;
+      font-size: 15px;
+      min-width: 32px;
     }
 
     .wa-tab-delete {
@@ -1564,13 +1722,13 @@ function renderGuiHtml() {
       cursor: pointer;
       display: inline-flex;
       font-size: 14px;
-      height: 22px;
+      height: 20px;
       justify-content: center;
       min-height: 0;
-      min-width: 22px;
+      min-width: 20px;
       padding: 0;
       transition: background 0.14s ease, transform 0.14s ease;
-      width: 22px;
+      width: 20px;
     }
 
     .wa-tab-delete:hover {
@@ -1584,6 +1742,16 @@ function renderGuiHtml() {
 
     .icon-tool {
       font-size: 16px;
+    }
+
+    .license-panel {
+      background: #fff7f5;
+      border-color: #ffd7ce;
+      font-size: 13px;
+    }
+
+    .license-panel h2 {
+      font-size: 14px;
     }
 
     .wa-editor-shell {
@@ -1647,6 +1815,61 @@ function renderGuiHtml() {
     .wa-placeholder-token {
       color: #175cd3;
       font-weight: 800;
+    }
+
+    code,
+    .syntax-tag {
+      background: #f2f4f7;
+      border: 1px solid #e4e7ec;
+      border-radius: 6px;
+      color: #344054;
+      font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
+      font-size: 0.92em;
+      padding: 0.1em 0.35em;
+    }
+
+    .syntax-tag {
+      display: inline-flex;
+      margin: 1px 3px 1px 0;
+    }
+
+    .label-with-help {
+      align-items: center;
+      display: flex;
+      gap: 7px;
+      justify-content: space-between;
+    }
+
+    .help-links {
+      align-items: center;
+      display: inline-flex;
+      gap: 6px;
+      margin-left: 6px;
+    }
+
+    .help-link {
+      align-items: center;
+      color: #175cd3;
+      display: inline-flex;
+      font-size: 14px;
+      justify-content: center;
+      text-decoration: none;
+    }
+
+    .help-link.video-help {
+      color: #b42318;
+    }
+
+    details.syntax-details {
+      margin-top: 10px;
+    }
+
+    details.syntax-details summary {
+      color: var(--text);
+      cursor: pointer;
+      font-weight: 800;
+      list-style-position: inside;
+      margin-bottom: 8px;
     }
 
     .wa-preview {
@@ -2052,6 +2275,40 @@ function renderGuiHtml() {
       width: 36%;
     }
 
+    .settings-grid {
+      display: grid;
+      gap: 10px;
+      margin-top: 14px;
+      max-height: min(52vh, 520px);
+      overflow: auto;
+      padding-right: 4px;
+    }
+
+    .settings-row {
+      align-items: center;
+      display: grid;
+      gap: 8px;
+      grid-template-columns: minmax(170px, 1fr) minmax(92px, 0.55fr);
+    }
+
+    .settings-row label {
+      margin: 0;
+    }
+
+    .settings-scope {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-top: 12px;
+    }
+
+    .settings-scope label {
+      align-items: center;
+      display: inline-flex;
+      gap: 6px;
+      margin: 0;
+    }
+
     .modal-actions {
       display: flex;
       gap: 10px;
@@ -2102,6 +2359,7 @@ function renderGuiHtml() {
   </style>
 </head>
 <body>
+  ${renderGuiIconSprite()}
   <div id="topProgress" class="top-progress" aria-hidden="true">
     <div id="topProgressBar" class="top-progress-bar"></div>
   </div>
@@ -2113,7 +2371,8 @@ function renderGuiHtml() {
       </div>
       <div class="header-actions">
         <div class="status-pill" id="statusPill">Aguardando</div>
-        <button id="shutdownButton" class="icon-button shutdown-button" type="button" title="Desligar" aria-label="Desligar">⏻</button>
+        <button id="settingsButton" class="icon-button" type="button" data-hint="${escapeHtml(GUI_HINTS.settings)}" aria-label="Configurações">${renderGuiIcon("settings")}</button>
+        <button id="shutdownButton" class="icon-button shutdown-button" type="button" data-hint="${escapeHtml(GUI_HINTS.shutdown)}" aria-label="Desligar">${renderGuiIcon("power")}</button>
       </div>
     </header>
 
@@ -2126,14 +2385,14 @@ function renderGuiHtml() {
               <label for="sessionSelect">WhatsApp</label>
               <select id="sessionSelect"></select>
             </div>
-            <button id="newSessionButton" class="icon-button" type="button" title="Criar sessão" aria-label="Criar sessão">+</button>
-            <button id="renameSessionButton" class="icon-button" type="button" title="Renomear sessão" aria-label="Renomear sessão">✎</button>
-            <button id="removeSessionButton" class="icon-button danger-button" type="button" title="Remover sessão" aria-label="Remover sessão">−</button>
+            <button id="newSessionButton" class="icon-button" type="button" data-hint="Criar sessão" aria-label="Criar sessão">${renderGuiIcon("plus")}</button>
+            <button id="renameSessionButton" class="icon-button" type="button" data-hint="Renomear sessão" aria-label="Renomear sessão">${renderGuiIcon("pencil")}</button>
+            <button id="removeSessionButton" class="icon-button danger-button" type="button" data-hint="Remover sessão" aria-label="Remover sessão">${renderGuiIcon("trash")}</button>
           </div>
           <div class="hint">Ao alternar, criar ou remover a sessão ativa, o WhatsApp é reiniciado automaticamente. Se a última sessão for removida, a próxima abertura volta ao QR Code.</div>
         </section>
 
-        <section>
+        <section class="license-panel">
           <h2>Licença</h2>
           <p><strong>Autor:</strong> <a href="${AUTHOR_URL}" target="_blank" rel="noreferrer">${AUTHOR}</a></p>
           <p><strong>Repositório:</strong> <a href="${REPOSITORY_URL}" target="_blank" rel="noreferrer">${REPOSITORY_URL}</a></p>
@@ -2144,33 +2403,39 @@ function renderGuiHtml() {
 
         <section>
           <h2>Modelo de mensagem</h2>
-          <label for="templateFile">Arquivo .md</label>
-          <input id="templateFile" type="file" accept=".md,text/markdown,text/plain">
+          <input id="templateFile" class="visually-hidden-field" type="file" accept=".md,text/markdown,text/plain" tabindex="-1" aria-hidden="true">
           <div id="templateMediaStatus" class="field-message"></div>
           <div id="templateBaseDirBox" class="template-base-dir">
             <label for="templateBaseDir">Pasta de referência dos anexos</label>
             <input id="templateBaseDir" type="text" placeholder="C:/LOCAL/whatsapp/anexos">
             <div class="hint">Use quando o navegador não conseguir informar a pasta real do .md. Deve ser um diretório local existente.</div>
           </div>
-          <div class="hint">Se nenhum arquivo for selecionado, use o editor abaixo ou o modelo padrão texto.md.</div>
+          <div class="hint">Use Abrir na toolbar para carregar um .md; se nada for carregado, use o editor abaixo ou o modelo padrão texto.md.</div>
 
-          <label for="templateEditorInput" style="margin-top:14px">Texto do modelo</label>
+          <div class="label-with-help" style="margin-top:14px">
+            <label for="templateEditorInput">Texto do modelo</label>
+            <span class="help-links">${renderHelpLink("youtube", HELP_VIDEO_URLS.template, GUI_HINTS.videoTemplate, "video-help")}</span>
+          </div>
           <div class="wa-editor">
             <div class="wa-tabs" id="templateTabs" aria-label="Blocos do modelo">
-              <button id="newTemplateTabButton" class="wa-tab wa-tab-create" type="button" title="Novo modelo" aria-label="Novo modelo">+</button>
+              <button id="newTemplateTabButton" class="wa-tab wa-tab-create" type="button" data-hint="${escapeHtml(GUI_HINTS.newModel)}" aria-label="Novo modelo">${renderGuiIcon("plus")}</button>
             </div>
             <div class="wa-toolbar" aria-label="Ferramentas de edição textual">
-              <button type="button" data-wrap="*" title="Negrito">B</button>
-              <button type="button" data-wrap="_" title="Itálico"><em>I</em></button>
-              <button type="button" data-wrap="~" title="Tachado"><s>T</s></button>
-              <button type="button" data-wrap="\`\`\`" title="Monoespaçado" class="icon-tool">⟨⟩</button>
+              <button type="button" id="openTemplateButton" data-hint="${escapeHtml(GUI_HINTS.open)}" aria-label="Abrir">${renderGuiIcon("f574")}</button>
+              <button type="button" id="saveTemplateButton" data-hint="${escapeHtml(GUI_HINTS.save)}" aria-label="Salvar">${renderGuiIcon("f56d")}</button>
+              <span class="toolbar-separator" aria-hidden="true"></span>
+              <button type="button" data-wrap="*" data-hint="${escapeHtml(GUI_HINTS.bold)}" aria-label="Negrito">${renderGuiIcon("bold")}</button>
+              <button type="button" data-wrap="_" data-hint="${escapeHtml(GUI_HINTS.italic)}" aria-label="Itálico">${renderGuiIcon("italic")}</button>
+              <button type="button" data-wrap="~" data-hint="${escapeHtml(GUI_HINTS.strikethrough)}" aria-label="Tachado">${renderGuiIcon("strikethrough")}</button>
+              <button type="button" data-wrap="\`\`\`" data-hint="${escapeHtml(GUI_HINTS.code)}" aria-label="Monoespaçado" class="icon-tool">${renderGuiIcon("code")}</button>
+              <span class="toolbar-separator" aria-hidden="true"></span>
+              ${renderTemplateMarkerButtons()}
               <div class="wa-toolbar-group">
-                <button type="button" id="insertEmojiButton" title="Inserir emoji" aria-haspopup="menu" aria-expanded="false">☺</button>
+                <button type="button" id="insertEmojiButton" data-hint="${escapeHtml(GUI_HINTS.emoji)}" aria-label="Inserir emoji" aria-haspopup="menu" aria-expanded="false">${renderGuiIcon("emoji")}</button>
                 <div id="emojiMenu" class="emoji-menu" role="menu" aria-label="Emojis profissionais"></div>
               </div>
-              <button type="button" id="insertAttachmentButton" title="Inserir anexo">📎</button>
-              <button type="button" id="insertPostingButton" title="Inserir nova postagem">↵ Nova postagem</button>
-              <button type="button" id="saveTemplateButton" title="Salvar como" aria-label="Salvar como">💾</button>
+              <button type="button" id="insertAttachmentButton" data-hint="${escapeHtml(GUI_HINTS.attachment)}" aria-label="Inserir anexo">${renderGuiIcon("attachment")}</button>
+              <button type="button" id="insertPostingButton" data-hint="${escapeHtml(GUI_HINTS.newPosting)}" aria-label="Inserir nova postagem">${renderGuiIcon("newPosting")}</button>
             </div>
             <div class="wa-editor-shell">
               <div class="wa-input-pane">
@@ -2181,32 +2446,51 @@ function renderGuiHtml() {
             </div>
           </div>
           <textarea id="templateText" class="visually-hidden-field" tabindex="-1" aria-hidden="true"></textarea>
-          <div class="hint">\${campo} aceita colunas/expressões. Use a toolbar para inserir apenas marcação textual do WhatsApp. Anexos em ![](arquivo.pdf), $postagem$ e separadores ^^^ permanecem texto puro.</div>
-          <div class="syntax-demo" aria-label="Demonstração de sintaxe textual">
-            <div>*negrito exemplo*</div>
-            <div><strong>negrito exemplo</strong></div>
-            <div>_itálico exemplo_</div>
-            <div><em>itálico exemplo</em></div>
-            <div>~taxado exemplo~</div>
-            <div><s>taxado exemplo</s></div>
-            <div>\`\`\`mono exemplo\`\`\`</div>
-            <div><code>mono exemplo</code></div>
-          </div>
+          <div class="hint">\${campo} aceita colunas/expressões. Use a toolbar para inserir apenas marcação textual do WhatsApp. Anexos em <code>![](arquivo.pdf)</code>, <code>$postagem$</code> e separadores <code>^^^</code> permanecem texto puro. ${renderHelpLink("info", DOCS_USAGE_GITHUB_URL, GUI_HINTS.docs)}</div>
+          <details class="syntax-details">
+            <summary>Notações suportadas</summary>
+            <div class="syntax-demo" aria-label="Demonstração de sintaxe textual">
+              <div><span class="syntax-tag">*</span><code>*negrito exemplo*</code></div>
+              <div><strong>negrito exemplo</strong></div>
+              <div><span class="syntax-tag">_</span><code>_itálico exemplo_</code></div>
+              <div><em>itálico exemplo</em></div>
+              <div><span class="syntax-tag">~</span><code>~tachado exemplo~</code></div>
+              <div><s>taxado exemplo</s></div>
+              <div><span class="syntax-tag">\`\`\`</span><code>\`\`\`mono exemplo\`\`\`</code></div>
+              <div><code>mono exemplo</code></div>
+              <div><code>\${nome}</code> / <code>\${(valor+taxa)*2}</code></div>
+              <div>Variáveis e cálculos do CSV</div>
+              <div><code>$diatarde$</code></div>
+              <div>bom dia / boa tarde</div>
+              <div><code>![](arquivo.pdf)</code></div>
+              <div>Anexo no plano de envio</div>
+              <div><code>$postagem$</code></div>
+              <div>Nova postagem sequencial</div>
+              <div><code>^^^</code></div>
+              <div>Separador de modelos</div>
+            </div>
+          </details>
         </section>
 
         <section>
           <div class="split">
             <div>
               <h2>Filtro</h2>
-              <label for="filter">Expressão</label>
+              <div class="label-with-help">
+                <label for="filter">Expressão</label>
+                <span class="help-links">${renderHelpLink("youtube", HELP_VIDEO_URLS.expression, GUI_HINTS.videoExpression, "video-help")}</span>
+              </div>
               <input id="filter" type="text" placeholder="status=ativo && valor>=100">
-              <div class="hint">Suporta =, !=, &lt;, &lt;=, &gt;, &gt;=, &&, ||, ^^, !, funções $.isnum(campo) e matemática simples.</div>
+              <div class="hint">Suporta <code>=</code>, <code>!=</code>, <code>&lt;</code>, <code>&lt;=</code>, <code>&gt;</code>, <code>&gt;=</code>, <code>&amp;&amp;</code>, <code>||</code>, <code>^^</code>, <code>!</code>, funções <code>$.isnum(campo)</code> e matemática simples. ${renderHelpLink("info", DOCS_USAGE_GITHUB_URL, GUI_HINTS.docs)}</div>
             </div>
             <div>
               <h2>Base de clientes</h2>
-              <label for="csvFile">Arquivo .csv opcional</label>
+              <div class="label-with-help">
+                <label for="csvFile">Arquivo .csv opcional</label>
+                <span class="help-links">${renderHelpLink("youtube", HELP_VIDEO_URLS.clients, GUI_HINTS.videoClients, "video-help")}</span>
+              </div>
               <input id="csvFile" type="file" accept=".csv,text/csv,text/plain">
-              <div class="hint">CSV com cabeçalho; colunas obrigatórias: nome e telefone. Outras colunas podem ser usadas em \${campo}.</div>
+              <div class="hint">CSV com cabeçalho; colunas obrigatórias: nome e telefone. Outras colunas podem ser usadas em <code>\${campo}</code>.</div>
             </div>
           </div>
         </section>
@@ -2234,6 +2518,24 @@ function renderGuiHtml() {
     </div>
   </main>
 
+  <div id="settingsOverlay" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
+    <div class="modal-dialog">
+      <h2 id="settingsTitle">Configurações</h2>
+      <p>Altere variáveis operacionais controladas por ENV.</p>
+      <div class="settings-scope" role="radiogroup" aria-label="Escopo das configurações">
+        <label><input type="radio" name="settingsScope" value="current" checked> Execução atual</label>
+        <label><input type="radio" name="settingsScope" value="global"> Global</label>
+        <label><input type="radio" name="settingsScope" value="session"> Sessão</label>
+      </div>
+      <div id="settingsGrid" class="settings-grid"></div>
+      <div class="hint">Configurações por sessão são salvas em JSON e entram automaticamente na próxima abertura dessa sessão.</div>
+      <div class="modal-actions">
+        <button id="settingsCancel" class="secondary-button" type="button">Cancelar</button>
+        <button id="settingsSave" type="button">Salvar</button>
+      </div>
+    </div>
+  </div>
+
   <div id="executionConfirmOverlay" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="executionConfirmTitle">
     <div class="modal-dialog">
       <h2 id="executionConfirmTitle">Confirmar execução</h2>
@@ -2256,6 +2558,7 @@ function renderGuiHtml() {
     const statusPill = document.getElementById("statusPill");
     const topProgress = document.getElementById("topProgress");
     const topProgressBar = document.getElementById("topProgressBar");
+    const settingsButton = document.getElementById("settingsButton");
     const shutdownButton = document.getElementById("shutdownButton");
     const sessionSelect = document.getElementById("sessionSelect");
     const newSessionButton = document.getElementById("newSessionButton");
@@ -2271,11 +2574,16 @@ function renderGuiHtml() {
     const templatePreview = document.getElementById("templatePreview");
     const templateTabs = document.getElementById("templateTabs");
     const newTemplateTabButton = document.getElementById("newTemplateTabButton");
+    const openTemplateButton = document.getElementById("openTemplateButton");
     const saveTemplateButton = document.getElementById("saveTemplateButton");
     const insertEmojiButton = document.getElementById("insertEmojiButton");
     const emojiMenu = document.getElementById("emojiMenu");
     const insertAttachmentButton = document.getElementById("insertAttachmentButton");
     const insertPostingButton = document.getElementById("insertPostingButton");
+    const settingsOverlay = document.getElementById("settingsOverlay");
+    const settingsGrid = document.getElementById("settingsGrid");
+    const settingsCancel = document.getElementById("settingsCancel");
+    const settingsSave = document.getElementById("settingsSave");
     const executionConfirmOverlay = document.getElementById("executionConfirmOverlay");
     const executionConfirmRows = document.getElementById("executionConfirmRows");
     const executionConfirmOk = document.getElementById("executionConfirmOk");
@@ -2293,6 +2601,8 @@ function renderGuiHtml() {
     let activeTemplateBlock = 0;
     let isComposingTemplate = false;
     let scrollSyncSource = "";
+    let settingsSnapshot = null;
+    const tabDeleteIcon = ${JSON.stringify(renderGuiIcon("trash"))};
     const emojiOptions = [
       ["⚠️", "alerta"],
       ["✅", "concluído"],
@@ -2364,6 +2674,24 @@ function renderGuiHtml() {
     function clearMessage() {
       message.textContent = "";
       message.className = "message";
+    }
+
+    function initializeHints(root) {
+      const scope = root || document;
+      scope
+        .querySelectorAll("button, input, select, textarea, a, [data-hint]")
+        .forEach((element) => {
+          const content =
+            element.getAttribute("data-hint") ||
+            element.getAttribute("title") ||
+            element.getAttribute("aria-label") ||
+            "";
+
+          if (!content) return;
+
+          element.setAttribute("data-hint", content);
+          element.removeAttribute("title");
+        });
     }
 
     function setTemplateMediaStatus(text, type) {
@@ -2541,14 +2869,14 @@ function renderGuiHtml() {
         tab.className = "wa-tab" + (index === activeTemplateBlock ? " active" : "");
         tab.setAttribute("role", "tab");
         tab.tabIndex = 0;
-        tab.title = block.trim() ? "Editar modelo " + (index + 1) : "Modelo vazio";
+        tab.setAttribute("data-hint", block.trim() ? "Editar modelo " + (index + 1) : "Modelo vazio");
         const label = document.createElement("span");
-        label.textContent = "Modelo " + (index + 1);
+        label.textContent = "M" + (index + 1);
         const remove = document.createElement("button");
         remove.type = "button";
         remove.className = "wa-tab-delete";
-        remove.textContent = "🗑";
-        remove.title = "Excluir modelo";
+        remove.innerHTML = tabDeleteIcon;
+        remove.setAttribute("data-hint", "Excluir modelo");
         remove.setAttribute("aria-label", "Excluir modelo " + (index + 1));
 
         const activate = () => {
@@ -2578,6 +2906,7 @@ function renderGuiHtml() {
         templateTabs.append(tab);
       });
       templateTabs.append(newTemplateTabButton);
+      initializeHints();
     }
 
     function setEditorContent(text, options = {}) {
@@ -2930,15 +3259,94 @@ function renderGuiHtml() {
 
     function downloadTemplateAsFile() {
       syncTemplateHidden();
+      const rawName = window.prompt("Nome do arquivo:", "modelo-whatsend");
+      const basename = normalizeDownloadBasename(rawName);
+
+      if (!basename) return;
+
       const blob = new Blob([templateTextHidden.value], { type: "text/markdown;charset=utf-8" });
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
-      link.download = "modelo-whatsend.md";
+      link.download = basename + ".md";
       document.body.append(link);
       link.click();
       link.remove();
       window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+    }
+
+    function normalizeDownloadBasename(value) {
+      return String(value || "")
+        .trim()
+        .replace(/\.md$/iu, "")
+        .replace(/[<>:"/\\\\|?*\\x00-\\x1f]+/gu, "-")
+        .replace(/^\\.+/u, "")
+        .replace(/\\.+$/u, "")
+        .trim();
+    }
+
+    async function openSettingsPanel() {
+      settingsOverlay.classList.add("visible");
+      settingsGrid.innerHTML = '<div class="wa-preview-empty">Carregando...</div>';
+
+      const data = await getJson("/api/settings");
+      settingsSnapshot = data.settings;
+      renderSettingsPanel();
+    }
+
+    function closeSettingsPanel() {
+      settingsOverlay.classList.remove("visible");
+    }
+
+    function getSelectedSettingsScope() {
+      const selected = document.querySelector('input[name="settingsScope"]:checked');
+      return selected ? selected.value : "current";
+    }
+
+    function renderSettingsPanel() {
+      const scope = getSelectedSettingsScope();
+      const values = (settingsSnapshot && settingsSnapshot.scopes && settingsSnapshot.scopes[scope]) || {};
+      const definitions = (settingsSnapshot && settingsSnapshot.definitions) || [];
+      settingsGrid.innerHTML = "";
+
+      definitions.forEach((definition) => {
+        const row = document.createElement("div");
+        row.className = "settings-row";
+
+        const label = document.createElement("label");
+        label.setAttribute("for", "setting-" + definition.name);
+        label.innerHTML = "<strong>" + escapeMarkup(definition.name) + "</strong><small>" + escapeMarkup(definition.label) + "</small>";
+
+        const input = document.createElement("input");
+        input.id = "setting-" + definition.name;
+        input.name = definition.name;
+        input.type = "number";
+        input.min = "0";
+        input.placeholder = definition.fallback || "";
+        input.value = values[definition.name] || "";
+
+        row.append(label, input);
+        settingsGrid.append(row);
+      });
+
+      initializeHints(settingsGrid);
+    }
+
+    async function saveSettingsPanel() {
+      const values = {};
+      settingsGrid.querySelectorAll("input[name]").forEach((input) => {
+        if (input.value.trim()) {
+          values[input.name] = input.value.trim();
+        }
+      });
+
+      await postJson("/api/settings", {
+        scope: getSelectedSettingsScope(),
+        sessionId: activeSessionId,
+        values,
+      });
+      showMessage("Configurações salvas.", "ok");
+      closeSettingsPanel();
     }
 
     function validateLocal(payload) {
@@ -3135,6 +3543,15 @@ function renderGuiHtml() {
       return data;
     }
 
+    async function getJson(url) {
+      const response = await fetch(url);
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error((data.errors || [data.error || "Falha na requisição."]).join("\\n"));
+      }
+      return data;
+    }
+
     function renderStatus(state) {
       const ready = Boolean(state.whatsappReady);
       statusPill.textContent = state.busy ? "Executando" : statusLabel(state.status, ready);
@@ -3318,6 +3735,16 @@ function renderGuiHtml() {
       button.addEventListener("click", () => wrapSelection(button.getAttribute("data-wrap") || ""));
     });
 
+    document.querySelectorAll("[data-insert-marker]").forEach((button) => {
+      button.addEventListener("click", () => {
+        insertTextAtCursor(button.getAttribute("data-insert-marker") || "");
+      });
+    });
+
+    openTemplateButton.addEventListener("click", () => {
+      templateFileInput.click();
+    });
+
     insertEmojiButton.addEventListener("click", (event) => {
       event.stopPropagation();
       toggleEmojiMenu();
@@ -3372,6 +3799,21 @@ function renderGuiHtml() {
     });
 
     saveTemplateButton.addEventListener("click", downloadTemplateAsFile);
+
+    settingsButton.addEventListener("click", () => {
+      openSettingsPanel().catch((err) => {
+        showMessage(err.message, "error");
+        closeSettingsPanel();
+      });
+    });
+
+    settingsCancel.addEventListener("click", closeSettingsPanel);
+    settingsSave.addEventListener("click", () => {
+      saveSettingsPanel().catch((err) => showMessage(err.message, "error"));
+    });
+    document.querySelectorAll('input[name="settingsScope"]').forEach((input) => {
+      input.addEventListener("change", renderSettingsPanel);
+    });
 
     templateFileInput.addEventListener("change", () => {
       if (!templateFileInput.files || !templateFileInput.files.length) {
@@ -3492,10 +3934,27 @@ function renderGuiHtml() {
     });
     renderEmojiMenu();
     setEditorContent("");
+    initializeHints();
     startStatusPolling();
   </script>
 </body>
 </html>`;
+}
+
+function renderTemplateMarkerButtons() {
+  return TEMPLATE_MARKER_ACTIONS.map((action) => {
+    const id = escapeHtml(action.id);
+    const label = escapeHtml(action.label);
+    const hint = escapeHtml(action.hint);
+    const insert = escapeHtml(action.insert);
+
+    return `<button type="button" id="${id}" data-insert-marker="${insert}" data-hint="${hint}" aria-label="${label}">${renderGuiIcon(action.icon)}</button>`;
+  }).join("");
+}
+
+function renderHelpLink(iconName, href, hint, extraClass = "") {
+  const className = ["help-link", extraClass].filter(Boolean).join(" ");
+  return `<a class="${escapeHtml(className)}" href="${escapeHtml(href)}" target="_blank" rel="noreferrer" data-hint="${escapeHtml(hint)}" aria-label="${escapeHtml(hint)}">${renderGuiIcon(iconName)}</a>`;
 }
 
 function renderComplianceNoticeHtml() {

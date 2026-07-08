@@ -68,6 +68,7 @@ const POSTING_SPLIT_MARKER = "$postagem$";
 const POSTING_SPLIT_HAS_MARKER_PATTERN = /\$postagem\$/iu;
 const POSTING_SPLIT_INLINE_PATTERN = /\$postagem\$/giu;
 const POSTING_SPLIT_LINE_PATTERN = /(?:^|\n)[ \t]*\$postagem\$[ \t]*(?:\n|$)/giu;
+const NON_PRINTABLE_EXCESS_PATTERN = /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/gu;
 
 function applyTemplate(template, data, options = {}) {
   const missingVariables = new Set();
@@ -467,7 +468,8 @@ function splitMessagePostings(renderedTemplate) {
   const source = normalizeTemplateText(renderedTemplate);
 
   if (!POSTING_SPLIT_HAS_MARKER_PATTERN.test(source)) {
-    return [source];
+    const normalizedPosting = normalizeMessagePosting(source);
+    return normalizedPosting.trim() ? [normalizedPosting] : [];
   }
 
   const normalizedSource = source.replace(
@@ -477,7 +479,31 @@ function splitMessagePostings(renderedTemplate) {
 
   return normalizedSource
     .split(POSTING_SPLIT_INLINE_PATTERN)
+    .map((part) => normalizeMessagePosting(part))
     .filter((part) => part.trim().length > 0);
+}
+
+function normalizeMessagePosting(posting) {
+  const source = normalizeTemplateText(posting).replace(NON_PRINTABLE_EXCESS_PATTERN, "");
+  const lines = source.split("\n");
+  const normalizedLines = lines.map((line, index) => {
+    const trimmedRight = line.replace(/[ \t]+$/u, "");
+    const previousLine = index > 0 ? lines[index - 1] : "";
+    const keepIntentionalIndent =
+      /^ {4,}\S/u.test(trimmedRight) && previousLine.trim().length > 0;
+
+    return keepIntentionalIndent ? trimmedRight : trimmedRight.replace(/^[ \t]+/u, "");
+  });
+
+  while (normalizedLines.length && !normalizedLines[0].trim()) {
+    normalizedLines.shift();
+  }
+
+  while (normalizedLines.length && !normalizedLines[normalizedLines.length - 1].trim()) {
+    normalizedLines.pop();
+  }
+
+  return normalizedLines.join("\n");
 }
 
 function normalizeMediaSource(source) {
@@ -509,6 +535,7 @@ module.exports = {
   normalizeTemplateText,
   replaceTemplateExpressions,
   normalizeMediaSource,
+  normalizeMessagePosting,
   parseTemplateParts,
   POSTING_SPLIT_MARKER,
   splitMessagePostings,

@@ -33,7 +33,7 @@ O WhatSend usa `clientes.csv` como base de destinatarios e `texto.md` como model
 Principais recursos:
 
 - GUI local para configurar modelo, CSV, filtro, sessao e reenvio.
-- Editor textual na GUI com abas `^^^`, toolbar de marcadores crus, menu de emojis, monoespaçado e prévia realista da aba ativa.
+- Editor textual na GUI com abas `^^^`, toolbar por ícones, hints, menu de emojis, monoespaçado e prévia realista da aba ativa.
 - CLI preservada para automacao.
 - Variaveis `${campo}` insensiveis a maiusculas/minusculas.
 - Apenas `nome` e `telefone` obrigatorios no CSV.
@@ -174,9 +174,13 @@ A interface local abre no inicio do fluxo, mostra autenticacao/carregamento do W
 - forcar reenvio ou limpar historico de enviados;
 - acompanhar andamento sem inundar a tela.
 
-O editor da GUI não salva HTML nem formato rico: a toolbar apenas insere ou remove texto compatível com WhatsApp, como `*negrito*`, `_itálico_`, `~tachado~`, monoespaçado com três crases, emoji pelo menu suspenso, `![](arquivo.pdf)` e `$postagem$`. Linhas `^^^` viram abas visuais automaticamente; ao salvar ou enviar, as abas são recombinadas com o mesmo separador. A prévia lateral mostra somente a aba ativa, renderiza a marcação básica como resultado visual e mantém rolagem sincronizada com o editor.
+O editor da GUI não salva HTML nem formato rico: a toolbar por ícones apenas insere ou remove texto compatível com WhatsApp, como `*negrito*`, `_itálico_`, `~tachado~`, monoespaçado com três crases, emoji pelo menu suspenso, `![](arquivo.pdf)`, `$diatarde$`, `$postagem$` e `^^^`. Linhas `^^^` viram abas visuais automaticamente; ao salvar ou enviar, as abas são recombinadas com o mesmo separador. A prévia lateral mostra somente a aba ativa, renderiza a marcação básica como resultado visual e mantém rolagem sincronizada com o editor.
+
+O quadro de notações fica recolhido por padrão e não depende de JavaScript. Links de documentação e ajuda em vídeo ficam próximos dos campos de modelo, expressão e CSV.
 
 Ao selecionar um `.md`, a GUI carrega o conteúdo no editor, separa abas por `^^^`, atualiza a prévia e analisa anexos locais em segundo plano. Se algum não for localizado, aparece um aviso ao lado do seletor e um campo para informar a pasta de referência dos anexos. Se o arquivo for enviado sem edição, ele continua podendo ser usado como fonte para preservar a resolução relativa de anexos; se houver edição no editor, o texto editado passa a ser a fonte da execução.
+
+A engrenagem da GUI permite ajustar parâmetros operacionais de ENV para a execução atual, globalmente ou apenas para a sessão selecionada. Configurações por sessão são gravadas em JSON local e carregadas automaticamente na próxima abertura dessa sessão, respeitando a hierarquia execução, sessão, global e default.
 
 ## CLI
 
@@ -296,6 +300,8 @@ npm run validate:dist
 ```
 
 `dist/release-notes.md`, quando existir, é protegido: o build preserva seu conteúdo e ele só deve ser gerado por `npm run release-notes:generate -- HASH_INICIAL HASH_FINAL`. Esse arquivo deve ser commitado sozinho.
+
+O `dist` usa manifesto de runtime próprio: dependências e scripts exclusivos de desenvolvimento, teste, build, minificação e validação não são instalados na distribuição. Recursos visuais incorporados, como ícones da GUI, são reduzidos aos itens efetivamente usados.
 
 ## Documentacao
 

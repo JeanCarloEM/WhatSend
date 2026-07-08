@@ -12,7 +12,7 @@ const path = require("path");
 const { fileURLToPath } = require("url");
 const { MessageMedia } = require("whatsapp-web.js");
 
-const { PATHS, ROOT_DIR, readIntegerEnv } = require("./config");
+const { PATHS, ROOT_DIR, readIntegerEnv, validateEnvRelations } = require("./config");
 const { hashValue } = require("./utils");
 const { parseTemplateParts, splitMessagePostings } = require("./template");
 
@@ -25,6 +25,17 @@ const MEDIA_SEND_RETRY_DELAY_MS = readIntegerEnv("MEDIA_SEND_RETRY_DELAY_MS", 12
 const MEDIA_SEND_RETRY_MAX_DELAY_MS = readIntegerEnv("MEDIA_SEND_RETRY_MAX_DELAY_MS", 10000);
 const MEDIA_CONTEXT_READY_TIMEOUT_MS = readIntegerEnv("MEDIA_CONTEXT_READY_TIMEOUT_MS", 15000);
 const MEDIA_CONTEXT_STABLE_MS = readIntegerEnv("MEDIA_CONTEXT_STABLE_MS", 500);
+
+validateEnvRelations({
+  MEDIA_CONTEXT_READY_TIMEOUT_MS,
+  MEDIA_CONTEXT_STABLE_MS,
+  MEDIA_SEND_RETRIES,
+  MEDIA_SEND_RETRY_DELAY_MS,
+  MEDIA_SEND_RETRY_MAX_DELAY_MS,
+  MESSAGE_SEND_RETRIES,
+  MESSAGE_SEND_RETRY_DELAY_MS,
+  MESSAGE_SEND_RETRY_MAX_DELAY_MS,
+});
 const chatSendQueues = new Map();
 const AUDIO_OGG_MARKERS = [
   Buffer.from("OpusHead", "ascii"),
