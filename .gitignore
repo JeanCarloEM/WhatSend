@@ -15,3 +15,8 @@ texto.md
 !modelos/assets/**/*.pdf
 !modelos/assets/**/*.png
 !modelos/assets/**/*.jpj
+
+0. Autoriza .md em ./.agents/
+/.agents/*
+!/.agents/*.md
+!/.agents/**/*.md
