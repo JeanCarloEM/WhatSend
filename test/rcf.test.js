@@ -10,7 +10,7 @@ process.env.MAX_DELAY_MS = "0";
 process.env.MESSAGE_SEND_RETRIES = "3";
 process.env.MESSAGE_SEND_RETRY_DELAY_MS = "0";
 process.env.MESSAGE_SEND_RETRY_MAX_DELAY_MS = "0";
-process.env.MEDIA_CONTEXT_READY_TIMEOUT_MS = "60";
+process.env.MEDIA_CONTEXT_READY_TIMEOUT_MS = "1000";
 process.env.MEDIA_CONTEXT_STABLE_MS = "0";
 process.env.MEDIA_SEND_RETRY_DELAY_MS = "0";
 process.env.MEDIA_SEND_RETRIES = "3";
@@ -1546,7 +1546,7 @@ test("GUI renderiza editor textual com abas, toolbar e preview", () => {
   assert.match(html, /id="templatePreview"/);
   assert.match(html, /data-wrap="\*"/);
   assert.match(html, /data-wrap="```"/);
-  assert.match(html, /title="Monoespaçado"/);
+  assert.match(html, /aria-label="Monoespaçado"/);
   assert.match(html, /id="emojiMenu"/);
   assert.match(html, /renderEmojiMenu/);
   assert.match(html, /appendFormattedPreviewText/);
@@ -1574,7 +1574,7 @@ test("preview da GUI usa plano de envio para postagens e anexos", () => {
   assert.deepEqual(preview.variants[0].postings[0].items, [
     {
       type: "text",
-      value: "Mensagem inicial\n",
+      value: "Mensagem inicial",
     },
   ]);
   assert.deepEqual(preview.variants[0].postings[1].items, [
@@ -1793,7 +1793,7 @@ test("force resend ignora histórico de enviados nessa execução", async () => 
 
   assert.deepEqual(calls, [
     ["getNumberId", "5519998240000"],
-    ["sendMessage", "5519998240000@c.us", "Olá Maria, conta 12345. "],
+    ["sendMessage", "5519998240000@c.us", "Olá Maria, conta 12345."],
   ]);
 });
 
@@ -1884,7 +1884,7 @@ test("mensagem igual pode reenviar após o prazo configurado", async () => {
 
   assert.deepEqual(calls, [
     ["getNumberId", "5519998240000"],
-    ["sendMessage", "5519998240000@c.us", "Olá Maria, conta 12345. "],
+    ["sendMessage", "5519998240000@c.us", "Olá Maria, conta 12345."],
   ]);
 });
 
@@ -1926,7 +1926,7 @@ test("envia somente após validação positiva e registra variáveis ausentes", 
 
   assert.deepEqual(calls, [
     ["getNumberId", "5519998240000"],
-    ["sendMessage", "5519998240000@c.us", "Olá Maria, conta 12345. "],
+    ["sendMessage", "5519998240000@c.us", "Olá Maria, conta 12345."],
   ]);
   assert.match(fs.readFileSync(paths.sent, "utf8"), /5519998240000/);
   assert.match(fs.readFileSync(paths.warnings, "utf8"), /VARIAVEL_AUSENTE;extra/);

@@ -49,11 +49,13 @@ const EXCLUDED_NAMES = new Set([
   ".wwebjs_cache",
   ".wwebjs_sessions.json",
   "AGENTS.md",
+  "IMPLEMENTACOES.md",
   "continue.ia",
   "dist",
   "logs",
   "node_modules",
   "test",
+  "update-agents.js",
 ]);
 const EXCLUDED_SUFFIXES = [
   ".log",

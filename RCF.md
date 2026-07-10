@@ -488,6 +488,8 @@ Toda implementação relevante deve ser organizada em Frente de Trabalho registr
 
 `continue.ia` é a memória operacional oficial do projeto. Deve registrar retomada, decisões, comandos relevantes, verificações, falhas objetivas, hipóteses descartadas, pendências e mudanças de planejamento sempre que essas informações forem úteis para evitar retrabalho.
 
+O comando `npm run agents:update` deve gerar, a partir de `continue.ia`, um resumo Markdown de FTs técnicas em andamento no root, sem reproduzir o detalhamento integral da memória operacional. Esse resumo deve ser linkado no README, não deve ser editado manualmente e não deve integrar a distribuição de runtime.
+
 Quando arquitetura, regras, UX, build, distribuição, documentação ou fluxos mudarem, a implementação deve sincronizar código, GUI/CLI quando aplicável, `AGENTS.md`, `RCF.md`, `README.md`, documentação pertinente e `continue.ia`.
 
 ### RN035 - Configurações Centralizadas

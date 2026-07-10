@@ -1,0 +1,100 @@
+# continue.ia
+
+CANONICO=continue.ia
+FORMATO=AGENTS-20260710
+MACHINE_ID=JEAN-DESKTOP
+DATA_REF=202607101546
+POLITICA=90IA/10HUMANO;1FT_POR_SOLICITACAO;DEV_BRANCH;COMMIT_PUSH_POR_ETAPA_SE_POSSIVEL
+
+FT-001|nome=Governanca operacional, GUI, configuracao e distribuicao|escopo=Tecnico|prioridade=alta|status=em_andamento
+inicio=20260710.1534.51
+ultima_atualizacao=20260710.1546.35
+conclusao=
+objetivo=Retomar processo apos alteracao drastica do AGENTS.md, reconciliar contexto fisico, manter pendencias anteriores como ja comitadas, adequar memoria operacional ao novo padrao e continuar implementacao/validacao sem regressao.
+estado_atual=Etapa 5/6 - Commit e push; Tarefa 1/3 - Commitar etapa funcional em PT-BR <=512 bytes.
+proximo_ponto_executavel=Revisar diff final, stagear arquivos alterados, commit em PT-BR <=512 bytes e tentar push do branch dev quando houver remoto/acesso.
+
+etapas=
+1/6 Retomada pos-AGENTS [concluido]
+  1/4 Verificar branch, worktree, arquivos canonicos e ultimo commit [concluido]
+  2/4 Criar branch dev e memoria canonica [concluido]
+  3/4 Revalidar AGENTS/RCF/README contra estado fisico [concluido]
+  4/4 Registrar divergencias e limites de escopo [concluido]
+2/6 Auditoria de implementacao [concluido]
+  1/5 Mapear fontes, scripts, testes e pontos de entrada [concluido]
+  2/5 Verificar avisos CLI/GUI/README e testes associados [concluido]
+  3/5 Verificar editor GUI, icones, ajudas e notacoes [concluido]
+  4/5 Verificar centralizacao de configuracoes ENV [concluido]
+  5/5 Verificar dist runtime-only e validacoes [concluido]
+3/6 Ajustes faltantes [concluido]
+  1/4 Corrigir apenas lacunas confirmadas [concluido]
+  2/4 Preservar APIs, sessoes e comportamento funcional [concluido]
+  3/4 Sincronizar RCF/README quando necessario [concluido]
+  4/4 Atualizar comandos de governanca se ausentes [concluido]
+4/6 Validacao [concluido]
+  1/4 Executar checks estaticos pertinentes [concluido]
+  2/4 Executar testes automatizados [concluido]
+  3/4 Executar build/validacao dist quando aplicavel [concluido]
+  4/4 Registrar falhas objetivas ou pendencias [concluido]
+5/6 Commit e push [em_andamento]
+  1/3 Commitar etapa funcional em PT-BR <=512 bytes [em_andamento]
+  2/3 Push do branch dev quando houver remoto/acesso [pendente]
+  3/3 Registrar hash, branch e pendencias [pendente]
+6/6 Encerramento da FT [pendente]
+  1/2 Consolidar resumo final e pendencias [pendente]
+  2/2 Avaliar merge em main somente se sistema global funcional [pendente]
+
+decisoes=
+- AGENTS.md atualizado altera governanca operacional; contexto anterior tratado como potencialmente desalinhado.
+- Alteracoes anteriores informadas como ja comitadas; base atual limpa em main no commit 7325c73.
+- Branch dev criado a partir do estado limpo conforme AGENTS.md secao 9.
+- Apenas um arquivo canonico deve existir; continue.ia adotado por inexistencia de continue.dev.
+- AGENTS referencia cenarios externos ainda nao verificados nesta retomada; ausencia de arquivo sera registrada como pendencia se confirmada.
+- Memoria externa indica src/notice.js como fonte unica do aviso; validar fisicamente antes de alterar.
+- Comando npm run agents:update criado para gerar IMPLEMENTACOES.md a partir de continue.ia.
+- Script operacional update-agents.js excluido de dist para preservar runtime-only.
+
+verificacoes_concluidas=
+- git branch atual inicial: main.
+- git status --short inicial: limpo.
+- arquivos canonicos encontrados antes desta criacao: AGENTS.md apenas.
+- branch dev inexistente antes da retomada.
+- ultimo commit antes da retomada: 7325c73 melhorias do agents.md.
+- Implementacao fisica confirmada para OGG externo em src/media.js e cobertura em test/rcf.test.js.
+- Implementacao fisica confirmada para reutilizacao de instancia em src/runtime.js e chamada em src/app.js.
+- npm run agents:update executado com sucesso e gerou IMPLEMENTACOES.md.
+- node --check scripts/update-agents.js concluido sem erro.
+- npm test concluido: 113 testes, 113 aprovados.
+- npm run check:test concluido sem erro.
+- npm run build:dist concluido; ZIP gerado em dist/WhatSend-v1.0.0.zip.
+- npm run validate:dist concluido com sucesso usando cache npm isolado em .runtime/npm-cache.
+- dist/scripts/update-agents.js ausente conforme runtime-only.
+
+comandos_relevantes=
+- git -c safe.directory=D:/trampo/whatsender branch --show-current => main
+- git -c safe.directory=D:/trampo/whatsender status --short => limpo
+- rg --files -g 'AGENTS.md' -g 'agents.local.md' -g 'continue.*' -g '.agents/**' -g 'agents/**' => AGENTS.md
+- git -c safe.directory=D:/trampo/whatsender branch --list dev => vazio
+- git -c safe.directory=D:/trampo/whatsender log -1 --oneline => 7325c73 melhorias do agents.md
+- git -c safe.directory=D:/trampo/whatsender switch -c dev => sucesso
+- npm run agents:update => sucesso
+- node --check scripts/update-agents.js => sucesso
+- npm test => sucesso, 113/113
+- npm run check:test => sucesso
+- npm run build:dist => sucesso
+- npm run validate:dist => falhou inicialmente por EPERM no cache global do npm
+- npm_config_cache=.runtime/npm-cache npm run validate:dist => sucesso
+
+pendencias=
+- Commitar e tentar push do branch dev.
+- Confirmar cenarios AGENTS indexados e arquivos ausentes; registrado como limite, sem inferir conteudo.
+
+hipoteses_descartadas=
+- Nao ha continue.ia/continue.dev legado a migrar nesta arvore.
+- Nao ha alteracoes unstaged exigindo pergunta sobre preservacao antes de mudar para dev.
+- Falha inicial de validate:dist nao era do pacote; causa objetiva: EPERM no cache global do npm.
+
+antirretrabalho=
+- Nao reprocessar tarefas anteriores ja comitadas sem divergencia fisica.
+- Nao alterar AGENTS.md para regras locais; comportamento do projeto pertence ao RCF.
+- Nao criar segunda memoria operacional.

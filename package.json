@@ -20,6 +20,7 @@
     "validate:dist": "node scripts/validate-dist.js",
     "release-notes:generate": "node scripts/generate-release-notes.js",
     "release-notes:validate": "node scripts/validate-release-notes-policy.js --staged",
+    "agents:update": "node scripts/update-agents.js",
     "check": "node main.js --check",
     "check:test": "node main.js --check --check-csv test/check-clientes.csv --check-template test/check-texto.md",
     "test": "node --test",
