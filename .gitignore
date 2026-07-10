@@ -18,5 +18,7 @@ texto.md
 
 0. Autoriza .md em ./.agents/
 /.agents/*
+!/.agents/
 !/.agents/*.md
 !/.agents/**/*.md
+!/.agents/continue.ia

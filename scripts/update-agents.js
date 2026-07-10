@@ -9,14 +9,19 @@ const fs = require("fs");
 const path = require("path");
 
 const ROOT_DIR = path.resolve(__dirname, "..");
-const CANONICAL_FILES = ["continue.ia", "continue.dev"];
+const CANONICAL_FILES = [
+  "continue.ia",
+  "continue.dev",
+  path.join(".agents", "continue.ia"),
+  path.join(".agents", "continue.dev"),
+];
 const STATUS_FILE = "IMPLEMENTACOES.md";
 
 function main() {
   const canonical = resolveCanonicalContinueFile(ROOT_DIR);
   const content = fs.readFileSync(canonical.path, "utf8");
   const fronts = parseWorkFronts(content).filter((front) => isTechnicalScope(front.scope));
-  const markdown = renderImplementationsStatus(path.basename(canonical.path), fronts);
+  const markdown = renderImplementationsStatus(toPosixPath(path.relative(ROOT_DIR, canonical.path)), fronts);
   fs.writeFileSync(path.join(ROOT_DIR, STATUS_FILE), markdown, "utf8");
   console.log(`Governanca operacional atualizada: ${STATUS_FILE}`);
 }
@@ -208,6 +213,10 @@ function escapeHtml(value) {
     .replace(/</gu, "&lt;")
     .replace(/>/gu, "&gt;")
     .replace(/"/gu, "&quot;");
+}
+
+function toPosixPath(value) {
+  return String(value || "").split(path.sep).join("/");
 }
 
 if (require.main === module) {

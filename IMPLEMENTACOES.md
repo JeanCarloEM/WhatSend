@@ -1,11 +1,11 @@
 <!-- Gerado por npm run agents:update. Nao editar manualmente. -->
 # Implementacoes em andamento
 
-Resumo operacional gerado de `continue.ia`.
+Resumo operacional gerado de `.agents/continue.ia`.
 
 ## FT-001 - Governanca operacional, GUI, configuracao e distribuicao
 
-Objetivo: Retomar processo apos alteracao drastica do AGENTS.md, reconciliar contexto fisico, manter pendencias anteriores como ja comitadas, adequar memoria operacional ao novo padrao e continuar implementacao/validacao sem regressao.
+Objetivo: Consolidar a frente de GUI/configuracao/distribuicao apos alteracao drastica do AGENTS.md, preservar o trabalho previamente comitado, corrigir a memoria canonica para .agents/continue.ia, aplicar o cenario Web Page Like existente e manter validacoes/commits/pushes rastreaveis.
 
 <table>
 <thead><tr><th>Etapa</th><th>Tarefa</th><th>Status</th></tr></thead>
@@ -62,7 +62,7 @@ Objetivo: Retomar processo apos alteracao drastica do AGENTS.md, reconciliar con
 <td><span style="color:#15803d">&#9679;</span> concluído</td>
 </tr>
 <tr>
-<td>Atualizar comandos de governanca se ausentes</td>
+<td>Atualizar comando/resumo de governanca se ausentes</td>
 <td><span style="color:#15803d">&#9679;</span> concluído</td>
 </tr>
 <tr>
@@ -84,11 +84,11 @@ Objetivo: Retomar processo apos alteracao drastica do AGENTS.md, reconciliar con
 </tr>
 <tr>
 <td rowspan="3">Commit e push</td>
-<td>Commitar etapa funcional em PT-BR &lt;=512 bytes</td>
+<td>Commitar correcao de memoria/cenario</td>
 <td><span style="color:#ca8a04">&#9679;</span> em andamento</td>
 </tr>
 <tr>
-<td>Push do branch dev quando houver remoto/acesso</td>
+<td>Push do branch dev</td>
 <td><span style="color:#64748b">&#9679;</span> pendente</td>
 </tr>
 <tr>

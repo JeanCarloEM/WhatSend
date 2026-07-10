@@ -1,0 +1,103 @@
+# continue.ia
+
+CANONICO=.agents/continue.ia
+FORMATO=AGENTS-20260710
+MACHINE_ID=JEAN-DESKTOP
+DATA_REF=202607101620
+POLITICA=90IA/10HUMANO;1FT_POR_SOLICITACAO;DEV_BRANCH;COMMIT_PUSH_POR_ETAPA_SE_POSSIVEL
+
+FT-001|nome=Governanca operacional, GUI, configuracao e distribuicao|escopo=Tecnico|prioridade=alta|status=em_andamento
+inicio=20260710.1534.51
+ultima_atualizacao=20260710.1620.00
+conclusao=
+objetivo=Consolidar a frente de GUI/configuracao/distribuicao apos alteracao drastica do AGENTS.md, preservar o trabalho previamente comitado, corrigir a memoria canonica para .agents/continue.ia, aplicar o cenario Web Page Like existente e manter validacoes/commits/pushes rastreaveis.
+estado_atual=Etapa 5/6 - Commit e push; Tarefa 1/3 - Commitar correcao de memoria/cenario.
+proximo_ponto_executavel=Revisar diff, decidir se a divergencia semantica de agents:update sera corrigida nesta FT ou registrada como pendencia, commit/push da correcao de unicidade.
+
+etapas=
+1/6 Retomada pos-AGENTS [concluido]
+  1/4 Verificar branch, worktree, arquivos canonicos e ultimo commit [concluido]
+  2/4 Criar branch dev e memoria canonica [concluido]
+  3/4 Revalidar AGENTS/RCF/README contra estado fisico [concluido]
+  4/4 Registrar divergencias e limites de escopo [concluido]
+2/6 Auditoria de implementacao [concluido]
+  1/5 Mapear fontes, scripts, testes e pontos de entrada [concluido]
+  2/5 Verificar avisos CLI/GUI/README e testes associados [concluido]
+  3/5 Verificar editor GUI, icones, ajudas e notacoes [concluido]
+  4/5 Verificar centralizacao de configuracoes ENV [concluido]
+  5/5 Verificar dist runtime-only e validacoes [concluido]
+3/6 Ajustes faltantes [concluido]
+  1/4 Corrigir apenas lacunas confirmadas [concluido]
+  2/4 Preservar APIs, sessoes e comportamento funcional [concluido]
+  3/4 Sincronizar RCF/README quando necessario [concluido]
+  4/4 Atualizar comando/resumo de governanca se ausentes [concluido]
+4/6 Validacao [concluido]
+  1/4 Executar checks estaticos pertinentes [concluido]
+  2/4 Executar testes automatizados [concluido]
+  3/4 Executar build/validacao dist quando aplicavel [concluido]
+  4/4 Registrar falhas objetivas ou pendencias [concluido]
+5/6 Commit e push [em_andamento]
+  1/3 Commitar correcao de memoria/cenario [em_andamento]
+  2/3 Push do branch dev [pendente]
+  3/3 Registrar hash, branch e pendencias [pendente]
+6/6 Encerramento da FT [pendente]
+  1/2 Consolidar resumo final e pendencias [pendente]
+  2/2 Avaliar merge em main somente se sistema global funcional [pendente]
+
+decisoes=
+- .agents/continue.ia preexistia e e o canônico correto; continue.ia da raiz foi removido para restabelecer arquivo unico.
+- .agents/webPageLike.md existe e se aplica ao projeto por GUI consumida em navegador; secoes editoriais/gerador estatico nao se aplicam a esta entrega.
+- AGENTS.md indexava ./agents/webPageLike.md; caminho fisico correto informado e confirmado: ./.agents/webPageLike.md.
+- Alteracoes anteriores foram comitadas em 893683c e enviadas a origin/dev apos autorizacao explicita.
+- Comando gerador deve localizar exatamente um canônico entre raiz e .agents, priorizando a regra de unicidade.
+- Script operacional update-agents.js permanece excluido de dist para preservar runtime-only.
+- .agents/.autoupdate.md define agents:update como sincronizacao remota de governanca; script atual usa o mesmo nome para gerar IMPLEMENTACOES.md. Registrar como pendencia de correcao semantica, salvo decisao de ampliar esta FT.
+
+verificacoes_concluidas=
+- git branch atual inicial: main; dev criado a partir de 7325c73.
+- Commit 893683c melhoria: adequa governanca operacional criado e enviado para origin/dev.
+- .agents/.autoupdate.md, .agents/agents.local.md, .agents/continue.ia e .agents/webPageLike.md existem.
+- Implementacao fisica confirmada para OGG externo em src/media.js e cobertura em test/rcf.test.js.
+- Implementacao fisica confirmada para reutilizacao de instancia em src/runtime.js e chamada em src/app.js.
+- node --check scripts/update-agents.js concluido sem erro.
+- npm test concluido: 113 testes, 113 aprovados.
+- npm run check:test concluido sem erro.
+- npm run build:dist concluido; ZIP gerado em dist/WhatSend-v1.0.0.zip.
+- npm run validate:dist concluido com sucesso usando cache npm isolado em .runtime/npm-cache.
+- dist/scripts/update-agents.js ausente conforme runtime-only.
+- Unicidade fisica confirmada: nenhum continue.* na raiz; apenas .agents/continue.ia.
+- npm run agents:update regenerou IMPLEMENTACOES.md a partir de .agents/continue.ia.
+- node --check scripts/update-agents.js concluido sem erro apos ajuste de canônico.
+- npm test concluido novamente: 113 testes, 113 aprovados.
+- npm run check:test concluido novamente sem erro.
+- .gitignore ajustado para versionar .agents/continue.ia.
+
+comandos_relevantes=
+- git -c safe.directory=D:/trampo/whatsender switch -c dev => sucesso
+- npm run agents:update => sucesso
+- node --check scripts/update-agents.js => sucesso
+- npm test => sucesso, 113/113
+- npm run check:test => sucesso
+- Get-ChildItem continue.* raiz/.agents => apenas .agents/continue.ia
+- npm run build:dist => sucesso
+- npm run validate:dist => falhou inicialmente por EPERM no cache global do npm
+- npm_config_cache=.runtime/npm-cache npm run validate:dist => sucesso
+- git -c safe.directory=D:/trampo/whatsender commit -m "melhoria: adequa governanca operacional" => 893683c
+- git -c safe.directory=D:/trampo/whatsender push -u origin dev => sucesso; origin/dev criado
+
+pendencias=
+- Corrigir referencias ./agents/webPageLike.md para ./.agents/webPageLike.md.
+- Atualizar scripts/update-agents.js para reconhecer .agents/continue.ia.
+- Regenerar IMPLEMENTACOES.md e revalidar.
+- Commitar e enviar a correcao de convergencia canônica.
+- Resolver conflito semantico do comando agents:update com .agents/.autoupdate.md.
+
+hipoteses_descartadas=
+- Arquivo de cenario ausente: descartada; .agents/webPageLike.md existe.
+- continue.ia da raiz como canônico: descartada; .agents/continue.ia preexistente e correto.
+- Falha inicial de validate:dist como defeito do pacote: descartada; causa objetiva EPERM no cache global do npm.
+
+antirretrabalho=
+- Nao criar segundo continue.ia/continue.dev.
+- Nao inferir conteudo de cenario quando o arquivo fisico existir.
+- Nao alterar regras de negocio no AGENTS.md; somente corrigir path operacional do indice se necessario.

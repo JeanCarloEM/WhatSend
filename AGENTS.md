@@ -642,8 +642,8 @@ Leia e analise os subarquivos apenas se, e quando, for aplicável ao projeto/rep
 
 | Cenário                                                     | Arquivo/seção                                             | Dependências                       | Aplicabilidade resumida                                                                     |
 | ----------------------------------------------------------- | --------------------------------------------------------- | ---------------------------------- | ------------------------------------------------------------------------------------------- |
-| Web Page Like                                               | [`./agents/webPageLike.md` §1](./agents/webPageLike.md#1) | —                                  | Entrega principal consumida por navegador ou engine web.                                    |
-| Web Page Like com gerador estático ou hospedagem de páginas | [`./agents/webPageLike.md` §2](./agents/webPageLike.md#2) | Web Page Like                      | Gerador estático, templates ou hospedagem de páginas.                                       |
-| Sites e blogs com conteúdo editorial                        | [`./agents/webPageLike.md` §3](./agents/webPageLike.md#3) | Web Page Like; §2 quando aplicável | Publicação de artigos, posts, sermões, ensaios, notícias ou conteúdo editorial equivalente. |
+| Web Page Like                                               | [`./.agents/webPageLike.md` §1](./.agents/webPageLike.md#1) | —                                  | Entrega principal consumida por navegador ou engine web.                                    |
+| Web Page Like com gerador estático ou hospedagem de páginas | [`./.agents/webPageLike.md` §2](./.agents/webPageLike.md#2) | Web Page Like                      | Gerador estático, templates ou hospedagem de páginas.                                       |
+| Sites e blogs com conteúdo editorial                        | [`./.agents/webPageLike.md` §3](./.agents/webPageLike.md#3) | Web Page Like; §2 quando aplicável | Publicação de artigos, posts, sermões, ensaios, notícias ou conteúdo editorial equivalente. |
 
 Novos cenários devem ser acrescentados apenas a esta tabela, preservando a arquitetura definida em §17.2.
