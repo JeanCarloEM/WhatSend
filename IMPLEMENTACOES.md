@@ -85,20 +85,20 @@ Objetivo: Consolidar a frente de GUI/configuracao/distribuicao apos alteracao dr
 <tr>
 <td rowspan="3">Commit e push</td>
 <td>Commitar correcao de memoria/cenario</td>
-<td><span style="color:#ca8a04">&#9679;</span> em andamento</td>
+<td><span style="color:#15803d">&#9679;</span> concluído</td>
 </tr>
 <tr>
 <td>Push do branch dev</td>
-<td><span style="color:#64748b">&#9679;</span> pendente</td>
+<td><span style="color:#15803d">&#9679;</span> concluído</td>
 </tr>
 <tr>
 <td>Registrar hash, branch e pendencias</td>
-<td><span style="color:#64748b">&#9679;</span> pendente</td>
+<td><span style="color:#15803d">&#9679;</span> concluído</td>
 </tr>
 <tr>
 <td rowspan="2">Encerramento da FT</td>
 <td>Consolidar resumo final e pendencias</td>
-<td><span style="color:#64748b">&#9679;</span> pendente</td>
+<td><span style="color:#ca8a04">&#9679;</span> em andamento</td>
 </tr>
 <tr>
 <td>Avaliar merge em main somente se sistema global funcional</td>
