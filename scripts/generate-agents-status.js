@@ -23,7 +23,7 @@ function main() {
   const fronts = parseWorkFronts(content).filter((front) => isTechnicalScope(front.scope));
   const markdown = renderImplementationsStatus(toPosixPath(path.relative(ROOT_DIR, canonical.path)), fronts);
   fs.writeFileSync(path.join(ROOT_DIR, STATUS_FILE), markdown, "utf8");
-  console.log(`Governanca operacional atualizada: ${STATUS_FILE}`);
+  console.log(`Resumo operacional atualizado: ${STATUS_FILE}`);
 }
 
 function resolveCanonicalContinueFile(rootDir) {
