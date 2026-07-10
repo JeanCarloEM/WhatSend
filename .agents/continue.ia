@@ -3,16 +3,16 @@
 CANONICO=.agents/continue.ia
 FORMATO=AGENTS-20260710
 MACHINE_ID=JEAN-DESKTOP
-DATA_REF=202607101625
+DATA_REF=202607101735
 POLITICA=90IA/10HUMANO;1FT_POR_SOLICITACAO;DEV_BRANCH;COMMIT_PUSH_POR_ETAPA_SE_POSSIVEL
 
 FT-001|nome=Governanca operacional, GUI, configuracao e distribuicao|escopo=Tecnico|prioridade=alta|status=em_andamento
 inicio=20260710.1534.51
-ultima_atualizacao=20260710.1625.00
+ultima_atualizacao=20260710.1735.00
 conclusao=
 objetivo=Consolidar a frente de GUI/configuracao/distribuicao apos alteracao drastica do AGENTS.md, preservar o trabalho previamente comitado, corrigir a memoria canonica para .agents/continue.ia, aplicar o cenario Web Page Like existente e manter validacoes/commits/pushes rastreaveis.
 estado_atual=Etapa 6/6 - Encerramento da FT; Tarefa 1/2 - Consolidar resumo final e pendencias.
-proximo_ponto_executavel=Responder com commits, push, validacoes e pendencia semantica restante sobre agents:update remoto.
+proximo_ponto_executavel=Commitar e publicar segregacao agents:update/agents:status; aplicar atualizacao normativa remota em FT/commit exclusivo posterior.
 
 etapas=
 1/6 Retomada pos-AGENTS [concluido]
@@ -51,7 +51,8 @@ decisoes=
 - Alteracoes anteriores foram comitadas em 893683c e enviadas a origin/dev apos autorizacao explicita.
 - Comando gerador deve localizar exatamente um canônico entre raiz e .agents, priorizando a regra de unicidade.
 - Script operacional update-agents.js permanece excluido de dist para preservar runtime-only.
-- .agents/.autoupdate.md define agents:update como sincronizacao remota de governanca; script atual usa o mesmo nome para gerar IMPLEMENTACOES.md. Registrar como pendencia de correcao semantica, salvo decisao de ampliar esta FT.
+- .agents/.autoupdate.md define agents:update como sincronizacao remota de governanca; geracao de IMPLEMENTACOES.md foi segregada para agents:status.
+- agents:update agora baixa origem normativa, compara AGENTS/cenarios gerenciados, preserva agents.local/continue/README/RCF/codigo, atualiza lock local e cria commit/push exclusivo quando aplicar alteracao normativa.
 
 verificacoes_concluidas=
 - git branch atual inicial: main; dev criado a partir de 7325c73.
@@ -72,6 +73,9 @@ verificacoes_concluidas=
 - npm run check:test concluido novamente sem erro.
 - .gitignore ajustado para versionar .agents/continue.ia.
 - Commit f0a2578 fix: corrige memoria canonica criado e enviado para origin/dev.
+- Comando agents:update segregado do resumo operacional; agents:status gera IMPLEMENTACOES.md.
+- scripts/update-agents.js reimplementado como sincronizador remoto conforme .agents/.autoupdate.md, com bloqueio de arquivos nao gerenciados.
+- npm run agents:update -- --dry-run confirmou origem remota e atualizacao normativa disponivel para AGENTS/cenarios; nao aplicada nesta etapa para nao misturar commit normativo exclusivo com alteracoes tecnicas/documentais em andamento.
 
 comandos_relevantes=
 - git -c safe.directory=D:/trampo/whatsender switch -c dev => sucesso
@@ -87,9 +91,16 @@ comandos_relevantes=
 - git -c safe.directory=D:/trampo/whatsender push -u origin dev => sucesso; origin/dev criado
 - git -c safe.directory=D:/trampo/whatsender commit -m "fix: corrige memoria canonica" => f0a2578
 - git -c safe.directory=D:/trampo/whatsender push => sucesso; dev atualizado de 893683c para f0a2578
+- node --check scripts/update-agents.js => sucesso apos sincronizador remoto
+- node --check scripts/generate-agents-status.js => sucesso
+- npm run agents:status => sucesso
+- npm run agents:update -- --dry-run => sucesso; origem branch main 782f195f4d4c826a888179215309d8ead8c42f83; alteracoes previstas em AGENTS.md, .agents/.autoupdate.md e .agents/webPageLike.md
+- npm test => sucesso, 116/116
+- npm run check:test => sucesso
 
 pendencias=
-- Resolver conflito semantico do comando agents:update com .agents/.autoupdate.md.
+- Commitar e publicar a segregacao operacional em dev.
+- Aplicar atualizacao normativa remota de AGENTS/cenarios em commit exclusivo posterior.
 
 hipoteses_descartadas=
 - Arquivo de cenario ausente: descartada; .agents/webPageLike.md existe.

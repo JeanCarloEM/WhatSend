@@ -5,214 +5,520 @@
 // Resumo da Licenca: uso, copia, modificacao e distribuicao permitidos conforme os termos da MPL-2.0.
 // Disclaimer: fornecido "AS IS", sem garantias de qualquer tipo.
 
+const childProcess = require("child_process");
+const crypto = require("crypto");
 const fs = require("fs");
+const https = require("https");
+const os = require("os");
 const path = require("path");
 
+const { extractZip } = require("./archive");
+
 const ROOT_DIR = path.resolve(__dirname, "..");
-const CANONICAL_FILES = [
-  "continue.ia",
-  "continue.dev",
-  path.join(".agents", "continue.ia"),
-  path.join(".agents", "continue.dev"),
-];
-const STATUS_FILE = "IMPLEMENTACOES.md";
+const SOURCE_OWNER = "JeanCarloEM";
+const SOURCE_REPO = "agents.md";
+const SOURCE_API = `https://api.github.com/repos/${SOURCE_OWNER}/${SOURCE_REPO}`;
+const LOCK_FILE = path.join(".agents", "agents-update.lock.json");
+const TEXT_EXTENSIONS = new Set([".md", ".json"]);
 
-function main() {
-  const canonical = resolveCanonicalContinueFile(ROOT_DIR);
-  const content = fs.readFileSync(canonical.path, "utf8");
-  const fronts = parseWorkFronts(content).filter((front) => isTechnicalScope(front.scope));
-  const markdown = renderImplementationsStatus(toPosixPath(path.relative(ROOT_DIR, canonical.path)), fronts);
-  fs.writeFileSync(path.join(ROOT_DIR, STATUS_FILE), markdown, "utf8");
-  console.log(`Governanca operacional atualizada: ${STATUS_FILE}`);
-}
+async function main(argv = process.argv.slice(2), options = {}) {
+  const parsed = parseArgs(argv);
+  const rootDir = options.rootDir || ROOT_DIR;
+  const httpClient = options.httpClient || defaultHttpClient;
+  const plan = await buildUpdatePlan(rootDir, httpClient);
 
-function resolveCanonicalContinueFile(rootDir) {
-  const found = CANONICAL_FILES
-    .map((name) => ({ name, path: path.join(rootDir, name) }))
-    .filter((entry) => fs.existsSync(entry.path) && fs.statSync(entry.path).isFile());
-
-  if (found.length !== 1) {
-    throw new Error(`Deve existir exatamente um arquivo canonico: ${CANONICAL_FILES.join(" ou ")}.`);
+  if (parsed.dryRun) {
+    printPlan(plan, "dry-run");
+    return plan;
   }
 
-  return found[0];
-}
-
-function parseWorkFronts(content) {
-  const fronts = [];
-  let currentFront = null;
-  let currentStage = null;
-
-  for (const rawLine of String(content || "").split(/\r?\n/u)) {
-    const line = rawLine.trimEnd();
-
-    if (/^FT-\d+\|/u.test(line)) {
-      currentFront = parseFrontLine(line);
-      currentStage = null;
-      fronts.push(currentFront);
-      continue;
+  if (parsed.check) {
+    printPlan(plan, plan.changed ? "desatualizado" : "atualizado");
+    if (plan.changed) {
+      process.exitCode = 2;
     }
-
-    if (!currentFront) {
-      continue;
-    }
-
-    const metadata = line.match(/^([a-z_]+)=(.*)$/iu);
-    if (metadata && metadata[1] === "objetivo" && !currentFront.objective) {
-      currentFront.objective = metadata[2].trim();
-      continue;
-    }
-
-    const stage = line.match(/^(\d+)\/(\d+)\s+(.+?)\s+\[([^\]]+)\]$/u);
-    if (stage) {
-      currentStage = {
-        name: stage[3].trim(),
-        status: normalizeStatus(stage[4]),
-        tasks: [],
-      };
-      currentFront.stages.push(currentStage);
-      continue;
-    }
-
-    const task = line.match(/^\s+(\d+)\/(\d+)\s+(.+?)\s+\[([^\]]+)\]$/u);
-    if (task && currentStage) {
-      currentStage.tasks.push({
-        name: task[3].trim(),
-        status: normalizeStatus(task[4]),
-      });
-    }
+    return plan;
   }
 
-  return fronts;
+  if (!plan.changed) {
+    console.log("Governanca operacional ja esta atualizada.");
+    return plan;
+  }
+
+  assertManagedFilesClean(rootDir, parsed.force, plan);
+  applyPlan(rootDir, plan);
+  commitAndPushNormativeUpdate(rootDir, plan);
+  console.log(`Governanca operacional atualizada de ${plan.source.label}.`);
+  return plan;
 }
 
-function parseFrontLine(line) {
-  const [id, ...fields] = line.split("|");
-  const front = {
-    id,
-    name: "",
-    objective: "",
-    scope: "",
-    stages: [],
-    status: "pendente",
+function parseArgs(argv = []) {
+  return {
+    check: argv.includes("--check"),
+    dryRun: argv.includes("--dry-run"),
+    force: argv.includes("--force"),
   };
+}
 
-  for (const field of fields) {
-    const index = field.indexOf("=");
+async function buildUpdatePlan(rootDir, httpClient = defaultHttpClient) {
+  const source = await resolveRemoteSource(httpClient);
+  const archive = await httpClient(source.archiveUrl, { binary: true });
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "agents-update-"));
 
-    if (index === -1) {
+  try {
+    extractZip(archive.body, tempRoot);
+    const remoteRoot = discoverRemoteRoot(tempRoot);
+    const remoteFiles = collectRemoteGovernanceFiles(remoteRoot);
+    const previousLock = readUpdateLock(rootDir);
+    const changes = compareRemoteFiles(rootDir, remoteFiles, previousLock);
+
+    return {
+      changed: changes.some((change) => change.action !== "unchanged"),
+      changes,
+      remoteRoot,
+      source,
+      lock: createUpdateLock(source, remoteFiles),
+    };
+  } finally {
+    fs.rmSync(tempRoot, { force: true, recursive: true });
+  }
+}
+
+async function resolveRemoteSource(httpClient = defaultHttpClient) {
+  const latest = await requestJsonAllow404(httpClient, `${SOURCE_API}/releases/latest`);
+
+  if (latest && latest.statusCode !== 404) {
+    const asset = selectReleaseZipAsset(latest.json);
+    return {
+      archiveUrl: asset ? asset.browser_download_url : latest.json.zipball_url,
+      label: `release:${latest.json.tag_name || "latest"}`,
+      ref: latest.json.tag_name || "latest",
+      type: "release",
+    };
+  }
+
+  for (const branch of ["main", "master"]) {
+    const response = await requestJsonAllow404(httpClient, `${SOURCE_API}/branches/${branch}`);
+
+    if (response && response.statusCode !== 404) {
+      const sha = response.json && response.json.commit && response.json.commit.sha;
+
+      if (!sha) {
+        throw new Error(`Branch ${branch} sem commit SHA.`);
+      }
+
+      return {
+        archiveUrl: `${SOURCE_API}/zipball/${sha}`,
+        label: `branch:${branch}:${sha}`,
+        ref: sha,
+        type: "branch",
+      };
+    }
+  }
+
+  throw new Error("Nenhuma release latest ou branch main/master encontrada para AGENTS.");
+}
+
+async function requestJsonAllow404(httpClient, url) {
+  const response = await httpClient(url);
+
+  if (response.statusCode === 404) {
+    return response;
+  }
+
+  if (response.statusCode < 200 || response.statusCode >= 300) {
+    throw new Error(`Falha ao consultar ${url}: HTTP ${response.statusCode}.`);
+  }
+
+  return {
+    ...response,
+    json: JSON.parse(response.body.toString("utf8")),
+  };
+}
+
+function selectReleaseZipAsset(release) {
+  const assets = Array.isArray(release && release.assets) ? release.assets : [];
+  const candidates = assets.filter((asset) => {
+    const name = String(asset.name || "").toLocaleLowerCase("en-US");
+    return name.endsWith(".zip") && asset.browser_download_url;
+  });
+
+  if (candidates.length > 1) {
+    throw new Error("Release latest possui múltiplos ZIPs normativos possíveis.");
+  }
+
+  return candidates[0] || null;
+}
+
+function discoverRemoteRoot(tempRoot) {
+  const agentsFiles = listFiles(tempRoot)
+    .filter((filePath) => path.basename(filePath).toLocaleLowerCase("en-US") === "agents.md")
+    .filter((filePath) => fs.readFileSync(filePath, "utf8").includes("AGENTS.md"));
+
+  if (agentsFiles.length === 0) {
+    throw new Error("AGENTS.md remoto não encontrado no pacote normativo.");
+  }
+
+  agentsFiles.sort((a, b) => scoreAgentsPath(a).localeCompare(scoreAgentsPath(b)));
+  return path.dirname(agentsFiles[0]);
+}
+
+function scoreAgentsPath(filePath) {
+  const rel = toPosixPath(filePath).toLocaleLowerCase("en-US");
+
+  if (rel.endsWith("/src/agents.md")) {
+    return "0";
+  }
+
+  return `${String(rel.split("/").length).padStart(4, "0")}:${rel}`;
+}
+
+function collectRemoteGovernanceFiles(remoteRoot) {
+  const files = new Map();
+  const agentsPath = path.join(remoteRoot, "AGENTS.md");
+
+  addRemoteFile(files, remoteRoot, "AGENTS.md");
+
+  for (const rel of discoverReferencedMarkdown(fs.readFileSync(agentsPath, "utf8"))) {
+    addRemoteFile(files, remoteRoot, normalizeGovernanceRelativePath(rel));
+  }
+
+  for (const rel of [path.join(".agents", ".autoupdate.md"), path.join(".agents", "webPageLike.md")]) {
+    const sourcePath = path.join(remoteRoot, rel);
+
+    if (fs.existsSync(sourcePath) && fs.statSync(sourcePath).isFile()) {
+      addRemoteFile(files, remoteRoot, rel);
+    }
+  }
+
+  return [...files.values()];
+}
+
+function discoverReferencedMarkdown(content) {
+  const result = [];
+  const pattern = /\]\((\.\/[^)#]+\.md)(?:#[^)]+)?\)/giu;
+  let match;
+
+  while ((match = pattern.exec(content)) !== null) {
+    result.push(match[1]);
+  }
+
+  return result;
+}
+
+function normalizeGovernanceRelativePath(value) {
+  const normalized = toPosixPath(value).replace(/^\.\//u, "");
+
+  if (normalized.startsWith("agents/")) {
+    return `.agents/${normalized.slice("agents/".length)}`;
+  }
+
+  return normalized;
+}
+
+function addRemoteFile(files, remoteRoot, relativePath) {
+  const safeRel = safeRelativePath(relativePath);
+  const sourcePath = path.join(remoteRoot, safeRel);
+
+  if (!fs.existsSync(sourcePath) || !fs.statSync(sourcePath).isFile()) {
+    throw new Error(`Arquivo normativo remoto ausente: ${toPosixPath(safeRel)}`);
+  }
+
+  if (!TEXT_EXTENSIONS.has(path.extname(sourcePath).toLocaleLowerCase("en-US"))) {
+    throw new Error(`Tipo normativo não permitido: ${toPosixPath(safeRel)}`);
+  }
+
+  files.set(toPosixPath(safeRel), {
+    content: fs.readFileSync(sourcePath),
+    relativePath: safeRel,
+  });
+}
+
+function compareRemoteFiles(rootDir, remoteFiles, previousLock = null) {
+  const changes = [];
+  const remotePaths = new Set(remoteFiles.map((entry) => toPosixPath(entry.relativePath)));
+
+  for (const entry of remoteFiles) {
+    const localPath = path.join(rootDir, entry.relativePath);
+    const localContent = fs.existsSync(localPath) ? fs.readFileSync(localPath) : null;
+    const same = localContent && hashBuffer(localContent) === hashBuffer(entry.content);
+    changes.push({
+      action: same ? "unchanged" : localContent ? "update" : "add",
+      content: entry.content,
+      relativePath: entry.relativePath,
+    });
+  }
+
+  for (const localRel of listPreviouslyManagedFiles(previousLock)) {
+    if (toPosixPath(localRel) !== toPosixPath(LOCK_FILE) && !remotePaths.has(toPosixPath(localRel))) {
+      changes.push({
+        action: "remove",
+        relativePath: localRel,
+      });
+    }
+  }
+
+  return changes.sort((a, b) => toPosixPath(a.relativePath).localeCompare(toPosixPath(b.relativePath), "en"));
+}
+
+function listPreviouslyManagedFiles(lock) {
+  if (!lock || !Array.isArray(lock.managedFiles)) {
+    return [];
+  }
+
+  return lock.managedFiles.map((entry) => safeRelativePath(entry.path || entry.relativePath || entry));
+}
+
+function assertManagedFilesClean(rootDir, force, plan) {
+  if (force) {
+    return;
+  }
+
+  const paths = [...new Set(plan.changes
+    .filter((change) => change.action !== "unchanged")
+    .map((change) => toPosixPath(change.relativePath)))];
+
+  if (paths.length === 0) {
+    return;
+  }
+
+  const result = childProcess.spawnSync("git", [
+    "-C",
+    rootDir,
+    "status",
+    "--porcelain",
+    "--",
+    ...paths,
+  ], {
+    encoding: "utf8",
+  });
+
+  if (result.status !== 0) {
+    throw new Error(`Falha ao verificar working tree: ${result.stderr || result.stdout}`);
+  }
+
+  if (result.stdout.trim()) {
+    throw new Error("Arquivos normativos locais modificados; use --force somente após revisar o diff.");
+  }
+}
+
+function applyPlan(rootDir, plan) {
+  for (const change of plan.changes) {
+    const target = path.join(rootDir, change.relativePath);
+
+    if (change.action === "unchanged") {
       continue;
     }
 
-    const key = field.slice(0, index).trim();
-    const value = field.slice(index + 1).trim();
+    if (change.action === "remove") {
+      fs.rmSync(target, { force: true });
+      continue;
+    }
 
-    if (key === "nome") {
-      front.name = value;
-    } else if (key === "objetivo") {
-      front.objective = value;
-    } else if (key === "escopo") {
-      front.scope = value;
-    } else if (key === "status") {
-      front.status = normalizeStatus(value);
+    fs.mkdirSync(path.dirname(target), { recursive: true });
+    fs.writeFileSync(target, change.content);
+  }
+
+  fs.mkdirSync(path.dirname(path.join(rootDir, LOCK_FILE)), { recursive: true });
+  fs.writeFileSync(path.join(rootDir, LOCK_FILE), `${JSON.stringify(plan.lock)}\n`, "utf8");
+}
+
+function commitAndPushNormativeUpdate(rootDir, plan) {
+  const paths = listChangedNormativePaths(plan);
+
+  if (paths.length === 0) {
+    return;
+  }
+
+  const upstream = resolveUpstream(rootDir);
+  assertNoPendingLocalCommits(rootDir, upstream);
+  runGit(rootDir, ["add", "--", ...paths]);
+
+  const staged = runGit(rootDir, ["diff", "--cached", "--name-only"]).stdout
+    .trim()
+    .split(/\r?\n/u)
+    .filter(Boolean)
+    .map(toPosixPath);
+  const allowed = new Set(paths.map(toPosixPath));
+  const invalid = staged.filter((entry) => !allowed.has(entry));
+
+  if (invalid.length > 0) {
+    throw new Error(`Staging normativo contem path proibido: ${invalid.join(", ")}`);
+  }
+
+  if (staged.length === 0) {
+    return;
+  }
+
+  runGit(rootDir, ["commit", "-m", `ajuste: sincroniza governanca ${plan.source.ref}`]);
+
+  if (upstream) {
+    runGit(rootDir, ["push"]);
+  } else {
+    runGit(rootDir, ["push", "-u", "origin", currentBranchName(rootDir)]);
+  }
+}
+
+function listChangedNormativePaths(plan) {
+  return plan.changes
+    .filter((change) => change.action !== "unchanged")
+    .map((change) => toPosixPath(change.relativePath));
+}
+
+function resolveUpstream(rootDir) {
+  const upstream = childProcess.spawnSync("git", [
+    "-C",
+    rootDir,
+    "rev-parse",
+    "--abbrev-ref",
+    "--symbolic-full-name",
+    "@{u}",
+  ], {
+    encoding: "utf8",
+  });
+
+  if (upstream.status !== 0) {
+    return "";
+  }
+
+  return upstream.stdout.trim();
+}
+
+function assertNoPendingLocalCommits(rootDir, upstream) {
+  if (!upstream) {
+    return;
+  }
+
+  const count = runGit(rootDir, ["rev-list", "--count", `${upstream}..HEAD`]).stdout.trim();
+
+  if (Number(count) > 0) {
+    throw new Error("Ha commits locais pendentes; push normativo exclusivo bloqueado.");
+  }
+}
+
+function currentBranchName(rootDir) {
+  return runGit(rootDir, ["branch", "--show-current"]).stdout.trim();
+}
+
+function runGit(rootDir, args) {
+  const result = childProcess.spawnSync("git", ["-C", rootDir, ...args], {
+    encoding: "utf8",
+  });
+
+  if (result.status !== 0) {
+    throw new Error(`git ${args.join(" ")} falhou: ${result.stderr || result.stdout}`);
+  }
+
+  return result;
+}
+
+function printPlan(plan, mode) {
+  console.log(`agents:update ${mode}: ${plan.source.label}`);
+
+  for (const change of plan.changes) {
+    if (change.action !== "unchanged") {
+      console.log(`${change.action}: ${toPosixPath(change.relativePath)}`);
     }
   }
 
-  return front;
+  if (!plan.changed) {
+    console.log("sem alteracoes normativas");
+  } else if (mode === "dry-run") {
+    console.log(`commit/push normativo previsto para: ${listChangedNormativePaths(plan).join(", ")}`);
+  }
 }
 
-function renderImplementationsStatus(sourceName, fronts) {
-  const lines = [
-    "<!-- Gerado por npm run agents:update. Nao editar manualmente. -->",
-    "# Implementacoes em andamento",
-    "",
-    `Resumo operacional gerado de \`${sourceName}\`.`,
-    "",
-  ];
+function safeRelativePath(value) {
+  const normalized = path.normalize(String(value || ""));
 
-  const activeFronts = fronts.filter((front) => front.status !== "concluído");
-
-  if (activeFronts.length === 0) {
-    lines.push("Nenhuma FT tecnica em andamento.", "");
-    return lines.join("\n");
+  if (!normalized || path.isAbsolute(normalized) || normalized.startsWith("..") || normalized.includes(`..${path.sep}`)) {
+    throw new Error(`Path normativo inseguro: ${value}`);
   }
 
-  for (const front of activeFronts) {
-    lines.push(`## ${front.id} - ${front.name || "Sem nome"}`);
-    lines.push("");
-    lines.push(`Objetivo: ${formatSentence(front.objective || "registrado em continue.ia")}`);
-    lines.push("");
-    lines.push("<table>");
-    lines.push("<thead><tr><th>Etapa</th><th>Tarefa</th><th>Status</th></tr></thead>");
-    lines.push("<tbody>");
+  return normalized;
+}
 
-    for (const stage of front.stages) {
-      const tasks = stage.tasks.length ? stage.tasks : [{ name: "-", status: stage.status }];
+function readUpdateLock(rootDir) {
+  const lockPath = path.join(rootDir, LOCK_FILE);
 
-      tasks.forEach((task, index) => {
-        lines.push("<tr>");
+  if (!fs.existsSync(lockPath)) {
+    return null;
+  }
 
-        if (index === 0) {
-          lines.push(`<td rowspan="${tasks.length}">${escapeHtml(stage.name)}</td>`);
-        }
+  return JSON.parse(fs.readFileSync(lockPath, "utf8"));
+}
 
-        lines.push(`<td>${escapeHtml(task.name)}</td>`);
-        lines.push(`<td>${renderStatus(task.status)}</td>`);
-        lines.push("</tr>");
+function createUpdateLock(source, remoteFiles) {
+  return {
+    files: Object.fromEntries(remoteFiles.map((entry) => [
+      toPosixPath(entry.relativePath),
+      hashBuffer(entry.content),
+    ])),
+    managedFiles: remoteFiles.map((entry) => ({ path: toPosixPath(entry.relativePath) })),
+    source: {
+      label: source.label,
+      ref: source.ref,
+      type: source.type,
+      url: `${SOURCE_OWNER}/${SOURCE_REPO}`,
+    },
+    updatedAt: new Date().toISOString(),
+  };
+}
+
+function listFiles(dirPath) {
+  const result = [];
+
+  for (const entry of fs.readdirSync(dirPath, { withFileTypes: true })) {
+    const entryPath = path.join(dirPath, entry.name);
+
+    if (entry.isDirectory()) {
+      result.push(...listFiles(entryPath));
+    } else if (entry.isFile()) {
+      result.push(entryPath);
+    }
+  }
+
+  return result;
+}
+
+function defaultHttpClient(url, options = {}, redirectCount = 0) {
+  if (redirectCount > 5) {
+    return Promise.reject(new Error(`Redirecionamentos demais: ${url}`));
+  }
+
+  return new Promise((resolve, reject) => {
+    const req = https.request(url, {
+      headers: {
+        Accept: options.binary ? "*/*" : "application/vnd.github+json",
+        "User-Agent": "whatsender-agents-update",
+      },
+      timeout: 30000,
+    }, (res) => {
+      if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+        res.resume();
+        resolve(defaultHttpClient(new URL(res.headers.location, url).toString(), options, redirectCount + 1));
+        return;
+      }
+
+      const chunks = [];
+      res.on("data", (chunk) => chunks.push(chunk));
+      res.on("end", () => {
+        resolve({
+          body: Buffer.concat(chunks),
+          headers: res.headers,
+          statusCode: res.statusCode || 0,
+        });
       });
-    }
+    });
 
-    lines.push("</tbody>");
-    lines.push("</table>");
-    lines.push("");
-  }
-
-  return lines.join("\n");
+    req.on("error", reject);
+    req.on("timeout", () => req.destroy(new Error(`Tempo esgotado: ${url}`)));
+    req.end();
+  });
 }
 
-function renderStatus(status) {
-  const normalized = normalizeStatus(status);
-  const color = normalized === "concluído"
-    ? "#15803d"
-    : normalized === "em andamento"
-      ? "#ca8a04"
-      : "#64748b";
-  return `<span style="color:${color}">&#9679;</span> ${escapeHtml(normalized)}`;
-}
-
-function formatSentence(value) {
-  const text = String(value || "").trim();
-  return /[.!?]$/u.test(text) ? text : `${text}.`;
-}
-
-function normalizeStatus(status) {
-  const value = String(status || "pendente").trim().replace(/_/gu, " ");
-
-  if (/^conclu[ií]do$/iu.test(value)) {
-    return "concluído";
-  }
-
-  if (/^em andamento$/iu.test(value)) {
-    return "em andamento";
-  }
-
-  return "pendente";
-}
-
-function isTechnicalScope(scope) {
-  const value = String(scope || "")
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/gu, "")
-    .toLocaleLowerCase("pt-BR");
-  return value === "tecnico";
-}
-
-function escapeHtml(value) {
-  return String(value || "")
-    .replace(/&/gu, "&amp;")
-    .replace(/</gu, "&lt;")
-    .replace(/>/gu, "&gt;")
-    .replace(/"/gu, "&quot;");
+function hashBuffer(buffer) {
+  return crypto.createHash("sha256").update(buffer).digest("hex");
 }
 
 function toPosixPath(value) {
@@ -220,16 +526,18 @@ function toPosixPath(value) {
 }
 
 if (require.main === module) {
-  try {
-    main();
-  } catch (err) {
+  main().catch((err) => {
     console.error(`Falha ao atualizar governanca operacional: ${err.message}`);
     process.exitCode = 1;
-  }
+  });
 }
 
 module.exports = {
-  parseWorkFronts,
-  renderImplementationsStatus,
-  resolveCanonicalContinueFile,
+  buildUpdatePlan,
+  collectRemoteGovernanceFiles,
+  compareRemoteFiles,
+  main,
+  normalizeGovernanceRelativePath,
+  parseArgs,
+  resolveRemoteSource,
 };

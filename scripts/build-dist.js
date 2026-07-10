@@ -52,6 +52,7 @@ const EXCLUDED_NAMES = new Set([
   "IMPLEMENTACOES.md",
   "continue.ia",
   "dist",
+  "generate-agents-status.js",
   "logs",
   "node_modules",
   "test",

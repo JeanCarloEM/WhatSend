@@ -45,7 +45,7 @@ Principais recursos:
 - Compatibilidade com Windows, macOS e Linux quando as dependencias tambem forem compativeis.
 
 O contrato funcional completo fica em [RCF.md](RCF.md).
-O andamento operacional das FTs fica em [IMPLEMENTACOES.md](IMPLEMENTACOES.md), gerado por `npm run agents:update` a partir de [`.agents/continue.ia`](.agents/continue.ia).
+O andamento operacional das FTs fica em [IMPLEMENTACOES.md](IMPLEMENTACOES.md), gerado por `npm run agents:status` a partir de [`.agents/continue.ia`](.agents/continue.ia).
 
 ## Requisitos
 
@@ -217,7 +217,8 @@ Comandos principais:
 | `npm run validate:dist` | Valida estrutura, segurança e execução do `dist`. |
 | `npm run release-notes:generate -- HASH_INICIAL HASH_FINAL` | Gera `dist/release-notes.md` para uma release formal. |
 | `npm run release-notes:validate` | Valida localmente que `dist/release-notes.md` esteja em commit exclusivo. |
-| `npm run agents:update` | Atualiza o resumo operacional gerado a partir de `.agents/continue.ia`. |
+| `npm run agents:update` | Verifica e sincroniza a governanca operacional remota definida em `.agents/.autoupdate.md`. |
+| `npm run agents:status` | Atualiza o resumo operacional gerado a partir de `.agents/continue.ia`. |
 | `.\atualizar.cmd` | Atualiza pela Release Latest do GitHub, ou por `main` se nao houver release valida, no Windows. |
 | `sh ./atualizar.sh` | Atualiza pela Release Latest do GitHub, ou por `main` se nao houver release valida, no macOS/Linux. |
 
