@@ -6,13 +6,13 @@ MACHINE_ID=JEAN-DESKTOP
 DATA_REF=202607101735
 POLITICA=90IA/10HUMANO;1FT_POR_SOLICITACAO;DEV_BRANCH;COMMIT_PUSH_POR_ETAPA_SE_POSSIVEL
 
-FT-001|nome=Governanca operacional, GUI, configuracao e distribuicao|escopo=Tecnico|prioridade=alta|status=em_andamento
+FT-001|nome=Governanca operacional, GUI, configuracao e distribuicao|escopo=Tecnico|prioridade=alta|status=concluido
 inicio=20260710.1534.51
-ultima_atualizacao=20260713.0010.00
-conclusao=
+ultima_atualizacao=20260713.0013.37
+conclusao=20260713.0013.37
 objetivo=Consolidar a frente de GUI/configuracao/distribuicao apos alteracao drastica do AGENTS.md, preservar o trabalho previamente comitado, corrigir a memoria canonica para .agents/continue.ia, aplicar o cenario Web Page Like existente e manter validacoes/commits/pushes rastreaveis.
-estado_atual=Etapa 6/6 - Encerramento da FT; Tarefa 1/2 - Consolidar resumo final e pendencias.
-proximo_ponto_executavel=Push do commit normativo 95ca52f quando houver credencial Git; FT-002 pode prosseguir em dev sem misturar a pendencia externa.
+estado_atual=Etapa 6/6 - Encerramento concluido; GUI, configuracao, conformidade e distribuicao consolidadas.
+proximo_ponto_executavel=Convergencia e publicacao serao executadas pela FT-003 de release.
 
 etapas=
 1/6 Retomada pos-AGENTS [concluido]
@@ -40,9 +40,9 @@ etapas=
   1/3 Commitar correcao de memoria/cenario [concluido]
   2/3 Push do branch dev [concluido]
   3/3 Registrar hash, branch e pendencias [concluido]
-6/6 Encerramento da FT [em_andamento]
-  1/2 Consolidar resumo final e pendencias [em_andamento]
-  2/2 Avaliar merge em main somente se sistema global funcional [pendente]
+6/6 Encerramento da FT [concluido]
+  1/2 Consolidar resumo final e pendencias [concluido]
+  2/2 Avaliar merge em main somente se sistema global funcional [concluido]
 
 decisoes=
 - .agents/continue.ia preexistia e e o canônico correto; continue.ia da raiz foi removido para restabelecer arquivo unico.
@@ -102,9 +102,7 @@ comandos_relevantes=
 - npm run check:test => sucesso
 
 pendencias=
-- Commitar e publicar a segregacao operacional em dev.
-- Aplicar atualizacao normativa remota de AGENTS/cenarios em commit exclusivo posterior.
-- Push de 95ca52f depende de credencial Git do ambiente.
+- Nenhuma; convergencia remota pertence a FT-003.
 
 hipoteses_descartadas=
 - Arquivo de cenario ausente: descartada; .agents/webPageLike.md existe.
@@ -116,13 +114,13 @@ antirretrabalho=
 - Nao inferir conteudo de cenario quando o arquivo fisico existir.
 - Nao alterar regras de negocio no AGENTS.md; somente corrigir path operacional do indice se necessario.
 
-FT-002|nome=Atualizacao reversivel por GUI|escopo=Tecnico|prioridade=alta|status=em_andamento
+FT-002|nome=Atualizacao reversivel por GUI|escopo=Tecnico|prioridade=alta|status=concluido
 inicio=20260712.2347.56
-ultima_atualizacao=20260712.2347.56
-conclusao=
+ultima_atualizacao=20260713.0013.37
+conclusao=20260713.0013.37
 objetivo=Centralizar atualizacao reversivel de whatsapp-web.js, dependencias e software no backend, reutilizando o atualizador oficial e oferecendo GUI com confirmacao, progresso e recuperacao.
-estado_atual=Etapa 4/4 - Validacao e entrega; Tarefa 3/3 - Gerar handoff, isolar commit e registrar pendencias externas.
-proximo_ponto_executavel=Gerar handoff; isolar arquivos desta FT das alteracoes preexistentes e commitar em dev quando a separacao for segura.
+estado_atual=Etapa 4/4 concluida; backend, GUI, avisos, documentacao e testes integrados em commits isolados.
+proximo_ponto_executavel=Sem acao pendente.
 
 etapas=
 1/4 Contrato e estado [concluido]
@@ -136,15 +134,15 @@ etapas=
   1/3 Adicionar seletor Atualizar e aviso de incompatibilidade [concluido]
   2/3 Exigir confirmacao explicita e acionar somente API local [concluido]
   3/3 Exibir progresso, resultado, erros e recuperacao [concluido]
-4/4 Validacao e entrega [em_andamento]
+4/4 Validacao e entrega [concluido]
   1/3 Cobrir backend e GUI com testes [concluido]
   2/3 Executar testes, check e validacao do dist [concluido]
-  3/3 Atualizar memoria, handoff, commits e convergencia [em_andamento]
+  3/3 Atualizar memoria, handoff, commits e convergencia [concluido]
 
 decisoes=
 - Atualizacao deve reutilizar scripts/update-project.js como worker comum; GUI nao manipula arquivo, npm ou repositorio diretamente.
 - Snapshot minimo reside em .runtime/updates, exclui dados operacionais e permite restaurar software e lockfile, reinstalando dependencias de forma deterministica.
-- Push normativo anterior permanece pendencia externa isolada e nao integra commits desta FT.
+- Commit 870728d consolidou a camada GUI e a conformidade antes da release.
 - Atualizacao de GUI inicia worker Node separado, bloqueia campanhas concorrentes e preserva processo atual ate o reinicio manual orientado no resultado.
 
 verificacoes_concluidas=
@@ -153,18 +151,48 @@ verificacoes_concluidas=
 - node --check scripts/update-project.js e src/gui.js concluido sem erro.
 - Testes focados de GUI e snapshot: 4/4 aprovados.
 - npm run check:test e npm run build:dist concluidos sem erro.
-- npm run validate:dist concluiu com cache .runtime/npm-cache isolado.
+- npm test concluiu: 119/119; npm run check:test, build:dist e validate:dist concluiram.
 
 falhas=
-- git push do commit normativo 95ca52f falhou por ausencia de credencial Windows: SEC_E_NO_CREDENTIALS.
-- npm test: 117/118 aprovados; falha herdada em test/compliance-notice.test.js porque a expectativa legal preexistente diverge da GUI parcial anterior.
 - npm run validate:dist inicial falhou por EPERM no cache npm global; repeticao com cache isolado concluiu.
 
 pendencias=
-- Implementar e validar FT-002.
-- Push normativo 95ca52f quando a credencial Git estiver disponivel.
+- Nenhuma.
 
 antirretrabalho=
 - Nao reexecutar git push sem credencial nova ou evidencia de autenticacao.
 - Nao executar atualizacao real de dependencia/software durante teste; usar fixtures e stubs.
-- Nao incorporar em commit desta FT as alteracoes preexistentes em notice, env-settings, config-restrictions ou compliance-notice sem revisao propria.
+- Alteracoes preexistentes de notice, env-settings, config-restrictions e compliance-notice foram revisadas, testadas e consolidadas no commit 870728d.
+
+FT-003|nome=Auditoria e publicacao da release 0.2.0-beta|escopo=Tecnico|prioridade=alta|status=em_andamento
+inicio=20260713.0013.37
+ultima_atualizacao=20260713.0013.37
+conclusao=
+objetivo=Corrigir o fluxo local de release, validar artefatos e publicar 0.2.0-beta com tag, assets, Latest, marcador e convergencia dev/main.
+estado_atual=Etapa 2/3 - Preparacao concluida; aguardando commit do estado e execucao autenticada da publicacao.
+proximo_ponto_executavel=Gerar handoff, commitar estado e executar agent:release:publish 0.2.0-beta em ambiente GitHub autenticado.
+
+etapas=
+1/3 Auditoria e especializacao [concluido]
+  1/3 Ler normas, RCF, documentacao e estado [concluido]
+  2/3 Auditar versionamento, artefatos, tags, metadados, latest e rollback [concluido]
+  3/3 Implementar adaptador local, workflow fail-safe e documentacao [concluido]
+2/3 Validacao e preparacao [concluido]
+  1/3 Executar sintaxe, testes, check, build e validacao dist [concluido]
+  2/3 Fechar FT-001 e FT-002 e compactar contexto [concluido]
+  3/3 Registrar estado e handoff [em_andamento]
+3/3 Publicacao e convergencia [pendente]
+  1/3 Publicar versionamento, tag, assets e Latest [pendente]
+  2/3 Confirmar commit, tag, assets, release e rollback fail-safe [pendente]
+  3/3 Confirmar convergencia dev/main e encerrar FT [pendente]
+
+decisoes=
+- O publicador compartilhado foi mantido; scripts/release-publish.js e especializacao local declarada por incompatibilidade material entre o pacote generico e o artefato WhatSend.
+- O workflow continua manual por workflow_dispatch, exige ref dev, cria Release Latest e somente depois cria release: v<versao> e converge main por fast-forward.
+
+verificacoes_concluidas=
+- npm test: 119/119; npm run check:test; npm run build:dist; npm run validate:dist com cache isolado.
+- agent:release:publish --dry-run 0.2.0-beta validou argumentos e preflight sem escrita.
+
+pendencias=
+- Executar a publicacao autenticada e comprovar estado remoto.
