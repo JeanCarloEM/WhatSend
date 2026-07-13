@@ -11,6 +11,7 @@ const { normalizeVersion } = require("./release-metadata");
 const ROOT_DIR = path.resolve(__dirname, "..");
 const PACKAGE_PATH = path.join(ROOT_DIR, "package.json");
 const RELEASE_WORKFLOW = "release.yml";
+const NPM_COMMAND = process.platform === "win32" ? "npm.cmd" : "npm";
 
 class UsageError extends Error {}
 
@@ -31,8 +32,8 @@ function main(argv = process.argv.slice(2)) {
   assertPreflight(preflight);
   const prepare = runReleaseHook("prepare", { version });
   prepareVersionCommit(version, options);
-  run("npm", ["test"], { timeout: 900000 });
-  run("npm", ["run", "check:test"], { timeout: 900000 });
+  run(NPM_COMMAND, ["test"], { timeout: 900000 });
+  run(NPM_COMMAND, ["run", "check:test"], { timeout: 900000 });
   const verify = runReleaseHook("verify", { version });
   const triggerCommit = run("git", ["rev-parse", "HEAD"]).stdout.trim();
   run("git", ["push", options.remote, options.branch], { timeout: 120000 });
