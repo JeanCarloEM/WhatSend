@@ -203,11 +203,11 @@ pendencias=
 
 FT-004|nome=Anexos embedded e painel visual de atualizacao|escopo=Tecnico|prioridade=alta|status=em_andamento
 inicio=20260713.0020.05
-ultima_atualizacao=20260713.0128.00
-conclusao=
+ultima_atualizacao=20260713.0405.00
+conclusao=20260713.0405.00
 objetivo=Adicionar anexos embedded Base64 em modelos sem alterar a sintaxe de caminhos nem o pipeline de anexos, substituir o seletor textual de atualizacao por painel visual e publicar 0.2.1-beta somente apos validacao integral.
-estado_atual=Etapa 5/5 - Release 0.2.1-beta; Tarefa 1/3 - Preparar commits e preflight de publicacao.
-proximo_ponto_executavel=Registrar os commits da FT, publicar pelo adaptador normatizado e comprovar tag, assets, Latest e convergencia dev/main.
+estado_atual=Etapa 5/5 concluida; release 0.2.1-beta publicada e validada.
+proximo_ponto_executavel=Sem acao pendente.
 
 etapas=
 1/5 Contrato e documentacao [concluido]
@@ -229,10 +229,10 @@ etapas=
   2/4 Cobrir duplicidade, orfandade, Base64 invalido e definicao ausente ou nao utilizada [concluido]
   3/4 Executar sintaxe, testes, check, build e validacao dist [concluido]
   4/4 Confirmar ausencia de regressao no pipeline, GUI estatica, CLI e distribuicao [concluido]
-5/5 Release 0.2.1-beta [em_andamento]
-  1/3 Validar preflight, commits, metadados e artefatos sem falha pendente [em_andamento]
-  2/3 Publicar obrigatoriamente pelo mecanismo normatizado de release [pendente]
-  3/3 Confirmar commit, tag, assets, Latest, historico e convergencia dev/main [pendente]
+5/5 Release 0.2.1-beta [concluido]
+  1/3 Validar preflight, commits, metadados e artefatos sem falha pendente [concluido]
+  2/3 Publicar obrigatoriamente pelo mecanismo normatizado de release [concluido]
+  3/3 Confirmar commit, tag, assets, Latest, historico e convergencia dev/main [concluido]
 
 decisoes=
 - A sintaxe atual de anexo por caminho e a indexacao permanecem inalteradas; embedded usa `![rotulo](@embed:id)` e segue a mesma fila, ordem, legenda e retentativa do pipeline existente.
@@ -244,7 +244,9 @@ verificacoes_concluidas=
 - Anexo de requisitos lido integralmente e convertido em plano tecnico rastreavel.
 - npm test: 122/122; npm run check:test; npm run build:dist e npm run validate:dist com cache isolado concluiram.
 - Renderizacao estatica da GUI e testes de interface confirmaram seletor nativo, Data URI, modal de atualizacao e ausencia do prompt legado; automacao visual indisponivel por falha de transporte local.
+- Publicador oficial criou `81ea53c chore: prepara release v0.2.1-beta`, tag `v0.2.1-beta` e `2a57766 release: v0.2.1-beta`; workflow 29223020717 concluiu com sucesso.
+- API oficial confirmou Release Latest, ZIP `WhatSend-v0.2.1-beta.zip` (SHA-256 5ad2e01bb109e5120d8d197cc2ee34439391fb12f3e625ab24d942c83dd8c993) e `whatsend-version.json`.
 - FT-001, FT-002 e FT-003 permanecem concluidas; nao ha outra FT ativa.
 
 pendencias=
-- Publicar 0.2.1-beta e comprovar os metadados remotos antes de concluir a FT.
+- Nenhuma.

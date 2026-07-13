@@ -77,15 +77,15 @@ Objetivo: Adicionar anexos embedded Base64 em modelos sem alterar a sintaxe de c
 <tr>
 <td rowspan="3">Release 0.2.1-beta</td>
 <td>Validar preflight, commits, metadados e artefatos sem falha pendente</td>
-<td><span style="color:#ca8a04">&#9679;</span> em andamento</td>
+<td><span style="color:#15803d">&#9679;</span> concluído</td>
 </tr>
 <tr>
 <td>Publicar obrigatoriamente pelo mecanismo normatizado de release</td>
-<td><span style="color:#64748b">&#9679;</span> pendente</td>
+<td><span style="color:#15803d">&#9679;</span> concluído</td>
 </tr>
 <tr>
 <td>Confirmar commit, tag, assets, Latest, historico e convergencia dev/main</td>
-<td><span style="color:#64748b">&#9679;</span> pendente</td>
+<td><span style="color:#15803d">&#9679;</span> concluído</td>
 </tr>
 </tbody>
 </table>
