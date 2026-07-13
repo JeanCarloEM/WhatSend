@@ -338,6 +338,12 @@ O mecanismo de expressões deve oferecer as funções `$.round()`, `$.ceil()`, `
 
 Devem existir scripts de atualização no root para Windows e macOS/Linux.
 
+O backend deve centralizar quatro ações: atualizar somente `whatsapp-web.js`; atualizar todas as dependências, incluindo esse motor; atualizar o software pela origem oficial e sincronizar as dependências declaradas pelo novo `package.json`; e reverter a última atualização válida. GUI e CLI devem apenas selecionar a ação, exigir confirmação explícita e exibir estado, progresso, resultado, erro relevante e recuperação sucinta.
+
+Antes de cada atualização ou reversão, o backend deve registrar em `.runtime/updates` o estado do software, `package.json`, lockfile, versões instaladas das dependências afetadas, origem, data, ação e dados suficientes para restaurar a última operação válida. O snapshot não deve conter dados de clientes, sessões, logs, configurações, `.env` ou outros dados operacionais do usuário.
+
+Atualização de software e de dependências deve avisar antes da confirmação que versões novas podem introduzir incompatibilidades e quebrar um ambiente estável. A operação deve validar a instalação e a compatibilidade aplicável, remover dependências órfãs por poda segura e, em falha, interromper sem estado parcial e restaurar automaticamente o snapshot quando possível. Reversão deve restaurar software, dependências e metadados do último snapshot, preservando dados operacionais.
+
 A atualização não deve depender da existência de `git` nem de diretório local `./.git`.
 
 O atualizador deve consultar `https://github.com/JeanCarloEM/WhatSend` por APIs oficiais do GitHub, priorizando a Release marcada como Latest. Quando a Release possuir asset distribuível `WhatSend-v<versão>[-<canal>].zip`, esse ZIP deve ser preferido ao tarball de código-fonte da release. Somente quando não houver Release válida publicada deve usar a branch `main`.

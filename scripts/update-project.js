@@ -20,6 +20,8 @@ const ROOT_DIR = path.resolve(__dirname, "..");
 const GITHUB_API = `https://api.github.com/repos/${OWNER}/${REPO}`;
 const MAIN_TARBALL_URL = `https://codeload.github.com/${OWNER}/${REPO}/tar.gz/refs/heads/main`;
 const GITHUB_API_VERSION = "2022-11-28";
+const UPDATE_ACTIONS = new Set(["whatsapp-web.js", "dependencies", "software", "revert"]);
+const UPDATES_DIR = path.join(".runtime", "updates");
 
 const PROTECTED_ROOT_ENTRIES = new Set([
   ".env",
@@ -420,7 +422,7 @@ function copyEntry(sourcePath, targetPath, relativePath) {
 function run(command, args, options = {}) {
   console.log(`> ${[command, ...args].join(" ")}`);
   const result = childProcess.spawnSync(command, args, {
-    cwd: ROOT_DIR,
+    cwd: options.rootDir || ROOT_DIR,
     env: {
       ...process.env,
       PUPPETEER_SKIP_DOWNLOAD: "true",
@@ -435,42 +437,173 @@ function run(command, args, options = {}) {
   }
 }
 
-async function updateProject() {
-  const source = await resolveUpdateSource();
-  console.log(`Fonte da atualização: ${source.label}`);
+function updatePaths(rootDir = ROOT_DIR) {
+  const directory = path.join(rootDir, UPDATES_DIR);
+  return {
+    directory,
+    latest: path.join(directory, "last-update.json"),
+  };
+}
 
-  const installed = readInstalledVersion();
+function installedDependencyVersions(rootDir = ROOT_DIR) {
+  const pkg = JSON.parse(fs.readFileSync(path.join(rootDir, "package.json"), "utf8"));
+  const names = Object.keys({ ...(pkg.dependencies || {}), ...(pkg.devDependencies || {}) }).sort();
+  return Object.fromEntries(names.map((name) => {
+    const manifest = path.join(rootDir, "node_modules", ...name.split("/"), "package.json");
+    let version = "";
+    try { version = JSON.parse(fs.readFileSync(manifest, "utf8")).version || ""; } catch {}
+    return [name, version];
+  }));
+}
 
-  if (isSameInstalledVersion(installed, source)) {
-    console.log(`WhatSend já está atualizado (${source.versionId}).`);
-    return false;
+function snapshotUpdate(action, rootDir = ROOT_DIR) {
+  const paths = updatePaths(rootDir);
+  const id = `${new Date().toISOString().replace(/[:.]/gu, "-")}-${action}`;
+  const directory = path.join(paths.directory, id);
+  const software = path.join(directory, "software");
+  fs.mkdirSync(software, { recursive: true });
+  copyTree(rootDir, software);
+  const audit = {
+    action,
+    createdAt: new Date().toISOString(),
+    dependencies: installedDependencyVersions(rootDir),
+    packageVersion: JSON.parse(fs.readFileSync(path.join(rootDir, "package.json"), "utf8")).version || "",
+    schema: 1,
+    software,
+  };
+  fs.writeFileSync(path.join(directory, "audit.json"), `${JSON.stringify(audit, null, 2)}\n`, "utf8");
+  return { ...audit, directory, id };
+}
+
+function readLastUpdate(rootDir = ROOT_DIR) {
+  const latest = updatePaths(rootDir).latest;
+  if (!fs.existsSync(latest)) return null;
+  try { return JSON.parse(fs.readFileSync(latest, "utf8")); } catch { return null; }
+}
+
+function writeLastUpdate(snapshot, result, rootDir = ROOT_DIR) {
+  const latest = updatePaths(rootDir).latest;
+  fs.mkdirSync(path.dirname(latest), { recursive: true });
+  fs.writeFileSync(latest, `${JSON.stringify({ ...snapshot, completedAt: new Date().toISOString(), result }, null, 2)}\n`, "utf8");
+}
+
+function removeUnprotectedTree(rootDir, allowedEntries = new Set()) {
+  for (const entry of fs.readdirSync(rootDir)) {
+    if (PROTECTED_ROOT_ENTRIES.has(entry) || allowedEntries.has(entry)) continue;
+    fs.rmSync(path.join(rootDir, entry), { force: true, maxRetries: 5, recursive: true, retryDelay: 200 });
   }
+}
 
-  const tarball = await downloadTarball(source);
-  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), `${REPO}-update-`));
-  const extractDir = path.join(tempDir, "source");
+function synchronizeSoftware(sourceDir, rootDir = ROOT_DIR) {
+  const entries = new Set(fs.readdirSync(sourceDir));
+  removeUnprotectedTree(rootDir, entries);
+  copyTree(sourceDir, rootDir);
+}
+
+function restoreSnapshot(snapshot, rootDir = ROOT_DIR) {
+  if (!snapshot || !snapshot.software || !fs.existsSync(snapshot.software)) {
+    throw new Error("Snapshot de atualização ausente ou inválido.");
+  }
+  synchronizeSoftware(snapshot.software, rootDir);
+  run("npm", ["ci"], { rootDir });
+  run("node", ["scripts/ensure-browser.js"], { rootDir });
+}
+
+function validateUpdate(rootDir = ROOT_DIR) {
+  JSON.parse(fs.readFileSync(path.join(rootDir, "package.json"), "utf8"));
+  JSON.parse(fs.readFileSync(path.join(rootDir, "package-lock.json"), "utf8"));
+  run(process.execPath, ["--check", "main.js"], { rootDir });
+}
+
+function parseUpdateArgs(argv = []) {
+  const parsed = { action: "software", confirm: false, help: false };
+  for (let index = 0; index < argv.length; index += 1) {
+    const value = argv[index];
+    if (value === "--action") parsed.action = argv[++index] || "";
+    else if (value === "--confirm") parsed.confirm = true;
+    else if (value === "--help") parsed.help = true;
+    else throw new Error(`Parâmetro de atualização inválido: ${value}`);
+  }
+  if (!UPDATE_ACTIONS.has(parsed.action)) throw new Error(`Ação de atualização inválida: ${parsed.action}`);
+  return parsed;
+}
+
+async function updateProject(options = {}) {
+  const rootDir = options.rootDir || ROOT_DIR;
+  const action = options.action || "software";
+  if (!UPDATE_ACTIONS.has(action)) throw new Error(`Ação de atualização inválida: ${action}`);
+  if (!options.confirmed) throw new Error("Confirmação explícita obrigatória para atualização ou reversão.");
+  const previous = readLastUpdate(rootDir);
+  const snapshot = snapshotUpdate(action, rootDir);
 
   try {
-    fs.mkdirSync(extractDir, { recursive: true });
-    extractArchive(tarball, source, extractDir);
-    copyTree(extractDir, ROOT_DIR);
-  } finally {
-    fs.rmSync(tempDir, { force: true, maxRetries: 5, recursive: true, retryDelay: 200 });
+    if (action === "revert") {
+      if (!previous) throw new Error("Nenhuma atualização válida disponível para reverter.");
+      console.log(`Revertendo atualização registrada em ${previous.createdAt}.`);
+      restoreSnapshot(previous, rootDir);
+      validateUpdate(rootDir);
+      writeLastUpdate(previous, { action, revertedAt: new Date().toISOString() }, rootDir);
+      console.log("Reversão concluída. Reinicie o WhatSend para carregar o estado restaurado.");
+      return { action, reverted: true };
+    }
+
+    if (action === "whatsapp-web.js") {
+      console.log("Atualizando somente whatsapp-web.js.");
+      run("npm", ["install", "whatsapp-web.js@latest"], { rootDir });
+    } else if (action === "dependencies") {
+      console.log("Atualizando todas as dependências declaradas.");
+      run("npm", ["update"], { rootDir });
+    } else {
+      const source = await resolveUpdateSource(options);
+      console.log(`Fonte da atualização: ${source.label}`);
+      const installed = readInstalledVersion(rootDir);
+      if (isSameInstalledVersion(installed, source)) {
+        console.log(`WhatSend já está atualizado (${source.versionId}).`);
+        return { action, updated: false };
+      }
+      const archive = await downloadTarball(source);
+      const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), `${REPO}-update-`));
+      try {
+        const extractDir = path.join(tempDir, "source");
+        fs.mkdirSync(extractDir, { recursive: true });
+        extractArchive(archive, source, extractDir);
+        synchronizeSoftware(extractDir, rootDir);
+      } finally {
+        fs.rmSync(tempDir, { force: true, maxRetries: 5, recursive: true, retryDelay: 200 });
+      }
+      run("npm", ["install"], { rootDir });
+      writeInstalledVersion(source, rootDir);
+    }
+
+    run("npm", ["prune"], { rootDir });
+    run("node", ["scripts/ensure-browser.js"], { rootDir });
+    validateUpdate(rootDir);
+    writeLastUpdate(snapshot, { action, success: true }, rootDir);
+    console.log("Atualização concluída. Reinicie o WhatSend para carregar as versões instaladas.");
+    return { action, updated: true };
+  } catch (error) {
+    console.error(`Atualização falhou: ${error.message}`);
+    try {
+      restoreSnapshot(snapshot, rootDir);
+      console.error("Estado anterior restaurado automaticamente.");
+    } catch (restoreError) {
+      console.error(`Recuperação automática falhou: ${restoreError.message}`);
+    }
+    throw error;
   }
-
-  run("npm", ["install"]);
-  run("node", ["scripts/ensure-browser.js"]);
-  writeInstalledVersion(source);
-
-  console.log(`Atualização concluída (${source.versionId}).`);
-  return true;
 }
 
 if (require.main === module) {
-  updateProject().catch((err) => {
+  const args = parseUpdateArgs(process.argv.slice(2));
+  if (args.help) {
+    console.log("Uso: node scripts/update-project.js --action whatsapp-web.js|dependencies|software|revert --confirm");
+    process.exitCode = 0;
+  } else {
+    updateProject({ action: args.action, confirmed: args.confirm }).catch((err) => {
     console.error(`Atualização falhou: ${err.message}`);
     process.exitCode = 1;
-  });
+    });
+  }
 }
 
 module.exports = {
@@ -487,6 +620,10 @@ module.exports = {
   safeTarPath,
   selectReleaseAsset,
   shouldSkip,
+  snapshotUpdate,
+  restoreSnapshot,
+  updatePaths,
+  validateUpdate,
   updateProject,
   writeInstalledVersion,
 };

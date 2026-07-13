@@ -49,3 +49,10 @@ test("configurações ENV persistem por escopo global e sessão", () => {
   applyStartupEnvSettings(root, ["--session", "campanha teste"]);
   assert.equal(process.env.MAX_DELAY_MS, "20");
 });
+
+test("GUI expõe atualização com confirmação explícita", () => {
+  const html = renderGuiHtml();
+  assert.match(html, /id="updateButton"/);
+  assert.match(html, /\/api\/update/);
+  assert.match(html, /incompatibilidades/);
+});

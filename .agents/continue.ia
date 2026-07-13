@@ -8,11 +8,11 @@ POLITICA=90IA/10HUMANO;1FT_POR_SOLICITACAO;DEV_BRANCH;COMMIT_PUSH_POR_ETAPA_SE_P
 
 FT-001|nome=Governanca operacional, GUI, configuracao e distribuicao|escopo=Tecnico|prioridade=alta|status=em_andamento
 inicio=20260710.1534.51
-ultima_atualizacao=20260710.1735.00
+ultima_atualizacao=20260713.0010.00
 conclusao=
 objetivo=Consolidar a frente de GUI/configuracao/distribuicao apos alteracao drastica do AGENTS.md, preservar o trabalho previamente comitado, corrigir a memoria canonica para .agents/continue.ia, aplicar o cenario Web Page Like existente e manter validacoes/commits/pushes rastreaveis.
 estado_atual=Etapa 6/6 - Encerramento da FT; Tarefa 1/2 - Consolidar resumo final e pendencias.
-proximo_ponto_executavel=Commitar e publicar segregacao agents:update/agents:status; aplicar atualizacao normativa remota em FT/commit exclusivo posterior.
+proximo_ponto_executavel=Push do commit normativo 95ca52f quando houver credencial Git; FT-002 pode prosseguir em dev sem misturar a pendencia externa.
 
 etapas=
 1/6 Retomada pos-AGENTS [concluido]
@@ -76,6 +76,7 @@ verificacoes_concluidas=
 - Comando agents:update segregado do resumo operacional; agents:status gera IMPLEMENTACOES.md.
 - scripts/update-agents.js reimplementado como sincronizador remoto conforme .agents/.autoupdate.md, com bloqueio de arquivos nao gerenciados.
 - npm run agents:update -- --dry-run confirmou origem remota e atualizacao normativa disponivel para AGENTS/cenarios; nao aplicada nesta etapa para nao misturar commit normativo exclusivo com alteracoes tecnicas/documentais em andamento.
+- Atualizacao normativa forcada materializou o conjunto gerenciado; commit exclusivo 95ca52f criado. Push falhou por SEC_E_NO_CREDENTIALS, preservando commit local e sem alterar arquivos tecnicos.
 
 comandos_relevantes=
 - git -c safe.directory=D:/trampo/whatsender switch -c dev => sucesso
@@ -95,12 +96,15 @@ comandos_relevantes=
 - node --check scripts/generate-agents-status.js => sucesso
 - npm run agents:status => sucesso
 - npm run agents:update -- --dry-run => sucesso; origem branch main 782f195f4d4c826a888179215309d8ead8c42f83; alteracoes previstas em AGENTS.md, .agents/.autoupdate.md e .agents/webPageLike.md
+- npm run agent:agents -- --force => materializou governanca; commit exclusivo 95ca52f
+- git push => falhou: SEC_E_NO_CREDENTIALS
 - npm test => sucesso, 116/116
 - npm run check:test => sucesso
 
 pendencias=
 - Commitar e publicar a segregacao operacional em dev.
 - Aplicar atualizacao normativa remota de AGENTS/cenarios em commit exclusivo posterior.
+- Push de 95ca52f depende de credencial Git do ambiente.
 
 hipoteses_descartadas=
 - Arquivo de cenario ausente: descartada; .agents/webPageLike.md existe.
@@ -111,3 +115,56 @@ antirretrabalho=
 - Nao criar segundo continue.ia/continue.dev.
 - Nao inferir conteudo de cenario quando o arquivo fisico existir.
 - Nao alterar regras de negocio no AGENTS.md; somente corrigir path operacional do indice se necessario.
+
+FT-002|nome=Atualizacao reversivel por GUI|escopo=Tecnico|prioridade=alta|status=em_andamento
+inicio=20260712.2347.56
+ultima_atualizacao=20260712.2347.56
+conclusao=
+objetivo=Centralizar atualizacao reversivel de whatsapp-web.js, dependencias e software no backend, reutilizando o atualizador oficial e oferecendo GUI com confirmacao, progresso e recuperacao.
+estado_atual=Etapa 4/4 - Validacao e entrega; Tarefa 3/3 - Gerar handoff, isolar commit e registrar pendencias externas.
+proximo_ponto_executavel=Gerar handoff; isolar arquivos desta FT das alteracoes preexistentes e commitar em dev quando a separacao for segura.
+
+etapas=
+1/4 Contrato e estado [concluido]
+  1/2 Registrar FT, auditoria, reversao e protecao de dados [concluido]
+  2/2 Sincronizar RCF, README e guia operacional [concluido]
+2/4 Backend compartilhado [concluido]
+  1/3 Reutilizar atualizador oficial com acoes tipadas [concluido]
+  2/3 Criar snapshot, poda, validacao e restauracao automatica [concluido]
+  3/3 Preservar CLI, dist e inicializadores [concluido]
+3/4 GUI [concluido]
+  1/3 Adicionar seletor Atualizar e aviso de incompatibilidade [concluido]
+  2/3 Exigir confirmacao explicita e acionar somente API local [concluido]
+  3/3 Exibir progresso, resultado, erros e recuperacao [concluido]
+4/4 Validacao e entrega [em_andamento]
+  1/3 Cobrir backend e GUI com testes [concluido]
+  2/3 Executar testes, check e validacao do dist [concluido]
+  3/3 Atualizar memoria, handoff, commits e convergencia [em_andamento]
+
+decisoes=
+- Atualizacao deve reutilizar scripts/update-project.js como worker comum; GUI nao manipula arquivo, npm ou repositorio diretamente.
+- Snapshot minimo reside em .runtime/updates, exclui dados operacionais e permite restaurar software e lockfile, reinstalando dependencias de forma deterministica.
+- Push normativo anterior permanece pendencia externa isolada e nao integra commits desta FT.
+- Atualizacao de GUI inicia worker Node separado, bloqueia campanhas concorrentes e preserva processo atual ate o reinicio manual orientado no resultado.
+
+verificacoes_concluidas=
+- Atualizador existente usa origem oficial, preserva entradas operacionais e sincroniza npm apos software, mas nao possui acoes de dependencias, auditoria ou reversao.
+- GUI possui backend HTTP local e endpoints JSON; integracao deve ocorrer por essa camada.
+- node --check scripts/update-project.js e src/gui.js concluido sem erro.
+- Testes focados de GUI e snapshot: 4/4 aprovados.
+- npm run check:test e npm run build:dist concluidos sem erro.
+- npm run validate:dist concluiu com cache .runtime/npm-cache isolado.
+
+falhas=
+- git push do commit normativo 95ca52f falhou por ausencia de credencial Windows: SEC_E_NO_CREDENTIALS.
+- npm test: 117/118 aprovados; falha herdada em test/compliance-notice.test.js porque a expectativa legal preexistente diverge da GUI parcial anterior.
+- npm run validate:dist inicial falhou por EPERM no cache npm global; repeticao com cache isolado concluiu.
+
+pendencias=
+- Implementar e validar FT-002.
+- Push normativo 95ca52f quando a credencial Git estiver disponivel.
+
+antirretrabalho=
+- Nao reexecutar git push sem credencial nova ou evidencia de autenticacao.
+- Nao executar atualizacao real de dependencia/software durante teste; usar fixtures e stubs.
+- Nao incorporar em commit desta FT as alteracoes preexistentes em notice, env-settings, config-restrictions ou compliance-notice sem revisao propria.

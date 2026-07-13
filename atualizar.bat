@@ -16,6 +16,9 @@ if errorlevel 1 (
   exit /b 1
 )
 
+set /p "CONFIRM=Atualizar software e dependencias? Versoes novas podem quebrar o ambiente estavel. [s/N]: "
+if /I not "%CONFIRM%"=="s" exit /b 0
+
 echo Atualizando a partir do GitHub sem depender de git...
-node scripts\update-project.js
+node scripts\update-project.js --action software --confirm
 if errorlevel 1 exit /b 1

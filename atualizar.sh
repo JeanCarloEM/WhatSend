@@ -15,5 +15,12 @@ if ! command -v npm >/dev/null 2>&1; then
   exit 1
 fi
 
+printf "Atualizar software e dependencias? Versoes novas podem quebrar o ambiente estavel. [s/N]: "
+read -r confirm
+case "$confirm" in
+  s|S|sim|SIM) ;;
+  *) exit 0 ;;
+esac
+
 echo "Atualizando a partir do GitHub sem depender de git..."
-node scripts/update-project.js
+node scripts/update-project.js --action software --confirm

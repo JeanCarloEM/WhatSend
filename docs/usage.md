@@ -226,6 +226,8 @@ Antes de baixar o pacote remoto, o atualizador compara os metadados da API com `
 
 Durante a copia, arquivos operacionais locais sao preservados, incluindo `clientes.csv`, `texto.md`, `.env`, `logs/`, `.wwebjs_auth/`, `.runtime/` e `node_modules/`. Depois disso, o script roda `npm install` com download automatico do Puppeteer desativado, valida o navegador com `scripts/ensure-browser.js` e so entao grava o novo `whatsend-version.json`.
 
+O botão Atualizar da GUI também permite atualizar somente `whatsapp-web.js`, todas as dependências, o software oficial ou reverter a última atualização. A confirmação é obrigatória porque versões novas podem quebrar o ambiente estável. O backend registra um snapshot em `.runtime/updates`, poda dependências órfãs e tenta restaurar automaticamente software, dependências e metadados se uma operação falhar; sessões, configurações, dados e logs não entram no snapshot nem são alterados.
+
 ## Releases
 
 O comando abaixo gera `dist/`, `dist/whatsend-version.json` e o ZIP distribuivel:

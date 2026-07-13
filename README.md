@@ -173,6 +173,7 @@ A interface local abre no inicio do fluxo, mostra autenticacao/carregamento do W
 - informar filtro;
 - anexar CSV opcional;
 - forcar reenvio ou limpar historico de enviados;
+- atualizar o motor do WhatsApp, dependências, software ou reverter a última atualização após confirmação;
 - acompanhar andamento sem inundar a tela.
 
 O editor da GUI não salva HTML nem formato rico: a toolbar por ícones apenas insere ou remove texto compatível com WhatsApp, como `*negrito*`, `_itálico_`, `~tachado~`, monoespaçado com três crases, emoji pelo menu suspenso, `![](arquivo.pdf)`, `$diatarde$`, `$postagem$` e `^^^`. Linhas `^^^` viram abas visuais automaticamente; ao salvar ou enviar, as abas são recombinadas com o mesmo separador. A prévia lateral mostra somente a aba ativa, renderiza a marcação básica como resultado visual e mantém rolagem sincronizada com o editor.
@@ -219,6 +220,7 @@ Comandos principais:
 | `npm run release-notes:validate` | Valida localmente que `dist/release-notes.md` esteja em commit exclusivo. |
 | `npm run agents:update` | Verifica e sincroniza a governanca operacional remota definida em `.agents/.autoupdate.md`. |
 | `npm run agents:status` | Atualiza o resumo operacional gerado a partir de `.agents/continue.ia`. |
+| `npm run update -- --action software --confirm` | Atualiza o software oficial após confirmação explícita. |
 | `.\atualizar.cmd` | Atualiza pela Release Latest do GitHub, ou por `main` se nao houver release valida, no Windows. |
 | `sh ./atualizar.sh` | Atualiza pela Release Latest do GitHub, ou por `main` se nao houver release valida, no macOS/Linux. |
 
@@ -269,6 +271,8 @@ MEDIA_SEND_RETRY_MAX_DELAY_MS=10000
 Os scripts `.\atualizar.cmd` e `sh ./atualizar.sh` nao dependem de Git nem de um clone local. Eles consultam a API oficial do GitHub, priorizam a Release marcada como Latest e usam a branch `main` apenas se nao houver release valida.
 
 Quando a Release Latest possuir asset `WhatSend-v<versao>[-<canal>].zip`, o atualizador baixa esse pacote distribuivel. Antes de baixar o pacote, ele compara a versao remota com `whatsend-version.json`, arquivo operacional pequeno mantido no root e tambem publicado na release. Quando o identificador local corresponde ao `tag`/commit da Release ou ao commit da `main`, o download e a reinstalacao de dependencias sao pulados.
+
+Na GUI, o ícone Atualizar oferece quatro ações: somente `whatsapp-web.js`, todas as dependências, software oficial e reversão da última atualização. Cada ação exige confirmação e alerta que versões novas podem quebrar um ambiente estável. Antes da alteração, o sistema cria um snapshot local mínimo em `.runtime/updates`; em falha tenta restaurá-lo, preservando sessões, configurações, dados de clientes e logs. Ao concluir, reinicie o WhatSend para carregar as versões instaladas.
 
 ## Releases
 
