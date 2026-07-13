@@ -53,6 +53,17 @@ test("configurações ENV persistem por escopo global e sessão", () => {
 test("GUI expõe atualização com confirmação explícita", () => {
   const html = renderGuiHtml();
   assert.match(html, /id="updateButton"/);
+  assert.match(html, /id="updateOverlay"/);
+  assert.match(html, /Confirmar atualização/);
+  assert.doesNotMatch(html, /window\.prompt\("Atualizar/u);
   assert.match(html, /\/api\/update/);
   assert.match(html, /incompatibilidades/);
+});
+
+test("GUI incorpora anexos com seletor nativo e Data URI", () => {
+  const html = renderGuiHtml();
+  assert.match(html, /id="embeddedAttachmentInput"/);
+  assert.match(html, /readAsDataURL/);
+  assert.match(html, /@embed:/);
+  assert.match(html, /@@embedded/);
 });

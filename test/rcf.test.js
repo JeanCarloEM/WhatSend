@@ -61,6 +61,7 @@ const {
   normalizeTemplateText,
   normalizeYesNoAnswer,
   parseExecutionOptions,
+  parseEmbeddedTemplate,
   parseExpression,
   parseTemplateParts,
   POSTING_SPLIT_MARKER,
@@ -80,6 +81,7 @@ const {
   sanitizePhone,
   validateGuiPayload,
   validateGuiTemplateBaseDir,
+  validateTemplateMediaReferences,
   validateRuntimeFiles,
   resolveSessionByIdentifier,
   removeSession,
@@ -87,6 +89,55 @@ const {
   registerGuiInstance,
   waitForWhatsAppMediaContext,
 } = require("../main");
+
+test("anexos embedded usam Data URI terminal e preservam o pipeline de mídia", async () => {
+  const template = [
+    "Olá, ${nome}.",
+    "![Contrato](@embed:contrato)",
+    "",
+    "@@embedded",
+    "",
+    "[id=contrato]",
+    "name=contrato.pdf",
+    "mime=application/pdf",
+    "encoding=base64",
+    "data=data:application/pdf;base64,Y29udHJhdG8=",
+    "@@end",
+  ].join("\n");
+  const document = parseEmbeddedTemplate(template);
+
+  assert.equal(document.content.includes("@@embedded"), false);
+  assert.equal(document.attachments.get("contrato").mime, "application/pdf");
+  assert.equal(document.attachments.get("contrato").bytes.toString(), "contrato");
+  assert.deepEqual(validateTemplateMediaReferences(document), []);
+  assert.equal(applyTemplate(template, { nome: "Ana" }).includes("data:"), false);
+
+  const calls = [];
+  await sendRenderedTemplate({
+    async sendMessage(_to, content, options) {
+      calls.push({ content, options });
+    },
+  }, "5511999999999@c.us", applyTemplate(document.content, { nome: "Ana" }), undefined, {
+    embeddedAttachments: document.attachments,
+  });
+
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].content.filename, "contrato.pdf");
+  assert.equal(calls[0].content.mimetype, "application/pdf");
+  assert.equal(calls[0].options.caption, "Olá, Ana.");
+  assert.equal(calls[0].options.sendMediaAsDocument, true);
+});
+
+test("anexos embedded inválidos bloqueiam referências e integridade", () => {
+  const invalid = "![x](@embed:ausente)\n\n@@embedded\n\n[id=solto]\nname=solto.pdf\nmime=application/pdf\nencoding=base64\ndata=data:application/pdf;base64,AAAA\n@@end";
+  assert.deepEqual(validateTemplateMediaReferences(invalid), [
+    "Anexo embedded não definido: ausente.",
+    "Definição embedded sem referência: solto.",
+  ]);
+  assert.deepEqual(validateTemplateMediaReferences("@@embedded\n\n[id=x]\nname=x.pdf\nmime=image/png\nencoding=base64\ndata=data:image/png;base64,AAAA\n@@end"), [
+    "MIME ou extensão não suportado no embedded: x.pdf.",
+  ]);
+});
 const {
   MAIN_TARBALL_URL,
   VERSION_FILE_NAME,

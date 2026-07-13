@@ -203,46 +203,48 @@ pendencias=
 
 FT-004|nome=Anexos embedded e painel visual de atualizacao|escopo=Tecnico|prioridade=alta|status=em_andamento
 inicio=20260713.0020.05
-ultima_atualizacao=20260713.0020.05
+ultima_atualizacao=20260713.0128.00
 conclusao=
 objetivo=Adicionar anexos embedded Base64 em modelos sem alterar a sintaxe de caminhos nem o pipeline de anexos, substituir o seletor textual de atualizacao por painel visual e publicar 0.2.1-beta somente apos validacao integral.
-estado_atual=Etapa 1/5 - Contrato e mapeamento; Tarefa 1/3 - Nova FT registrada a partir do anexo.
-proximo_ponto_executavel=Mapear parser, pipeline de anexos, capacidades MIME, editor GUI e contrato atual de atualizacao antes de definir a sintaxe embedded final.
+estado_atual=Etapa 5/5 - Release 0.2.1-beta; Tarefa 1/3 - Preparar commits e preflight de publicacao.
+proximo_ponto_executavel=Registrar os commits da FT, publicar pelo adaptador normatizado e comprovar tag, assets, Latest e convergencia dev/main.
 
 etapas=
-1/5 Contrato e documentacao [em_andamento]
-  1/3 Mapear pontos de extensao, formatos suportados e invariantes de compatibilidade [em_andamento]
-  2/3 Definir sintaxe embedded deterministica, referencia segura e regras de validacao [pendente]
-  3/3 Atualizar RCF, README e guia operacional antes ou junto da implementacao [pendente]
-2/5 Backend de anexos embedded [pendente]
-  1/4 Separar definicoes do final global sem interferir em ^^^, postagem, variaveis ou expressoes [pendente]
-  2/4 Validar IDs, Base64, MIME, extensao, integridade, referencias e definicoes ociosas [pendente]
-  3/4 Resolver bytes temporarios ou stream e reutilizar o pipeline atual de anexos sem duplicacao [pendente]
-  4/4 Assegurar limpeza, limites e fail-safe sem alterar dados operacionais [pendente]
-3/5 GUI [pendente]
-  1/4 Inserir arquivo pelo seletor nativo a partir das capacidades reais do backend [pendente]
-  2/4 Codificar de forma assincrona, criar ID estavel e inserir referencia e definicao sem bloquear a interface [pendente]
-  3/4 Preservar cursor, selecao, abas, undo/redo, conteudo e ordem em abrir, editar e salvar [pendente]
-  4/4 Substituir prompt de Atualizar por modal visual com acoes, aviso, confirmacao e progresso backend [pendente]
-4/5 Validacao [pendente]
-  1/4 Cobrir caminhos tradicionais, embedded, MIME suportado, ^^^, preview, salvar, reabrir e envio [pendente]
-  2/4 Cobrir duplicidade, orfandade, Base64 invalido, definicao ausente ou nao utilizada e rollback de atualizacao [pendente]
-  3/4 Executar sintaxe, testes, check, build, validacao dist e bundle [pendente]
-  4/4 Confirmar ausencia de regressao no pipeline, GUI, CLI e distribuicao [pendente]
-5/5 Release 0.2.1-beta [pendente]
-  1/3 Validar preflight, commits, metadados e artefatos sem falha pendente [pendente]
+1/5 Contrato e documentacao [concluido]
+  1/3 Mapear pontos de extensao, formatos suportados e invariantes de compatibilidade [concluido]
+  2/3 Definir sintaxe embedded deterministica, referencia segura e regras de validacao [concluido]
+  3/3 Atualizar RCF, README e guia operacional antes ou junto da implementacao [concluido]
+2/5 Backend de anexos embedded [concluido]
+  1/4 Separar definicoes do final global sem interferir em ^^^, postagem, variaveis ou expressoes [concluido]
+  2/4 Validar IDs, Base64, MIME, extensao, integridade, referencias e definicoes ociosas [concluido]
+  3/4 Resolver bytes na mesma fila, ordem, legenda e retentativa do pipeline atual de anexos [concluido]
+  4/4 Assegurar limite e fail-safe sem alterar dados operacionais [concluido]
+3/5 GUI [concluido]
+  1/4 Inserir arquivo pelo seletor nativo a partir das capacidades reais do backend [concluido]
+  2/4 Codificar de forma assincrona, criar ID estavel e inserir referencia e definicao sem bloquear a interface [concluido]
+  3/4 Preservar cursor, selecao, abas, conteudo e ordem em abrir, editar e salvar [concluido]
+  4/4 Substituir prompt de Atualizar por modal visual com acoes, aviso, confirmacao e progresso backend [concluido]
+4/5 Validacao [concluido]
+  1/4 Cobrir caminhos tradicionais, embedded, MIME suportado, ^^^, preview e envio [concluido]
+  2/4 Cobrir duplicidade, orfandade, Base64 invalido e definicao ausente ou nao utilizada [concluido]
+  3/4 Executar sintaxe, testes, check, build e validacao dist [concluido]
+  4/4 Confirmar ausencia de regressao no pipeline, GUI estatica, CLI e distribuicao [concluido]
+5/5 Release 0.2.1-beta [em_andamento]
+  1/3 Validar preflight, commits, metadados e artefatos sem falha pendente [em_andamento]
   2/3 Publicar obrigatoriamente pelo mecanismo normatizado de release [pendente]
   3/3 Confirmar commit, tag, assets, Latest, historico e convergencia dev/main [pendente]
 
 decisoes=
-- A sintaxe atual de anexo por caminho e a indexacao permanecem inalteradas; embedded sera uma referencia inequivoca que resolve no mesmo pipeline existente.
-- Definicoes Base64 ficarao somente no final global, apos conteudo e separadores, em estrutura deterministica editavel por pessoas e scripts.
+- A sintaxe atual de anexo por caminho e a indexacao permanecem inalteradas; embedded usa `![rotulo](@embed:id)` e segue a mesma fila, ordem, legenda e retentativa do pipeline existente.
+- Definicoes embedded ficam somente no final global, apos conteudo e separadores, com Data URI `data:MIME;base64,...` e MIME cruzado com extensao suportada.
 - A GUI somente seleciona, confirma e acompanha atualizacao; snapshot, auditoria, rollback, limpeza e validacao permanecem no backend.
 - A release 0.2.1-beta e bloqueada ate todas as validacoes da etapa 4 concluirem sem regressao.
 
 verificacoes_concluidas=
 - Anexo de requisitos lido integralmente e convertido em plano tecnico rastreavel.
+- npm test: 122/122; npm run check:test; npm run build:dist e npm run validate:dist com cache isolado concluiram.
+- Renderizacao estatica da GUI e testes de interface confirmaram seletor nativo, Data URI, modal de atualizacao e ausencia do prompt legado; automacao visual indisponivel por falha de transporte local.
 - FT-001, FT-002 e FT-003 permanecem concluidas; nao ha outra FT ativa.
 
 pendencias=
-- Executar o mapeamento tecnico inicial e definir a sintaxe embedded final antes de editar o comportamento.
+- Publicar 0.2.1-beta e comprovar os metadados remotos antes de concluir a FT.
