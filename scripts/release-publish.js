@@ -6,7 +6,7 @@ const childProcess = require("child_process");
 const fs = require("fs");
 const path = require("path");
 const { runReleaseHook } = require("./.agents/release-hooks");
-const { normalizeVersion } = require("./release-metadata");
+const { normalizeVersion, REPOSITORY } = require("./release-metadata");
 
 const ROOT_DIR = path.resolve(__dirname, "..");
 const PACKAGE_PATH = path.join(ROOT_DIR, "package.json");
@@ -139,10 +139,11 @@ function waitForRelease(version, triggerCommit, options) {
   if (dev !== primary) throw new Error(`CONVERGENCIA_REMOTA_PENDENTE:${options.branch}=${dev};${options.primary}=${primary}`);
   const release = JSON.parse(run("gh", [
     "release", "view", `v${version}`,
-    "--json", "assets,isDraft,isLatest,isPrerelease,tagName,targetCommitish,url",
+    "--json", "assets,isDraft,isPrerelease,tagName,targetCommitish,url",
   ], { timeout: 120000 }).stdout);
+  const latestTag = run("gh", ["api", `repos/${REPOSITORY}/releases/latest`, "--jq", ".tag_name"], { timeout: 120000 }).stdout.trim();
   const assetNames = release.assets.map((asset) => asset.name).sort();
-  if (release.tagName !== `v${version}` || release.isDraft || release.isPrerelease || !release.isLatest) throw new Error(`RELEASE_REMOTO_INVALIDO:v${version}`);
+  if (release.tagName !== `v${version}` || release.isDraft || release.isPrerelease || latestTag !== `v${version}`) throw new Error(`RELEASE_REMOTO_INVALIDO:v${version}`);
   if (release.targetCommitish !== triggerCommit) throw new Error(`TAG_RELEASE_DIVERGENTE:${release.targetCommitish};${triggerCommit}`);
   if (!assetNames.includes(`WhatSend-v${version}.zip`) || !assetNames.includes("whatsend-version.json")) throw new Error("ASSETS_RELEASE_INCOMPLETOS");
   return { primary: options.primary, releaseUrl: release.url, workflowRun: Number(runId) };
