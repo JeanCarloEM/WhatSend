@@ -21,3 +21,7 @@ Ao alterar o sistema:
 - Não repita análises, comandos ou tentativas já registrados sem nova evidência ou ganho técnico esperado.
 - Sempre que tecnicamente possível, cada etapa funcional deve terminar com validação, commit e push antes da próxima etapa.
 - Ao mudar arquitetura, regras, UX, documentação, build ou distribuição, sincronize implementação, `AGENTS.md`, `RCF.md`, `README.md`, documentação pertinente e `continue.ia`.
+
+## Especialização de release
+
+`scripts/release-publish.js` especializa a publicação do WhatSend. O adaptador é necessário porque o pacote distribuível, a versão do manifesto e o workflow deste repositório não coincidem com o artefato genérico de governança. Ele usa os hooks formais `prepare`, `verify` e `published` quando existirem; não altera o mecanismo compartilhado.

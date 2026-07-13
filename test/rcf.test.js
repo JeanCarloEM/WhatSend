@@ -121,6 +121,7 @@ const {
   validateChangedFilesForSingleCommit,
   validateReleaseNotesContent,
 } = require("../scripts/release-notes-policy");
+const { parseArgs: parseReleasePublishArgs } = require("../scripts/release-publish");
 
 const COMPLEX_CLIENTS_CSV = path.join(__dirname, "clientes-complexos.csv");
 const COMPLEX_EXPECTED_JSON = path.join(__dirname, "expressions-complexas.expected.json");
@@ -635,6 +636,21 @@ test("workflow de release usa workflow_dispatch, build único e GitHub CLI", () 
   assert.match(releaseWorkflow, /gh release (create|edit)/);
   assert.match(releaseWorkflow, /--latest/);
   assert.match(releaseWorkflow, /whatsend-version\.json|metadata_path/);
+  assert.match(releaseWorkflow, /release-workflow\.js finalize/);
+  assert.match(releaseWorkflow, /git merge --ff-only origin\/dev/);
+});
+
+test("publicador local exige versão explícita e preserva dry-run", () => {
+  assert.deepEqual(parseReleasePublishArgs(["0.2.0-beta", "--dry-run"]), {
+    branch: "dev",
+    dryRun: true,
+    help: false,
+    noWatch: false,
+    primary: "main",
+    remote: "origin",
+    version: "0.2.0-beta",
+  });
+  assert.throws(() => parseReleasePublishArgs([]), /PARAMETRO_NORMATIVO_AUSENTE:version/);
 });
 
 test("status interativo renderiza sem erro", () => {

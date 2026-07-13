@@ -106,7 +106,7 @@
     "agent:validate-data": "node scripts/.agents/repo-tools.js agent:validate-data",
     "agent:index-data": "node scripts/.agents/repo-tools.js agent:index-data",
     "agent:query-data": "node scripts/.agents/repo-tools.js agent:query-data",
-    "agent:release:publish": "node scripts/.agents/to-ia.js --command agent:release:publish --run node scripts/.agents/release-publish-resume.js"
+    "agent:release:publish": "node scripts/.agents/to-ia.js --command agent:release:publish --run node scripts/release-publish.js"
   },
   "dependencies": {
     "csv-parse": "^7.0.0",

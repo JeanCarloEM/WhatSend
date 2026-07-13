@@ -246,7 +246,7 @@ alpha  -> WhatSend-v1.2.0-alpha.zip
 
 Em terminal local, dados ausentes sao perguntados interativamente. Em CI ou scripts, informe `--version`, `--channel`, `--commit-sha` e `--official-release` para um build oficial deterministico.
 
-Para publicar pelo GitHub Web, use o workflow `Release`. Ele e acionado por `workflow_dispatch`, exibindo campos para versao, canal e confirmacao. O workflow roda testes, checagem RCF, build, validacao do dist, cria ou atualiza a Release/tag, anexa o ZIP e `whatsend-version.json`, e marca a Release como Latest.
+Para publicar, parta de `dev` com worktree limpo e use `npm run agent:release:publish -- VERSAO`. O adaptador local valida a autenticacao, atualiza o manifesto, executa os testes e aciona o workflow `Release`. O workflow roda as validacoes, gera o ZIP, publica tag, assets e Latest, cria o marcador `release: vVERSAO` e faz fast-forward para `main`. A interface web continua disponível por `workflow_dispatch`, desde que a branch selecionada seja `dev`.
 
 ## Validacao
 

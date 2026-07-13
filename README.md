@@ -289,7 +289,7 @@ O build gera:
 
 Sem parametros e em terminal interativo, o comando pergunta versao, canal e se o artefato e uma Release oficial. Em automacao, passe os parametros explicitamente.
 
-A publicacao oficial deve usar o workflow GitHub Actions `Release`, executado por `workflow_dispatch` na interface web do GitHub. Ele recebe versao, canal e confirmacao, roda testes e validacoes, gera o mesmo ZIP pelo `build:dist`, cria ou atualiza a tag e a Release correspondente, anexa o ZIP e `whatsend-version.json`, e marca a Release como Latest.
+A publicacao oficial parte de `dev` e pode usar `npm run agent:release:publish -- VERSAO`, que exige worktree limpo, confirma a autenticacao GitHub, versiona o manifesto, executa testes e acompanha o workflow GitHub Actions `Release`. O workflow recebe versao, canal e confirmacao, gera o mesmo ZIP pelo `build:dist`, cria ou atualiza a tag e a Release correspondente, anexa o ZIP e `whatsend-version.json`, marca a Release como Latest e conclui com `release: vVERSAO` antes do fast-forward para `main`. Pela interface web, execute o mesmo workflow selecionando a branch `dev`.
 
 ## Testes
 

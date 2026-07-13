@@ -370,7 +370,7 @@ O workflow de CI deve executar testes, checagem RCF com fixtures, geração de `
 
 Deve existir workflow de Release com disparo manual por `workflow_dispatch`, usando campos explícitos para versão, canal e confirmação de publicação oficial. Esse fluxo deve permitir execução integral pela interface web do GitHub, sem prompts interativos.
 
-O workflow de Release deve usar a mesma lógica de versionamento do `build:dist`, criar automaticamente a tag `v<versão>[-<canal>]`, criar ou atualizar a Release correspondente, anexar o ZIP distribuível e `whatsend-version.json`, e marcar a Release como Latest por mecanismo oficial do GitHub. Como Releases marcadas como prerelease não são elegíveis a Latest no fluxo esperado, canais como `beta` e `alpha` devem ser representados no nome/tag/canal, sem marcar a publicação GitHub como prerelease.
+O workflow de Release deve usar a mesma lógica de versionamento do `build:dist`, criar automaticamente a tag `v<versão>[-<canal>]`, criar ou atualizar a Release correspondente, anexar o ZIP distribuível e `whatsend-version.json`, e marcar a Release como Latest por mecanismo oficial do GitHub. Como Releases marcadas como prerelease não são elegíveis a Latest no fluxo esperado, canais como `beta` e `alpha` devem ser representados no nome/tag/canal, sem marcar a publicação GitHub como prerelease. A execução oficial deve partir de `dev`, publicar a tag no commit validado e, depois da publicação, registrar `release: v<versão>` e convergir `dev` para `main` por fast-forward; qualquer divergência bloqueia a conclusão.
 
 ### RN029 - Reutilização de Instância Local
 
