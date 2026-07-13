@@ -11,7 +11,6 @@ const { normalizeVersion } = require("./release-metadata");
 const ROOT_DIR = path.resolve(__dirname, "..");
 const PACKAGE_PATH = path.join(ROOT_DIR, "package.json");
 const RELEASE_WORKFLOW = "release.yml";
-const NPM_COMMAND = process.platform === "win32" ? "npm.cmd" : "npm";
 
 class UsageError extends Error {}
 
@@ -32,8 +31,8 @@ function main(argv = process.argv.slice(2)) {
   assertPreflight(preflight);
   const prepare = runReleaseHook("prepare", { version });
   prepareVersionCommit(version, options);
-  run(NPM_COMMAND, ["test"], { timeout: 900000 });
-  run(NPM_COMMAND, ["run", "check:test"], { timeout: 900000 });
+  run(process.execPath, [resolveNpmCli(), "test"], { timeout: 900000 });
+  run(process.execPath, [resolveNpmCli(), "run", "check:test"], { timeout: 900000 });
   const verify = runReleaseHook("verify", { version });
   const triggerCommit = run("git", ["rev-parse", "HEAD"]).stdout.trim();
   run("git", ["push", options.remote, options.branch], { timeout: 120000 });
@@ -166,6 +165,16 @@ function assertOnlyStaged(allowed) {
   if (!files.length || files.some((file) => !allowed.includes(file))) throw new Error(`STAGING_RELEASE_INVALIDO:${files.join(",")}`);
 }
 
+function resolveNpmCli() {
+  const candidates = [
+    path.join(path.dirname(process.execPath), "node_modules", "npm", "bin", "npm-cli.js"),
+    path.join(path.dirname(process.execPath), "..", "lib", "node_modules", "npm", "bin", "npm-cli.js"),
+  ];
+  const npmCli = candidates.find((candidate) => fs.existsSync(candidate));
+  if (!npmCli) throw new Error("NPM_CLI_NAO_ENCONTRADO");
+  return npmCli;
+}
+
 function run(command, args, options = {}) {
   const result = childProcess.spawnSync(command, args, { cwd: ROOT_DIR, encoding: "utf8", shell: false, timeout: options.timeout || 30000 });
   if (!options.optional && (result.error || result.status !== 0)) {
@@ -191,4 +200,4 @@ if (require.main === module) {
   }
 }
 
-module.exports = { inspectPreflight, main, parseArgs };
+module.exports = { inspectPreflight, main, parseArgs, resolveNpmCli };
