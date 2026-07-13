@@ -12,8 +12,15 @@ const path = require("path");
 const ROOT_DIR = path.resolve(__dirname, "..", "..");
 const ZERO_SHA = "0000000000000000000000000000000000000000";
 
+class UsageError extends Error {}
+
 function main(argv = process.argv.slice(2)) {
   const [command, ...args] = argv;
+
+  if (command === "--help") {
+    console.log("Uso: release-workflow <detect <before> <after>|finalize <versao> [arquivo]> ");
+    return 0;
+  }
 
   if (command === "detect") {
     return detectReleaseTrigger(args);
@@ -23,7 +30,7 @@ function main(argv = process.argv.slice(2)) {
     return finalizeRelease(args);
   }
 
-  throw new Error(`Comando de release desconhecido: ${command || "(vazio)"}`);
+  throw new UsageError(`COMANDO_RELEASE_INVALIDO:${command || "(vazio)"}`);
 }
 
 function detectReleaseTrigger(args = []) {
@@ -172,7 +179,7 @@ if (require.main === module) {
     process.exitCode = main();
   } catch (err) {
     console.error(err.message);
-    process.exitCode = 1;
+    process.exitCode = error instanceof UsageError ? 2 : 1;
   }
 }
 

@@ -20,13 +20,12 @@
     "validate:dist": "node scripts/validate-dist.js",
     "release-notes:generate": "node scripts/generate-release-notes.js",
     "release-notes:validate": "node scripts/validate-release-notes-policy.js --staged",
-    "agents:update": "node scripts/update-agents.js",
+    "agents:update": "node scripts/.agents/repo-tools.js agent:agents",
     "agents:status": "node scripts/generate-agents-status.js",
     "check": "node main.js --check",
     "check:test": "node main.js --check --check-csv test/check-clientes.csv --check-template test/check-texto.md",
     "test": "node --test",
     "update": "node scripts/update-project.js",
-    "agents:update": "node scripts/.agents/repo-tools.js agent:agents",
     "agent:agents": "node scripts/.agents/repo-tools.js agent:agents",
     "agent:filter": "node scripts/.agents/to-ia.js --command agent:filter",
     "agent:build": "node scripts/.agents/repo-tools.js agent:build",
@@ -106,7 +105,8 @@
     "agent:convert": "node scripts/.agents/repo-tools.js agent:convert",
     "agent:validate-data": "node scripts/.agents/repo-tools.js agent:validate-data",
     "agent:index-data": "node scripts/.agents/repo-tools.js agent:index-data",
-    "agent:query-data": "node scripts/.agents/repo-tools.js agent:query-data"
+    "agent:query-data": "node scripts/.agents/repo-tools.js agent:query-data",
+    "agent:release:publish": "node scripts/.agents/to-ia.js --command agent:release:publish --run node scripts/.agents/release-publish-resume.js"
   },
   "dependencies": {
     "csv-parse": "^7.0.0",

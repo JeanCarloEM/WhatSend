@@ -12,8 +12,13 @@ const ROOT_DIR = path.resolve(__dirname, "..", "..");
 const HOOK_PATH = path.join(ROOT_DIR, ".agents", "hooks", "release.js");
 const EVENTS = new Set(["prepare", "verify", "published"]);
 
+class UsageError extends Error {}
+
 function runReleaseHook(event, payload = {}) {
-  if (!EVENTS.has(event) || !fs.existsSync(HOOK_PATH)) {
+  if (!EVENTS.has(event)) {
+    throw new UsageError(`EVENTO_HOOK_INVALIDO:${event || "(vazio)"}`);
+  }
+  if (!fs.existsSync(HOOK_PATH)) {
     return { event, executed: false };
   }
 
@@ -45,11 +50,15 @@ function deepFreeze(value) {
 if (require.main === module) {
   const [event, version = "", asset = ""] = process.argv.slice(2);
   try {
+    if (event === "--help") {
+      process.stdout.write("Uso: release-hooks <prepare|verify|published> [versao] [asset]\n");
+      return;
+    }
     const result = runReleaseHook(event, { asset, version });
     process.stdout.write(`${JSON.stringify(result)}\n`);
   } catch (error) {
     process.stderr.write(`${error.message}\n`);
-    process.exitCode = 1;
+    process.exitCode = error instanceof UsageError ? 2 : 1;
   }
 }
 

@@ -14,7 +14,14 @@ const CANONICAL_FILES = [
 ];
 const STATUS_FILE = "handoff.md";
 
-function main() {
+function main(argv = process.argv.slice(2)) {
+  if (argv.includes("--help")) {
+    console.log("Uso: generate-agents-status [--help]");
+    return;
+  }
+  if (argv.length) {
+    throw new Error(`PARAMETRO_INVALIDO:${argv[0]}`);
+  }
   const canonical = resolveCanonicalContinueFile(ROOT_DIR);
   const content = fs.readFileSync(canonical.path, "utf8");
   const fronts = parseWorkFronts(content).filter((front) => isTechnicalScope(front.scope));
@@ -221,7 +228,7 @@ if (require.main === module) {
     main();
   } catch (err) {
     console.error(`Falha ao atualizar governanca operacional: ${err.message}`);
-    process.exitCode = 1;
+    process.exitCode = String(err.message).includes("PARAMETRO_INVALIDO:") ? 2 : 1;
   }
 }
 

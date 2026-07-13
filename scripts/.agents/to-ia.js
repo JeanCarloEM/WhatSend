@@ -141,18 +141,41 @@ function parseArgs(argv) {
   const args = { command: "agent:filter", exit: 0 };
   for (let index = 0; index < argv.length; index += 1) {
     const value = argv[index];
-    if (value === "--command") args.command = argv[++index] || args.command;
-    if (value === "--exit") args.exit = Number(argv[++index] || 0);
-    if (value === "--run") {
+    if (value === "--help") {
+      args.help = true;
+    } else if (value === "--command") {
+      args.command = argv[++index] || "";
+      if (!args.command) throw new Error("PARAMETRO_NORMATIVO_AUSENTE:command");
+    } else if (value === "--exit") {
+      args.exit = Number(argv[++index]);
+      if (!Number.isInteger(args.exit)) throw new Error("PARAMETRO_INVALIDO:exit");
+    } else if (value === "--run") {
       args.run = argv.slice(index + 1);
       break;
+    } else {
+      throw new Error(`PARAMETRO_INVALIDO:${value}`);
     }
   }
   return args;
 }
 
+function help() {
+  return "Uso: node to-ia.js [--command <nome>] [--exit <codigo>] [--run <comando> [args...]]\n";
+}
+
 if (require.main === module) {
-  const args = parseArgs(process.argv.slice(2));
+  let args;
+  try {
+    args = parseArgs(process.argv.slice(2));
+  } catch (error) {
+    process.stdout.write(filterOutput({ exit: 2, stderr: error.message }));
+    process.exitCode = 2;
+    return;
+  }
+  if (args.help) {
+    process.stdout.write(help());
+    return;
+  }
   if (args.run) {
     const [command, ...commandArgs] = args.run;
     if (!command) {
@@ -176,4 +199,4 @@ if (require.main === module) {
   process.stdin.on("end", () => { process.stdout.write(filterOutput({ ...args, stdout: input })); });
 }
 
-module.exports = { filterOutput, normalize };
+module.exports = { filterOutput, help, normalize, parseArgs };

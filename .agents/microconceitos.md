@@ -48,6 +48,14 @@ Alteração DEVE comprovar ausência de regressão, reprodutibilidade, produto f
 
 ## MN-REF — referência cruzada
 
+## MN-CLI — contrato comum de script
+
+Script reutilizável DEVE declarar nome/finalidade, sintaxe, parâmetros tipados, obrigatoriedade/default, configuração, modos local/CI, efeitos, idempotência, ajuda, extensões, compatibilidade, logs, erros e códigos `0/1/2/3/4/130`. `--help` DEVE ser não mutável; argumento desconhecido DEVE retornar `2`, salvo encaminhamento explícito após `--` a extensão documentada. Configuração segue CLI → ambiente → arquivo local declarado → default; segredo NÃO DEVE ser logado. Saída para IA DEVE atravessar `to-ia`; script multiplataforma DEVERIA usar runtime disponível e path relativo seguro.
+
+## MN-META — metaarquivo contextual
+
+Metaarquivo gerenciado reside em `./.agents/meta/<contexto>.md`, é subordinado a AGENTS/microconceitos e contém somente regra do grupo. Contexto DEVE ter nome estável, referência determinística, leitura mínima e ausência de duplicação; arquivo não aplicável NÃO DEVE ser carregado. Distribuição/indexação DEVEM incluí-lo recursivamente. Especialização local usa local/hook/adaptador separado e atualização DEVE preservar colisão local, abortando diante de ambiguidade.
+
 Referência usa identificador e seção estáveis. Agregador contém somente referências. Referência circular, destino ausente, exceção sem autoridade ou valor essencial abstraído é não conformidade.
 
 ## W-MTX-42 — matriz Web gerativa

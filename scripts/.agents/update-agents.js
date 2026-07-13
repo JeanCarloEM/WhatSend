@@ -37,8 +37,14 @@ const LEGACY_MANAGED_FILES = new Set([
   "scripts/lib/archive.js",
 ]);
 
+class UsageError extends Error {}
+
 async function main(argv = process.argv.slice(2), options = {}) {
   const parsed = parseArgs(argv);
+  if (parsed.help) {
+    console.log(help());
+    return { help: true };
+  }
   const rootDir = options.rootDir || ROOT_DIR;
   const httpClient = options.httpClient || defaultHttpClient;
   const plan = await buildUpdatePlan(rootDir, httpClient);
@@ -70,11 +76,19 @@ async function main(argv = process.argv.slice(2), options = {}) {
 }
 
 function parseArgs(argv = []) {
-  return {
-    check: argv.includes("--check"),
-    dryRun: argv.includes("--dry-run"),
-    force: argv.includes("--force"),
-  };
+  const parsed = { check: false, dryRun: false, force: false, help: false };
+  for (const value of argv) {
+    if (value === "--check") parsed.check = true;
+    else if (value === "--dry-run") parsed.dryRun = true;
+    else if (value === "--force") parsed.force = true;
+    else if (value === "--help") parsed.help = true;
+    else throw new UsageError(`PARAMETRO_INVALIDO:${value}`);
+  }
+  return parsed;
+}
+
+function help() {
+  return "Uso: agents:update [--check|--dry-run] [--force] [--help]";
 }
 
 async function buildUpdatePlan(rootDir, httpClient = defaultHttpClient) {
@@ -137,7 +151,15 @@ async function resolveRemoteSource(httpClient = defaultHttpClient) {
 }
 
 async function requestJsonAllow404(httpClient, url) {
-  const response = await httpClient(url);
+  let response = await httpClient(url);
+
+  // PROTECAO: limita o fallback autenticado a consultas JSON da API GitHub.
+  if (response.statusCode === 403) {
+    const authenticated = githubCliJsonResponse(url);
+    if (authenticated) {
+      response = authenticated;
+    }
+  }
 
   if (response.statusCode === 404) {
     return response;
@@ -150,6 +172,34 @@ async function requestJsonAllow404(httpClient, url) {
   return {
     ...response,
     json: JSON.parse(response.body.toString("utf8")),
+  };
+}
+
+function githubCliJsonResponse(url) {
+  const target = new URL(url);
+
+  if (target.protocol !== "https:" || target.hostname !== "api.github.com") {
+    return null;
+  }
+
+  const result = childProcess.spawnSync("gh", [
+    "api",
+    `${target.pathname}${target.search}`,
+    "-H",
+    "Accept: application/vnd.github+json",
+  ], {
+    encoding: "utf8",
+    windowsHide: true,
+  });
+
+  if (result.error || result.status !== 0 || !result.stdout.trim()) {
+    return null;
+  }
+
+  return {
+    body: Buffer.from(result.stdout, "utf8"),
+    headers: {},
+    statusCode: 200,
   };
 }
 
@@ -183,7 +233,7 @@ function discoverRemoteRoot(tempRoot) {
 function scoreAgentsPath(filePath) {
   const rel = toPosixPath(filePath).toLocaleLowerCase("en-US");
 
-  if (rel.endsWith("/src/agents.md")) {
+  if (rel.toLocaleLowerCase("en-US").endsWith("/src/agents.md")) {
     return "0";
   }
 
@@ -203,7 +253,7 @@ function collectRemoteGovernanceFiles(remoteRoot) {
 
   for (const filePath of listFiles(path.join(remoteRoot, ".agents"))) {
     const relativePath = path.relative(remoteRoot, filePath);
-    if (MANAGED_EXTENSIONS.has(path.extname(filePath).toLocaleLowerCase("en-US"))) {
+    if (!isLocalExtensionPath(relativePath) && MANAGED_EXTENSIONS.has(path.extname(filePath).toLocaleLowerCase("en-US"))) {
       addRemoteFile(files, remoteRoot, relativePath);
     }
   }
@@ -274,7 +324,7 @@ function compareRemoteFiles(rootDir, remoteFiles, previousLock = null) {
     const localPath = path.join(rootDir, entry.relativePath);
     const localContent = fs.existsSync(localPath) ? fs.readFileSync(localPath) : null;
     const content = entry.kind === "package" && localContent ? mergePackageManifest(localContent, entry.content) : entry.content;
-    const same = localContent && hashBuffer(localContent) === hashBuffer(content);
+    const same = localContent && hashTextContent(localContent) === hashTextContent(content);
     changes.push({
       action: same ? "unchanged" : localContent ? "update" : "add",
       content,
@@ -667,6 +717,10 @@ function hashBuffer(buffer) {
   return crypto.createHash("sha256").update(buffer).digest("hex");
 }
 
+function hashTextContent(buffer) {
+  return hashBuffer(Buffer.from(buffer.toString("utf8").replace(/\r\n/gu, "\n"), "utf8"));
+}
+
 function toPosixPath(value) {
   return String(value || "").split(path.sep).join("/");
 }
@@ -674,8 +728,13 @@ function toPosixPath(value) {
 if (require.main === module) {
   main().catch((err) => {
     console.error(`Falha ao atualizar governanca operacional: ${err.message}`);
-    process.exitCode = 1;
+    process.exitCode = err instanceof UsageError ? 2 : 1;
   });
+}
+
+function isLocalExtensionPath(value) {
+  const relative = toPosixPath(value).replace(/^\.\//u, "");
+  return relative.startsWith(".agents/hooks/") || relative.startsWith(".agents/local/");
 }
 
 module.exports = {
@@ -683,7 +742,11 @@ module.exports = {
   collectRemoteGovernanceFiles,
   compareRemoteFiles,
   assertNoUnmanagedCollisions,
+  githubCliJsonResponse,
+  hashTextContent,
   isRecognizedLegacyGovernanceFile,
+  isLocalExtensionPath,
+  help,
   main,
   mergePackageManifest,
   normalizeGovernanceRelativePath,
