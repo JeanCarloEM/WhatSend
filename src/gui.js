@@ -16,12 +16,11 @@ const { renderGuiIcon, renderGuiIconSprite } = require("./gui-icons");
 const {
   AUTHOR,
   AUTHOR_URL,
-  COMPLIANCE_NOTICE,
-  DISCLAIMER,
   LICENSE_LOCAL_PATH,
   LICENSE_NAME,
   LICENSE_URL,
-  REPOSITORY_URL,
+  renderLegalFooterHtml,
+  renderComplianceSummaryHtml,
 } = require("./notice");
 const { loadCsv, normalizeTextContent } = require("./data");
 const { initLogFiles, resetSentLog } = require("./logs");
@@ -71,6 +70,7 @@ const GUI_HINTS = Object.freeze({
   save: "Salvar todas as abas em um arquivo .md separado por ^^^.",
   settings: "Abrir configurações desta execução.",
   shutdown: "Desligar o processo local e fechar o navegador controlado.",
+  update: "Atualizar motor, dependências, software ou reverter a última atualização.",
   strikethrough: "Aplicar ou remover tachado do WhatsApp na seleção.",
   variant: "Inserir separador ^^^ entre modelos.",
   docs: "Abrir documentação Markdown no GitHub.",
@@ -244,6 +244,7 @@ function createGuiState(paths = PATHS) {
     lastError: "",
     log: [],
     progress: createEmptyGuiProgress(),
+    update: { active: false, action: "", result: "" },
     startedAt: null,
     status: "iniciando_whatsapp",
     sessions: listSessions(paths),
@@ -294,6 +295,22 @@ async function routeGuiRequest(req, res, context) {
       ok: true,
       state: context.state,
     });
+    return;
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/update") {
+    const payload = await readJsonBody(req);
+    const action = String(payload.action || "").trim();
+    if (!payload.confirmed || !["whatsapp-web.js", "dependencies", "software", "revert"].includes(action)) {
+      sendJson(res, 400, { error: "Ação de atualização inválida ou sem confirmação.", ok: false });
+      return;
+    }
+    if (context.state.update && context.state.update.active) {
+      sendJson(res, 409, { error: "Já existe uma atualização em andamento.", ok: false });
+      return;
+    }
+    startGuiUpdate(context.state, action);
+    sendJson(res, 202, { message: "Atualização iniciada. Acompanhe o progresso abaixo.", ok: true });
     return;
   }
 
@@ -1745,13 +1762,24 @@ function renderGuiHtml() {
     }
 
     .license-panel {
-      background: #fff7f5;
+      background: #fff8f7;
       border-color: #ffd7ce;
-      font-size: 13px;
+      box-shadow: none;
+      color: #7a271a;
+      font-size: 12px;
+    }
+
+    .license-panel h2,
+    .license-panel p,
+    .license-panel a,
+    .license-panel .hint,
+    .license-panel strong {
+      font-size: inherit;
     }
 
     .license-panel h2 {
-      font-size: 14px;
+      color: #7a271a;
+      margin-bottom: 8px;
     }
 
     .wa-editor-shell {
@@ -2062,18 +2090,24 @@ function renderGuiHtml() {
     }
 
     .compliance-notice {
-      background: #fff1f0;
-      border: 1px solid #fecdca;
-      border-left: 4px solid var(--danger);
-      border-radius: 8px;
+      background: #fff4f2;
+      border: 1px solid #ffd7ce;
+      border-left: 3px solid #f97066;
+      border-radius: 7px;
       color: #7a271a;
       display: grid;
-      gap: 8px;
-      font-size: 13px;
+      gap: 6px;
+      font-size: inherit;
       font-weight: 700;
       line-height: 1.45;
-      margin: 12px 0;
-      padding: 11px 12px;
+      margin: 9px 0 0;
+      padding: 9px 10px;
+    }
+
+    .compliance-notice.full {
+      background: transparent;
+      border-left-color: #d92d20;
+      margin: 10px 0;
     }
 
     .compliance-notice p {
@@ -2083,6 +2117,31 @@ function renderGuiHtml() {
     .compliance-notice strong {
       color: #7a271a;
       font-weight: 900;
+    }
+
+    .global-footer {
+      color: #475467;
+      font-size: 12px;
+      line-height: 1.5;
+      margin: 20px auto 0;
+      max-width: 1180px;
+      padding: 0 2px 28px;
+    }
+
+    .global-footer h2,
+    .global-footer p,
+    .global-footer a,
+    .global-footer strong {
+      font-size: inherit;
+    }
+
+    .global-footer h2 {
+      color: var(--text);
+      margin: 0 0 8px;
+    }
+
+    .global-footer p {
+      margin: 5px 0;
     }
 
     .split {
@@ -2284,6 +2343,20 @@ function renderGuiHtml() {
       padding-right: 4px;
     }
 
+    .settings-group {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      display: grid;
+      gap: 9px;
+      padding: 10px;
+    }
+
+    .settings-group h3 {
+      color: var(--text);
+      font-size: 13px;
+      margin: 0;
+    }
+
     .settings-row {
       align-items: center;
       display: grid;
@@ -2371,6 +2444,7 @@ function renderGuiHtml() {
       </div>
       <div class="header-actions">
         <div class="status-pill" id="statusPill">Aguardando</div>
+        <button id="updateButton" class="icon-button" type="button" data-hint="${escapeHtml(GUI_HINTS.update)}" aria-label="Atualizar">${renderGuiIcon("save")}</button>
         <button id="settingsButton" class="icon-button" type="button" data-hint="${escapeHtml(GUI_HINTS.settings)}" aria-label="Configurações">${renderGuiIcon("settings")}</button>
         <button id="shutdownButton" class="icon-button shutdown-button" type="button" data-hint="${escapeHtml(GUI_HINTS.shutdown)}" aria-label="Desligar">${renderGuiIcon("power")}</button>
       </div>
@@ -2395,10 +2469,8 @@ function renderGuiHtml() {
         <section class="license-panel">
           <h2>Licença</h2>
           <p><strong>Autor:</strong> <a href="${AUTHOR_URL}" target="_blank" rel="noreferrer">${AUTHOR}</a></p>
-          <p><strong>Repositório:</strong> <a href="${REPOSITORY_URL}" target="_blank" rel="noreferrer">${REPOSITORY_URL}</a></p>
           <p><strong>Licença:</strong> <a href="/license" target="_blank" rel="noreferrer">${LICENSE_NAME}</a> <span class="hint">(${LICENSE_LOCAL_PATH}; <a href="${LICENSE_URL}" target="_blank" rel="noreferrer">${LICENSE_URL}</a>)</span></p>
-          <div class="compliance-notice" role="note" aria-label="Aviso legal">${renderComplianceNoticeHtml()}</div>
-          <div class="hint">${DISCLAIMER}</div>
+          <div class="compliance-notice" role="note" aria-label="Aviso legal resumido">${renderComplianceSummaryHtml()}</div>
         </section>
 
         <section>
@@ -2516,6 +2588,7 @@ function renderGuiHtml() {
         </section>
       </aside>
     </div>
+    <footer class="global-footer">${renderLegalFooterHtml()}</footer>
   </main>
 
   <div id="settingsOverlay" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
@@ -2558,6 +2631,7 @@ function renderGuiHtml() {
     const statusPill = document.getElementById("statusPill");
     const topProgress = document.getElementById("topProgress");
     const topProgressBar = document.getElementById("topProgressBar");
+    const updateButton = document.getElementById("updateButton");
     const settingsButton = document.getElementById("settingsButton");
     const shutdownButton = document.getElementById("shutdownButton");
     const sessionSelect = document.getElementById("sessionSelect");
@@ -3309,7 +3383,15 @@ function renderGuiHtml() {
       const definitions = (settingsSnapshot && settingsSnapshot.definitions) || [];
       settingsGrid.innerHTML = "";
 
-      definitions.forEach((definition) => {
+      groupSettingsDefinitions(definitions).forEach((group) => {
+        const groupBox = document.createElement("div");
+        groupBox.className = "settings-group";
+
+        const title = document.createElement("h3");
+        title.textContent = group.name;
+        groupBox.append(title);
+
+        group.items.forEach((definition) => {
         const row = document.createElement("div");
         row.className = "settings-row";
 
@@ -3321,15 +3403,39 @@ function renderGuiHtml() {
         input.id = "setting-" + definition.name;
         input.name = definition.name;
         input.type = "number";
-        input.min = "0";
+        input.step = definition.type === "integer" ? "1" : "any";
+        if (definition.min !== undefined) input.min = String(definition.min);
+        if (definition.max !== undefined) input.max = String(definition.max);
         input.placeholder = definition.fallback || "";
         input.value = values[definition.name] || "";
 
         row.append(label, input);
-        settingsGrid.append(row);
+          groupBox.append(row);
+        });
+
+        settingsGrid.append(groupBox);
       });
 
       initializeHints(settingsGrid);
+    }
+
+    function groupSettingsDefinitions(definitions) {
+      const groups = new Map();
+
+      definitions.forEach((definition) => {
+        const name = definition.group || "Geral";
+        if (!groups.has(name)) {
+          groups.set(name, {
+            items: [],
+            name,
+            order: Number(definition.groupOrder || 100),
+          });
+        }
+
+        groups.get(name).items.push(definition);
+      });
+
+      return Array.from(groups.values()).sort((a, b) => a.order - b.order || a.name.localeCompare(b.name));
     }
 
     async function saveSettingsPanel() {
@@ -3807,6 +3913,27 @@ function renderGuiHtml() {
       });
     });
 
+    updateButton.addEventListener("click", async () => {
+      const choice = window.prompt("Atualizar: 1) whatsapp-web.js  2) todas as dependências  3) software oficial  4) reverter última atualização", "1");
+      const actions = { "1": "whatsapp-web.js", "2": "dependencies", "3": "software", "4": "revert" };
+      const action = actions[choice || ""];
+      if (!action) return;
+      const warning = action === "revert"
+        ? "Reverter a última atualização? Software, dependências e metadados serão restaurados."
+        : "Atualizações podem introduzir incompatibilidades e quebrar o ambiente estável. Confirmar?";
+      if (!window.confirm(warning)) return;
+      try {
+        updateButton.disabled = true;
+        await postJson("/api/update", { action, confirmed: true });
+        showMessage("Atualização iniciada. O progresso será mostrado no registro.", "warning");
+        startStatusPolling();
+      } catch (err) {
+        showMessage(err.message, "error");
+      } finally {
+        window.setTimeout(() => { updateButton.disabled = false; }, 800);
+      }
+    });
+
     settingsCancel.addEventListener("click", closeSettingsPanel);
     settingsSave.addEventListener("click", () => {
       saveSettingsPanel().catch((err) => showMessage(err.message, "error"));
@@ -3952,34 +4079,41 @@ function renderTemplateMarkerButtons() {
   }).join("");
 }
 
+function startGuiUpdate(state, action) {
+  state.busy = true;
+  state.update = { active: true, action, result: "" };
+  pushGuiLog(state, { message: `Atualização iniciada: ${action}.`, type: "warning" });
+  const child = childProcess.spawn(process.execPath, [
+    path.join(ROOT_DIR, "scripts", "update-project.js"),
+    "--action", action, "--confirm",
+  ], { cwd: ROOT_DIR, windowsHide: true });
+  const append = (chunk, type) => String(chunk || "").split(/\r?\n/u).filter(Boolean).forEach((message) => {
+    pushGuiLog(state, { message, type });
+  });
+  child.stdout.on("data", (chunk) => append(chunk, "info"));
+  child.stderr.on("data", (chunk) => append(chunk, "error"));
+  child.on("error", (error) => {
+    state.busy = false;
+    state.update = { active: false, action, result: error.message };
+    pushGuiLog(state, { message: `Atualização não iniciada: ${error.message}`, type: "error" });
+  });
+  child.on("close", (code) => {
+    const ok = code === 0;
+    state.busy = false;
+    state.update = { active: false, action, result: ok ? "concluída" : `falhou (código ${code})` };
+    pushGuiLog(state, {
+      message: ok
+        ? "Atualização concluída. Reinicie o WhatSend para carregar as versões instaladas."
+        : "Atualização falhou; verifique o erro e a recuperação automática registrada acima.",
+      type: ok ? "success" : "error",
+    });
+
+  });
+}
+
 function renderHelpLink(iconName, href, hint, extraClass = "") {
   const className = ["help-link", extraClass].filter(Boolean).join(" ");
   return `<a class="${escapeHtml(className)}" href="${escapeHtml(href)}" target="_blank" rel="noreferrer" data-hint="${escapeHtml(hint)}" aria-label="${escapeHtml(hint)}">${renderGuiIcon(iconName)}</a>`;
-}
-
-function renderComplianceNoticeHtml() {
-  return COMPLIANCE_NOTICE
-    .split("\n")
-    .map((line) => `<p>${formatComplianceNoticeLine(line)}</p>`)
-    .join("");
-}
-
-function formatComplianceNoticeLine(line) {
-  const highlights = [
-    "não é afiliado, patrocinado, endossado ou mantido",
-    "Use-o por sua conta e risco",
-    "restrições, bloqueio ou banimento",
-    "O autor não se responsabiliza",
-    "disclaimer abaixo",
-  ];
-  let html = escapeHtml(line);
-
-  for (const phrase of highlights) {
-    const escapedPhrase = escapeHtml(phrase);
-    html = html.split(escapedPhrase).join(`<strong>${escapedPhrase}</strong>`);
-  }
-
-  return html;
 }
 
 function escapeHtml(value) {

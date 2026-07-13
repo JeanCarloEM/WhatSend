@@ -12,15 +12,17 @@ const CONFIG_RESTRICTIONS = require("./config-restrictions.json");
 
 const ENV_SETTING_DEFINITIONS = Object.freeze(
   Object.entries(CONFIG_RESTRICTIONS.env || {})
-    .filter(([name]) => name !== "GUI_PORT")
     .map(([name, definition]) => ({
       fallback: String(definition.default ?? ""),
+      group: definition.group || "Geral",
+      groupOrder: Number(definition.groupOrder || 100),
       label: definition.label || name,
       max: definition.max,
       min: definition.min,
       name,
       type: definition.type || "number",
-    })),
+    }))
+    .sort((a, b) => a.groupOrder - b.groupOrder || a.name.localeCompare(b.name, "en")),
 );
 
 const ENV_SETTING_NAMES = new Set(ENV_SETTING_DEFINITIONS.map((definition) => definition.name));
@@ -122,6 +124,9 @@ function validateEnvRelations(values) {
     if (restriction.greaterThan) {
       const other = numbers[restriction.greaterThan];
       const minDifference = Number(restriction.minDifference || 0);
+      if (restriction.allowEqualWhenZero && value === 0 && other === 0) {
+        continue;
+      }
       if (Number.isFinite(other) && value - other < minDifference) {
         throw new Error(`${name} deve ser pelo menos ${minDifference} maior que ${restriction.greaterThan}.`);
       }
@@ -154,13 +159,33 @@ function readSessionEnvSettings(rootDir) {
 
   try {
     const parsed = JSON.parse(fs.readFileSync(filePath, "utf8"));
-    return {
-      sessions: parsed.sessions && typeof parsed.sessions === "object" ? parsed.sessions : {},
-      version: 1,
-    };
+    return normalizeSessionEnvSettings(parsed);
   } catch {
     return { sessions: {}, version: 1 };
   }
+}
+
+function normalizeSessionEnvSettings(parsed) {
+  if (!parsed || typeof parsed !== "object" || parsed.version !== 1) {
+    return { sessions: {}, version: 1 };
+  }
+
+  const sessions = {};
+  const source = parsed.sessions && typeof parsed.sessions === "object" ? parsed.sessions : {};
+
+  for (const [sessionId, values] of Object.entries(source)) {
+    try {
+      const safeSessionId = normalizeSessionId(sessionId);
+      const validated = validateEnvValues(values);
+      if (Object.keys(validated).length > 0) {
+        sessions[safeSessionId] = validated;
+      }
+    } catch {
+      // PROTECAO: descarta sessão corrompida sem aplicar ENV inseguro.
+    }
+  }
+
+  return { sessions, version: 1 };
 }
 
 function writeSessionEnvSettings(rootDir, store) {

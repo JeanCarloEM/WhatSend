@@ -2,6 +2,8 @@
   "env": {
     "GUI_PORT": {
       "default": 3137,
+      "group": "Interface local",
+      "groupOrder": 50,
       "label": "Porta inicial da GUI",
       "max": 65535,
       "min": 1024,
@@ -11,6 +13,8 @@
       "allowEqualWhenZero": true,
       "default": 20000,
       "greaterThan": "MIN_DELAY_MS",
+      "group": "Intervalo entre envios",
+      "groupOrder": 10,
       "label": "Intervalo máximo entre envios (ms)",
       "min": 0,
       "minDifference": 1000,
@@ -18,6 +22,8 @@
     },
     "MEDIA_CONTEXT_READY_TIMEOUT_MS": {
       "default": 15000,
+      "group": "Mídia e OGG",
+      "groupOrder": 40,
       "label": "Timeout de estabilização de mídia (ms)",
       "max": 120000,
       "min": 1000,
@@ -25,6 +31,8 @@
     },
     "MEDIA_CONTEXT_STABLE_MS": {
       "default": 500,
+      "group": "Mídia e OGG",
+      "groupOrder": 40,
       "label": "Janela estável de mídia (ms)",
       "max": 10000,
       "min": 0,
@@ -32,6 +40,8 @@
     },
     "MEDIA_SEND_RETRIES": {
       "default": 5,
+      "group": "Mídia e OGG",
+      "groupOrder": 40,
       "label": "Tentativas de mídia",
       "max": 20,
       "min": 1,
@@ -39,6 +49,8 @@
     },
     "MEDIA_SEND_RETRY_DELAY_MS": {
       "default": 1200,
+      "group": "Mídia e OGG",
+      "groupOrder": 40,
       "label": "Espera inicial de mídia (ms)",
       "max": 60000,
       "min": 0,
@@ -47,6 +59,8 @@
     "MEDIA_SEND_RETRY_MAX_DELAY_MS": {
       "default": 10000,
       "greaterThanOrEqual": "MEDIA_SEND_RETRY_DELAY_MS",
+      "group": "Mídia e OGG",
+      "groupOrder": 40,
       "label": "Espera máxima de mídia (ms)",
       "max": 120000,
       "min": 0,
@@ -54,6 +68,8 @@
     },
     "MESSAGE_DIFF_THRESHOLD_PERCENT": {
       "default": 10,
+      "group": "Reenvio inteligente",
+      "groupOrder": 20,
       "label": "Diferença mínima para reenviar (%)",
       "max": 100,
       "min": 0,
@@ -61,6 +77,8 @@
     },
     "MESSAGE_SEND_RETRIES": {
       "default": 3,
+      "group": "Retentativas de texto",
+      "groupOrder": 30,
       "label": "Tentativas de texto",
       "max": 20,
       "min": 1,
@@ -68,6 +86,8 @@
     },
     "MESSAGE_SEND_RETRY_DELAY_MS": {
       "default": 1200,
+      "group": "Retentativas de texto",
+      "groupOrder": 30,
       "label": "Espera inicial de texto (ms)",
       "max": 60000,
       "min": 0,
@@ -76,6 +96,8 @@
     "MESSAGE_SEND_RETRY_MAX_DELAY_MS": {
       "default": 10000,
       "greaterThanOrEqual": "MESSAGE_SEND_RETRY_DELAY_MS",
+      "group": "Retentativas de texto",
+      "groupOrder": 30,
       "label": "Espera máxima de texto (ms)",
       "max": 120000,
       "min": 0,
@@ -83,6 +105,8 @@
     },
     "MIN_DELAY_MS": {
       "default": 8000,
+      "group": "Intervalo entre envios",
+      "groupOrder": 10,
       "label": "Intervalo mínimo entre envios (ms)",
       "max": 3600000,
       "min": 0,
@@ -90,6 +114,8 @@
     },
     "RESEND_AFTER_HOURS": {
       "default": 48,
+      "group": "Reenvio inteligente",
+      "groupOrder": 20,
       "label": "Reenvio permitido após (horas)",
       "max": 8760,
       "min": 0,
@@ -97,6 +123,8 @@
     },
     "TEMPLATE_VARIANT_MIN_LENGTH": {
       "default": 96,
+      "group": "Modelo",
+      "groupOrder": 60,
       "label": "Tamanho mínimo de modelo ^^^",
       "max": 10000,
       "min": 1,

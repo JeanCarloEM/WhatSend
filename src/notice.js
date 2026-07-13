@@ -26,6 +26,9 @@ const COMPLIANCE_NOTICE = [
   "O autor não se responsabiliza por banimentos, bloqueios, perdas, danos ou qualquer uso indevido do software. Leia este aviso e o disclaimer abaixo antes de prosseguir.",
 ].join("\n");
 
+const COMPLIANCE_NOTICE_SUMMARY =
+  "Software independente do WhatsApp/Meta. Uso indevido pode causar restrições, bloqueio ou banimento da conta. Use por sua conta e risco; o autor não se responsabiliza por banimentos, perdas, danos ou uso indevido.";
+
 const DISCLAIMER =
   "Este software é fornecido estritamente como está e como disponível, sem garantias expressas, implícitas, legais, comerciais, técnicas, operacionais, de disponibilidade, segurança, conformidade, licitude, não infração ou adequação a qualquer finalidade. O projeto é destinado exclusivamente a usos legítimos, proporcionais e consentidos, como comunicação com clientes reais, assinantes, contatos que autorizaram contato ou públicos próprios e legítimos. O autor é expressamente contrário ao uso massivo, abusivo, enganoso, invasivo, como spam, scraping, assédio, fraude, envio sem consentimento ou qualquer prática que viole leis, termos de serviço, privacidade ou direitos de terceiros. O uso, configuração, conteúdo enviado, destinatários, credenciais, automações e consequências são de responsabilidade exclusiva do usuário. Nada constitui consultoria, serviço gerenciado, vínculo, autorização para uso indevido, promessa de resultado ou assunção de responsabilidade pelo autor, que não responderá por danos, perdas, bloqueios, sanções, incidentes, violações, reclamações ou responsabilidades civis, criminais, trabalhistas, administrativas, regulatórias, contratuais ou de qualquer outra natureza.";
 
@@ -36,6 +39,58 @@ function buildNoticeText() {
     `Repositório: ${REPOSITORY_URL}`,
     `Disclaimer: ${DISCLAIMER}`,
   ].join("\n");
+}
+
+function buildLegalFooterText() {
+  return [
+    `Autor: ${AUTHOR} (${AUTHOR_URL})`,
+    `Repositório: ${REPOSITORY_URL}`,
+    `Licença: ${LICENSE_NAME} (${LICENSE_LOCAL_PATH}; ${LICENSE_URL})`,
+    "",
+    COMPLIANCE_NOTICE,
+    "",
+    `Disclaimer: ${DISCLAIMER}`,
+  ].join("\n");
+}
+
+function renderComplianceSummaryHtml() {
+  return `<p>${formatComplianceNoticeLine(COMPLIANCE_NOTICE_SUMMARY)}</p>`;
+}
+
+function renderLegalFooterHtml() {
+  return [
+    "<h2>Licença e disclaimer</h2>",
+    `<p><strong>Autor:</strong> <a href="${AUTHOR_URL}" target="_blank" rel="noreferrer">${AUTHOR}</a></p>`,
+    `<p><strong>Repositório:</strong> <a href="${REPOSITORY_URL}" target="_blank" rel="noreferrer">${REPOSITORY_URL}</a></p>`,
+    `<p><strong>Licença:</strong> <a href="/license" target="_blank" rel="noreferrer">${LICENSE_NAME}</a> (${LICENSE_LOCAL_PATH}; <a href="${LICENSE_URL}" target="_blank" rel="noreferrer">${LICENSE_URL}</a>)</p>`,
+    `<div class="compliance-notice full" role="note" aria-label="Aviso legal completo">${renderComplianceNoticeHtml()}</div>`,
+    `<p><strong>Disclaimer:</strong> ${escapeHtml(DISCLAIMER)}</p>`,
+  ].join("");
+}
+
+function renderComplianceNoticeHtml() {
+  return COMPLIANCE_NOTICE
+    .split("\n")
+    .map((line) => `<p>${formatComplianceNoticeLine(line)}</p>`)
+    .join("");
+}
+
+function formatComplianceNoticeLine(line) {
+  const highlights = [
+    "não é afiliado, patrocinado, endossado ou mantido",
+    "Use-o por sua conta e risco",
+    "restrições, bloqueio ou banimento",
+    "O autor não se responsabiliza",
+    "disclaimer abaixo",
+  ];
+  let html = escapeHtml(line);
+
+  for (const phrase of highlights) {
+    const escapedPhrase = escapeHtml(phrase);
+    html = html.split(escapedPhrase).join(`<strong>${escapedPhrase}</strong>`);
+  }
+
+  return html;
 }
 
 function printStartupNotice() {
@@ -119,16 +174,29 @@ function colorize(text, colorName, enabled) {
   return `${ANSI[colorName]}${text}${ANSI.reset}`;
 }
 
+function escapeHtml(value) {
+  return String(value || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
 module.exports = {
   AUTHOR,
   AUTHOR_URL,
   COMPLIANCE_NOTICE,
+  COMPLIANCE_NOTICE_SUMMARY,
   DISCLAIMER,
   LICENSE_LOCAL_PATH,
   LICENSE_NAME,
   LICENSE_URL,
   REPOSITORY_URL,
+  buildLegalFooterText,
   buildTerminalNoticeBox,
   buildNoticeText,
+  renderComplianceNoticeHtml,
+  renderComplianceSummaryHtml,
+  renderLegalFooterHtml,
   printStartupNotice,
 };

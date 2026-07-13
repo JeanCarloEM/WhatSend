@@ -10,6 +10,7 @@ const test = require("node:test");
 
 const {
   COMPLIANCE_NOTICE,
+  COMPLIANCE_NOTICE_SUMMARY,
   buildTerminalNoticeBox,
   renderGuiHtml,
 } = require("../main");
@@ -27,6 +28,10 @@ test("aviso de conformidade é idêntico no terminal e na GUI", () => {
 
   assert.match(html, /<strong>não é afiliado, patrocinado, endossado ou mantido<\/strong>/);
   assert.match(html, /<strong>restrições, bloqueio ou banimento<\/strong>/);
+  assert.match(html, /<footer class="global-footer">/);
+  assert.match(html, /aria-label="Aviso legal resumido"/);
+  assert.match(plainHtml, new RegExp(COMPLIANCE_NOTICE_SUMMARY.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+  assert.match(html, /aria-label="Aviso legal completo"/);
 });
 
 function stripTags(html) {
