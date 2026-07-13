@@ -18,6 +18,7 @@ module.exports = {
   ...require("./gui-icons"),
   ...require("./logs"),
   ...require("./media"),
+  ...require("./media-capabilities"),
   ...require("./notice"),
   ...require("./runtime"),
   ...require("./sessions"),

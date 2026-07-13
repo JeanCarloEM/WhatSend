@@ -99,6 +99,8 @@ Para caminhos relativos, com ou sem `./` ou `.\`, o diretório do template em us
 
 Arquivos locais inexistentes devem falhar na pré-validação. URLs devem ser baixadas para uma pasta temporária e reutilizadas quando a mesma URL aparecer novamente.
 
+O modelo também aceita `![rótulo](@embed:id)`. As definições embedded devem residir exclusivamente no fim do arquivo, entre `@@embedded` e `@@end`, com blocos `[id=...]`, `name`, `mime`, `encoding=base64` e `data=data:MIME;base64,BASE64`. O MIME declarado e o MIME da Data URI devem coincidir. IDs duplicados, Base64 inválido, MIME/extensão incompatíveis, definição sem referência ou referência sem definição devem bloquear a pré-validação. A sintaxe tradicional de caminhos e URLs permanece inalterada; o conteúdo embedded não participa de variantes `^^^`, postagens `$postagem$`, variáveis ou expressões.
+
 ### RN007 - Ordem e Legenda de Anexos
 
 Quando um anexo estiver no início ou no final do template, o texto adjacente deve ser enviado como legenda do próprio anexo sempre que compatível com o WhatsApp Web.
@@ -275,6 +277,7 @@ A GUI deve oferecer:
 - Modelo por editor textual especializado, persistindo somente texto cru compatível com WhatsApp/Markdown, sem HTML nem formato rico.
 - Modelo por arquivo `.md`.
 - Toolbar textual para inserir/remover marcadores crus de negrito, itálico, tachado, monoespaçado, anexo e `$postagem$`, além de menu suspenso de emojis, preservando seleção, cursor, foco, rolagem e composição IME sempre que possível. Ao aplicar marcadores sobre seleção, espaços externos não devem ser envolvidos pelos delimitadores.
+- O botão de anexo deve abrir seletor nativo limitado às capacidades centralizadas do backend, ler o arquivo assíncronamente, informar limite/tamanho e inserir referência embedded no cursor sem substituir a sintaxe manual por caminho. A definição Base64 deve ser acrescida ao rodapé global do modelo, preservando a ordem e o texto existente.
 - Abas visuais para blocos separados por `^^^`; ao salvar ou enviar, as abas devem ser recombinadas com o separador normatizado, sem criar blocos vazios automaticamente. A criação de novo modelo deve ficar junto das abas, e a exclusão deve pertencer à própria aba, com confirmação explícita.
 - Prévia visual baseada no mesmo parser/plano de envio do backend para texto, postagens, anexos, legendas e áudio, renderizando a marcação textual básica como resultado visual final, sem substituir as validações finais. A prévia deve refletir somente a aba ativa e manter rolagem proporcional sincronizada com o editor.
 - Bloqueio quando texto editado na GUI e arquivo `.md` divergente forem usados simultaneamente; quando um `.md` for carregado sem edição, o arquivo pode continuar sendo a fonte do envio para preservar resolução relativa de anexos.
@@ -293,6 +296,8 @@ A GUI deve oferecer:
 Todos os controles interativos da GUI devem possuir hint visual centralizado por configuração ou atributo equivalente, sem depender de serviços externos. A documentação resumida de marcações deve ser exibida em painel retrátil HTML sem JavaScript, recolhido por padrão, com link discreto por ícone para o Markdown oficial no GitHub e links de ajuda em vídeo quando definidos.
 
 Configurações operacionais antes controladas por ENV podem ser ajustadas pela GUI nos escopos execução atual, global e sessão. Configurações por sessão devem ser persistidas em JSON local e carregadas automaticamente na próxima execução da sessão correspondente.
+
+O controle Atualizar da GUI deve abrir painel visual com as quatro ações centralizadas no backend: atualizar somente `whatsapp-web.js`, todas as dependências, software oficial e reversão da última atualização. A seleção e confirmação explícita são obrigatórias; o painel deve advertir incompatibilidades, exibir progresso/resultado no registro e não conter lógica de atualização.
 
 Arquivos informados na GUI devem ser materializados temporariamente em área controlada pelo projeto ou sistema operacional, sem alterar `clientes.csv`, `texto.md` ou os modelos originais.
 

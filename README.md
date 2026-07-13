@@ -38,7 +38,7 @@ Principais recursos:
 - Variaveis `${campo}` insensiveis a maiusculas/minusculas.
 - Apenas `nome` e `telefone` obrigatorios no CSV.
 - Expressoes matematicas e filtros logicos com funcoes.
-- Anexos via Markdown `![](CAMINHO_OU_URL)`, incluindo URL com cache temporario.
+- Anexos por caminho/URL `![](CAMINHO_OU_URL)` e embedded Base64 `![rótulo](@embed:id)`.
 - `.ogg` apenas de audio enviado como mensagem de voz.
 - Marcador `$postagem$` para dividir uma mensagem em postagens consecutivas.
 - Controle inteligente de reenvio por telefone, conteudo nativo e tempo.
@@ -141,6 +141,8 @@ Segunda postagem, enviada somente após confirmação da primeira.
 O marcador `$postagem$` é removido do texto enviado. Quando estiver sozinho em uma linha, a própria linha do marcador funciona como separador. Se o template também usar múltiplos modelos com `^^^`, o sistema primeiro seleciona a variante por `^^^` e só depois divide a variante escolhida por `$postagem$`.
 
 Anexos em `![](arquivo.pdf)` ou `![](./arquivo.pdf)` são buscados primeiro a partir da pasta do modelo `.md` em uso; se não forem encontrados ali, o sistema tenta a raiz do projeto. Caminhos absolutos e URLs `http/https` também são aceitos.
+
+O clipe da GUI incorpora formatos suportados pelo backend (até 8 MiB), insere `![arquivo](@embed:id)` no cursor e mantém a definição no rodapé global `@@embedded`, usando `data:MIME;base64,...`. O caminho manual continua compatível. Integridade, MIME/extensão, IDs, referências e definições sem uso são validados antes do envio.
 
 Demonstracao de sintaxe textual:
 
@@ -272,7 +274,7 @@ Os scripts `.\atualizar.cmd` e `sh ./atualizar.sh` nao dependem de Git nem de um
 
 Quando a Release Latest possuir asset `WhatSend-v<versao>[-<canal>].zip`, o atualizador baixa esse pacote distribuivel. Antes de baixar o pacote, ele compara a versao remota com `whatsend-version.json`, arquivo operacional pequeno mantido no root e tambem publicado na release. Quando o identificador local corresponde ao `tag`/commit da Release ou ao commit da `main`, o download e a reinstalacao de dependencias sao pulados.
 
-Na GUI, o ícone Atualizar oferece quatro ações: somente `whatsapp-web.js`, todas as dependências, software oficial e reversão da última atualização. Cada ação exige confirmação e alerta que versões novas podem quebrar um ambiente estável. Antes da alteração, o sistema cria um snapshot local mínimo em `.runtime/updates`; em falha tenta restaurá-lo, preservando sessões, configurações, dados de clientes e logs. Ao concluir, reinicie o WhatSend para carregar as versões instaladas.
+Na GUI, o ícone Atualizar abre um painel visual com quatro ações: somente `whatsapp-web.js`, todas as dependências, software oficial e reversão da última atualização. Cada ação exige seleção e confirmação explícitas, alerta que versões novas podem quebrar um ambiente estável e mostra o progresso no registro. Antes da alteração, o sistema cria um snapshot local mínimo em `.runtime/updates`; em falha tenta restaurá-lo, preservando sessões, configurações, dados de clientes e logs. Ao concluir, reinicie o WhatSend para carregar as versões instaladas.
 
 ## Releases
 

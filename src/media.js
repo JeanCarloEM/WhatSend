@@ -14,7 +14,14 @@ const { MessageMedia } = require("whatsapp-web.js");
 
 const { PATHS, ROOT_DIR, readIntegerEnv, validateEnvRelations } = require("./config");
 const { hashValue } = require("./utils");
-const { parseTemplateParts, splitMessagePostings } = require("./template");
+const {
+  isEmbeddedMediaReference,
+  parseEmbeddedTemplate,
+  parseTemplateParts,
+  splitMessagePostings,
+  validateEmbeddedReferences,
+} = require("./template");
+const { inferSupportedMediaMimeType } = require("./media-capabilities");
 
 const CAPTION_POSITION = Symbol("captionPosition");
 const MESSAGE_SEND_RETRIES = Math.max(1, readIntegerEnv("MESSAGE_SEND_RETRIES", 3));
@@ -299,25 +306,17 @@ function createMessageMediaFromFile(filePath) {
 }
 
 function inferMediaMimeType(filePath) {
-  const ext = path.extname(filePath).toLocaleLowerCase("pt-BR");
-  const types = {
-    ".gif": "image/gif",
-    ".jpeg": "image/jpeg",
-    ".jpg": "image/jpeg",
-    ".ogg": "audio/ogg",
-    ".opus": "audio/ogg",
-    ".pdf": "application/pdf",
-    ".png": "image/png",
-    ".webp": "image/webp",
-    ".zip": "application/zip",
-  };
-
-  return types[ext] || "application/octet-stream";
+  return inferSupportedMediaMimeType(filePath);
 }
 
-function isOggSource(source) {
+function isOggSource(source, embeddedAttachments = new Map()) {
   if (!source) {
     return false;
+  }
+
+  if (isEmbeddedMediaReference(source)) {
+    return path.extname(embeddedAttachments.get(source.slice(7))?.name || "")
+      .toLocaleLowerCase("pt-BR") === ".ogg";
   }
 
   try {
@@ -368,7 +367,7 @@ function normalizeCaption(value) {
   return String(value || "").trim();
 }
 
-function buildSendPlan(parts) {
+function buildSendPlan(parts, embeddedAttachments = new Map()) {
   const plan = [];
   const mediaCaptions = new Map();
   const consumedText = new Set();
@@ -379,7 +378,7 @@ function buildSendPlan(parts) {
     firstTextIndex > 0 &&
     parts
       .slice(0, firstTextIndex)
-      .every((part) => part.type === "media" && !isOggSource(part.source))
+      .every((part) => part.type === "media" && !isOggSource(part.source, embeddedAttachments))
   ) {
     mediaCaptions.set(firstTextIndex - 1, {
       position: "after",
@@ -394,7 +393,7 @@ function buildSendPlan(parts) {
     !consumedText.has(lastTextIndex) &&
     parts
       .slice(lastTextIndex + 1)
-      .every((part) => part.type === "media" && !isOggSource(part.source))
+      .every((part) => part.type === "media" && !isOggSource(part.source, embeddedAttachments))
   ) {
     mediaCaptions.set(lastTextIndex + 1, {
       position: "before",
@@ -435,11 +434,21 @@ function buildSendPlan(parts) {
 
 function validateTemplateMediaReferences(template, paths = PATHS) {
   const issues = [];
+  let document;
 
-  for (const part of parseTemplateParts(template)) {
+  try {
+    document = typeof template === "string" ? parseEmbeddedTemplate(template) : template;
+    issues.push(...validateEmbeddedReferences(document));
+  } catch (err) {
+    return [err.message];
+  }
+
+  for (const part of parseTemplateParts(document.content)) {
     if (part.type !== "media" || isUrl(part.source)) {
       continue;
     }
+
+    if (isEmbeddedMediaReference(part.source)) continue;
 
     try {
       resolveLocalMediaPath(
@@ -465,9 +474,10 @@ async function sendRenderedTemplate(client, chatId, renderedTemplate, paths = PA
 async function sendRenderedTemplateInOrder(client, chatId, renderedTemplate, paths = PATHS, progressOptions = {}) {
   const postings = splitMessagePostings(renderedTemplate);
   const downloadCache = new Map();
+  const embeddedAttachments = progressOptions.embeddedAttachments || new Map();
 
   for (const posting of postings) {
-    const parts = buildSendPlan(parseTemplateParts(posting));
+    const parts = buildSendPlan(parseTemplateParts(posting), embeddedAttachments);
 
     for (const part of parts) {
       if (part.type === "text") {
@@ -475,10 +485,13 @@ async function sendRenderedTemplateInOrder(client, chatId, renderedTemplate, pat
         continue;
       }
 
-      const filePath = await resolveMediaPath(part.source, paths, downloadCache);
-      const filename = path.basename(filePath);
+      const embedded = isEmbeddedMediaReference(part.source)
+        ? embeddedAttachments.get(part.source.slice("@embed:".length))
+        : null;
+      const filePath = embedded ? null : await resolveMediaPath(part.source, paths, downloadCache);
+      const filename = embedded ? embedded.name : path.basename(filePath);
 
-      if (isOggAudioOnly(filePath)) {
+      if (!embedded && isOggAudioOnly(filePath)) {
         emitMediaProgress(progressOptions, {
           message: `Enviando áudio ${filename}.`,
           type: "current",
@@ -487,7 +500,9 @@ async function sendRenderedTemplateInOrder(client, chatId, renderedTemplate, pat
         continue;
       }
 
-      const media = createMessageMediaFromFile(filePath);
+      const media = embedded
+        ? new MessageMedia(embedded.mime, embedded.data, embedded.name, embedded.bytes.length)
+        : createMessageMediaFromFile(filePath);
       emitMediaProgress(progressOptions, {
         message: `Enviando anexo ${filename}.`,
         type: "current",
@@ -502,7 +517,9 @@ async function sendRenderedTemplateInOrder(client, chatId, renderedTemplate, pat
         sendOptions.caption = part.caption;
       }
 
-      await sendMediaMessageWithRetry(client, chatId, () => createMessageMediaFromFile(filePath), sendOptions, {
+      await sendMediaMessageWithRetry(client, chatId, () => embedded
+        ? new MessageMedia(embedded.mime, embedded.data, embedded.name, embedded.bytes.length)
+        : createMessageMediaFromFile(filePath), sendOptions, {
         label: filename,
         onProgress: progressOptions.onProgress,
       });

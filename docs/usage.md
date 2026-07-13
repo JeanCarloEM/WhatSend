@@ -18,6 +18,7 @@ Regras aplicadas ao modelo:
 - `${(valor+taxa)*2}` executa conta simples.
 - `$diatarde$` vira `bom dia` antes das 12h e `boa tarde` a partir das 12h.
 - `![](CAMINHO_OU_URL)` vira anexo no ponto em que aparece.
+- `![Contrato](@embed:contrato)` referencia um anexo Base64 definido no rodapé global `@@embedded`.
 - Quebras Windows (`CRLF`), Linux/macOS (`LF`), `CR` isolado e separadores Unicode sao normalizados para `LF` antes do envio; recuos, espacos e tabulacoes intencionais sao preservados.
 - Entidades HTML numericas e nomeadas comuns, como `&#x20;`, `&#32;`, `&nbsp;`, `&amp;`, `&lt;` e `&ccedil;`, sao convertidas para caracteres Unicode reais antes do envio e antes da interpretacao de anexos.
 
@@ -154,6 +155,21 @@ Na GUI, ao escolher um arquivo `.md`, o conteúdo é carregado no editor textual
 
 URLs sao baixadas uma vez para cache temporario e reutilizadas quando a mesma URL aparece novamente. Arquivos locais inexistentes falham na pre-validacao.
 
+Para anexar sem depender de caminho local, use `![rótulo](@embed:id)` e mantenha ao fim do modelo uma única seção editável:
+
+```text
+@@embedded
+
+[id=contrato]
+name=contrato.pdf
+mime=application/pdf
+encoding=base64
+data=data:application/pdf;base64,BASE64
+@@end
+```
+
+O editor da GUI cria essa seção pelo seletor nativo, com limite de 8 MiB e formatos derivados das capacidades do backend. IDs duplicados, Base64 inválido, MIME/extensão divergentes, referências ausentes ou definições sem uso impedem o envio. A seção não integra `^^^` nem `$postagem$`; caminhos e URLs continuam com o mesmo comportamento.
+
 Quando o anexo aparece no inicio ou fim do modelo, o texto adjacente pode ser enviado como legenda do proprio anexo quando o WhatsApp Web permitir. Quando aparece no meio, a ordem do modelo e preservada com partes separadas.
 
 Arquivos `.ogg` sao inspecionados. Se forem apenas audio, sao enviados como mensagem de voz separada exatamente naquela posicao do modelo.
@@ -226,7 +242,7 @@ Antes de baixar o pacote remoto, o atualizador compara os metadados da API com `
 
 Durante a copia, arquivos operacionais locais sao preservados, incluindo `clientes.csv`, `texto.md`, `.env`, `logs/`, `.wwebjs_auth/`, `.runtime/` e `node_modules/`. Depois disso, o script roda `npm install` com download automatico do Puppeteer desativado, valida o navegador com `scripts/ensure-browser.js` e so entao grava o novo `whatsend-version.json`.
 
-O botão Atualizar da GUI também permite atualizar somente `whatsapp-web.js`, todas as dependências, o software oficial ou reverter a última atualização. A confirmação é obrigatória porque versões novas podem quebrar o ambiente estável. O backend registra um snapshot em `.runtime/updates`, poda dependências órfãs e tenta restaurar automaticamente software, dependências e metadados se uma operação falhar; sessões, configurações, dados e logs não entram no snapshot nem são alterados.
+O botão Atualizar da GUI abre painel visual para atualizar somente `whatsapp-web.js`, todas as dependências, o software oficial ou reverter a última atualização. A seleção e confirmação são obrigatórias porque versões novas podem quebrar o ambiente estável. O backend registra um snapshot em `.runtime/updates`, poda dependências órfãs e tenta restaurar automaticamente software, dependências e metadados se uma operação falhar; sessões, configurações, dados e logs não entram no snapshot nem são alterados.
 
 ## Releases
 

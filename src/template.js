@@ -18,6 +18,7 @@ const {
   formatNameForMessage,
   normalizeFieldName,
 } = require("./utils");
+const { MAX_EMBEDDED_ATTACHMENT_BYTES, getMediaCapability } = require("./media-capabilities");
 
 const HTML_NAMED_ENTITIES = new Map([
   ["amp", "&"],
@@ -73,7 +74,7 @@ const NON_PRINTABLE_EXCESS_PATTERN = /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u0
 function applyTemplate(template, data, options = {}) {
   const missingVariables = new Set();
   const dataMap = buildCaseInsensitiveDataMap(data);
-  const normalizedTemplate = normalizeTemplateText(template);
+  const normalizedTemplate = parseEmbeddedTemplate(template).content;
 
   const rendered = replaceDayPeriodMarkers(
     replaceTemplateExpressions(normalizedTemplate, (expression) => {
@@ -167,7 +168,7 @@ function replaceTemplateExpressions(template, callback) {
 }
 
 function inspectTemplateSyntax(template) {
-  const source = normalizeTemplateText(template);
+  const source = parseEmbeddedTemplate(template).content;
   const issues = [];
   const reportedBareBracePositions = new Set();
   let index = 0;
@@ -433,7 +434,7 @@ function shouldCapitalizeDayPeriodMarker(template, offset) {
 }
 
 function parseTemplateParts(renderedTemplate) {
-  const source = normalizeTemplateText(renderedTemplate);
+  const source = parseEmbeddedTemplate(renderedTemplate).content;
   const parts = [];
   const mediaPattern = /!\[[^\]]*]\(([^)]+)\)/g;
   let lastIndex = 0;
@@ -465,7 +466,7 @@ function parseTemplateParts(renderedTemplate) {
 }
 
 function splitMessagePostings(renderedTemplate) {
-  const source = normalizeTemplateText(renderedTemplate);
+  const source = parseEmbeddedTemplate(renderedTemplate).content;
 
   if (!POSTING_SPLIT_HAS_MARKER_PATTERN.test(source)) {
     const normalizedPosting = normalizeMessagePosting(source);
@@ -515,7 +516,7 @@ function normalizeMediaSource(source) {
 }
 
 function splitTemplateVariants(template, minLength = TEMPLATE_VARIANT_MIN_LENGTH) {
-  const source = normalizeTemplateText(template);
+  const source = parseEmbeddedTemplate(template).content;
   const parts = source.split(/^[ \t]*\^{3,}[ \t]*$/gmu);
 
   if (parts.length <= 1) {
@@ -528,6 +529,121 @@ function splitTemplateVariants(template, minLength = TEMPLATE_VARIANT_MIN_LENGTH
   return valid ? trimmed : [source];
 }
 
+function parseEmbeddedTemplate(template) {
+  const source = normalizeTemplateText(template);
+  const startMarker = /^@@embedded[ \t]*$/gmu;
+  const markers = [...source.matchAll(startMarker)];
+
+  if (!markers.length) {
+    return { attachments: new Map(), content: source };
+  }
+
+  if (markers.length !== 1) {
+    throw new Error("Bloco @@embedded duplicado ou ambíguo.");
+  }
+
+  const start = markers[0].index;
+  const content = source.slice(0, start).replace(/[ \t]*\n?$/u, "");
+  const definitionText = source.slice(start);
+  const endMatch = /\n@@end[ \t]*$/u.exec(definitionText);
+
+  if (!endMatch || /\n@@end[\s\S]+$/u.test(definitionText)) {
+    throw new Error("Bloco @@embedded deve terminar o modelo com @@end.");
+  }
+
+  const body = definitionText
+    .slice(0, endMatch.index)
+    .replace(/^@@embedded[ \t]*\n?/u, "")
+    .trim();
+  const attachments = new Map();
+  const definitions = body ? body.split(/\n[ \t]*\n+/u) : [];
+
+  for (const definition of definitions) {
+    const lines = definition.split("\n").filter((line) => line.trim());
+    const header = /^\[id=([a-z][a-z0-9_-]{0,63})\]$/u.exec(lines.shift() || "");
+    const fields = new Map();
+
+    for (const line of lines) {
+      const field = /^([a-z]+)=(.*)$/u.exec(line);
+      if (!field || fields.has(field[1])) {
+        throw new Error("Definição embedded inválida ou com campo duplicado.");
+      }
+      fields.set(field[1], field[2]);
+    }
+
+    if (!header || attachments.has(header[1])) {
+      throw new Error("ID embedded inválido ou duplicado.");
+    }
+
+    const id = header[1];
+    const name = fields.get("name") || "";
+    const mime = fields.get("mime") || "";
+    const encoding = fields.get("encoding") || "";
+    const dataUri = fields.get("data") || "";
+    const capability = getMediaCapability(name);
+
+    if (fields.size !== 4 || !name || pathUnsafeName(name) || encoding !== "base64") {
+      throw new Error(`Definição embedded inválida: ${id}.`);
+    }
+    if (!capability || capability.mime !== mime) {
+      throw new Error(`MIME ou extensão não suportado no embedded: ${name}.`);
+    }
+    const data = parseEmbeddedDataUri(dataUri, mime, id);
+    if (!isStrictBase64(data)) {
+      throw new Error(`Base64 inválido no embedded: ${id}.`);
+    }
+
+    const bytes = Buffer.from(data, "base64");
+    if (!bytes.length || bytes.length > MAX_EMBEDDED_ATTACHMENT_BYTES) {
+      throw new Error(`Tamanho inválido no embedded: ${id}. Limite: ${MAX_EMBEDDED_ATTACHMENT_BYTES} bytes.`);
+    }
+
+    attachments.set(id, Object.freeze({ bytes, data, dataUri, id, mime, name }));
+  }
+
+  return { attachments, content };
+}
+
+function pathUnsafeName(name) {
+  return /[\\/\u0000]/u.test(name) || name !== String(name).trim();
+}
+
+function isStrictBase64(value) {
+  const normalized = String(value || "");
+  return /^[A-Za-z0-9+/]+={0,2}$/u.test(normalized) && normalized.length % 4 === 0;
+}
+
+function parseEmbeddedDataUri(value, expectedMime, id) {
+  const match = /^data:([^;,]+);base64,([A-Za-z0-9+/]+={0,2})$/u.exec(String(value || ""));
+  if (!match || match[1].toLocaleLowerCase("en-US") !== String(expectedMime).toLocaleLowerCase("en-US")) {
+    throw new Error(`Data URI ou MIME inválido no embedded: ${id}.`);
+  }
+  return match[2];
+}
+
+function validateEmbeddedReferences(template) {
+  const document = typeof template === "string" ? parseEmbeddedTemplate(template) : template;
+  const used = new Set();
+  const issues = [];
+
+  for (const part of parseTemplateParts(document.content)) {
+    if (part.type !== "media" || !isEmbeddedMediaReference(part.source)) continue;
+    const id = part.source.slice("@embed:".length);
+    used.add(id);
+    if (!document.attachments.has(id)) issues.push(`Anexo embedded não definido: ${id}.`);
+  }
+
+  for (const id of document.attachments.keys()) {
+    if (!used.has(id)) issues.push(`Definição embedded sem referência: ${id}.`);
+  }
+
+  return issues;
+}
+
+function isEmbeddedMediaReference(source) {
+  return /^@embed:[a-z][a-z0-9_-]{0,63}$/u.test(String(source || ""));
+}
+
 module.exports = {
   applyTemplate,
   decodeHtmlEntities,
@@ -537,7 +653,10 @@ module.exports = {
   normalizeMediaSource,
   normalizeMessagePosting,
   parseTemplateParts,
+  parseEmbeddedTemplate,
   POSTING_SPLIT_MARKER,
   splitMessagePostings,
   splitTemplateVariants,
+  isEmbeddedMediaReference,
+  validateEmbeddedReferences,
 };

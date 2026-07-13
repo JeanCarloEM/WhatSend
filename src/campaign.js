@@ -9,7 +9,7 @@ const fs = require("fs");
 
 const { PATHS } = require("./config");
 const { loadClientes, loadTemplate } = require("./data");
-const { applyTemplate, splitTemplateVariants } = require("./template");
+const { applyTemplate, parseEmbeddedTemplate, splitTemplateVariants } = require("./template");
 const { validateTemplateMediaReferences, sendRenderedTemplate } = require("./media");
 const { initLogFiles, appendLog, loadSentRecords } = require("./logs");
 const { registerTemplateInCache, getSendDecision } = require("./tracking");
@@ -27,9 +27,9 @@ function validateRuntimeFiles(paths = PATHS, options = {}) {
   let template = "";
 
   try {
-    template = loadTemplate(paths.template);
+    template = parseEmbeddedTemplate(loadTemplate(paths.template));
 
-    if (template.trim().length === 0) {
+    if (template.content.trim().length === 0) {
       issues.push("Template inválido: texto.md está vazio.");
     }
 
@@ -77,7 +77,7 @@ function validateRuntimeFiles(paths = PATHS, options = {}) {
 
   return {
     clientesCount: clientes.length,
-    templateVariables: [...template.matchAll(/\$\{([^}]+)\}/g)].map((match) =>
+    templateVariables: [...template.content.matchAll(/\$\{([^}]+)\}/g)].map((match) =>
       match[1].trim(),
     ),
   };
@@ -86,8 +86,8 @@ function validateRuntimeFiles(paths = PATHS, options = {}) {
 async function processCampaign(client, paths = PATHS, options = {}) {
   const forceResend = Boolean(options.forceResend);
   const sentRecords = loadSentRecords(paths.sent);
-  const template = loadTemplate(paths.template);
-  const templateVariants = splitTemplateVariants(template);
+  const templateDocument = parseEmbeddedTemplate(loadTemplate(paths.template));
+  const templateVariants = splitTemplateVariants(templateDocument.content);
   const messageContexts = templateVariants.map((variant) =>
     registerTemplateInCache(variant, paths),
   );
@@ -226,6 +226,7 @@ async function processCampaign(client, paths = PATHS, options = {}) {
       }
 
       await sendRenderedTemplate(client, numberId._serialized, mensagem, paths, {
+        embeddedAttachments: templateDocument.attachments,
         onProgress: (event) => {
           const mediaMessage = event.message || "Processando anexo.";
 

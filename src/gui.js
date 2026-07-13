@@ -26,9 +26,16 @@ const { loadCsv, normalizeTextContent } = require("./data");
 const { initLogFiles, resetSentLog } = require("./logs");
 const { processCampaign, validateRuntimeFiles } = require("./campaign");
 const { buildSendPlan, isOggSource, isUrl, validateTemplateMediaReferences } = require("./media");
+const {
+  MAX_EMBEDDED_ATTACHMENT_BYTES,
+  getEmbeddedAttachmentAccept,
+  getEmbeddedAttachmentCapabilities,
+} = require("./media-capabilities");
 const { parseListFilter } = require("./data");
 const {
   inspectTemplateSyntax,
+  isEmbeddedMediaReference,
+  parseEmbeddedTemplate,
   parseTemplateParts,
   splitMessagePostings,
   splitTemplateVariants,
@@ -854,7 +861,7 @@ function analyzeGuiTemplateMedia(payload = {}, basePaths = PATHS) {
     },
   );
   const localMediaCount = parseTemplateParts(templateCandidate)
-    .filter((part) => part.type === "media" && !isUrl(part.source))
+    .filter((part) => part.type === "media" && !isUrl(part.source) && !isEmbeddedMediaReference(part.source))
     .length;
 
   return {
@@ -892,11 +899,12 @@ function buildGuiTemplatePreview(payload = {}, basePaths = PATHS) {
   }
 
   try {
-    const variantSources = editorBlocks.length ? editorBlocks : splitTemplateVariants(normalized);
+    const document = parseEmbeddedTemplate(normalized);
+    const variantSources = editorBlocks.length ? editorBlocks : splitTemplateVariants(document.content);
     const variants = variantSources.map((variant, variantIndex) => {
       const postings = splitMessagePostings(variant).map((posting, postingIndex) => {
-        const plan = buildSendPlan(parseTemplateParts(posting)).map((part) =>
-          describePreviewPart(part),
+        const plan = buildSendPlan(parseTemplateParts(posting), document.attachments).map((part) =>
+          describePreviewPart(part, document.attachments),
         );
 
         return {
@@ -926,7 +934,7 @@ function buildGuiTemplatePreview(payload = {}, basePaths = PATHS) {
   }
 }
 
-function describePreviewPart(part) {
+function describePreviewPart(part, embeddedAttachments = new Map()) {
   if (part.type === "text") {
     return {
       type: "text",
@@ -935,8 +943,12 @@ function describePreviewPart(part) {
   }
 
   const source = String(part.source || "");
-  const extension = path.extname(source.split("?")[0]).toLocaleLowerCase("pt-BR");
-  const mediaType = isOggSource(source)
+  const embedded = isEmbeddedMediaReference(source)
+    ? embeddedAttachments.get(source.slice("@embed:".length))
+    : null;
+  const filename = embedded ? embedded.name : path.basename(source) || source;
+  const extension = path.extname(filename.split("?")[0]).toLocaleLowerCase("pt-BR");
+  const mediaType = isOggSource(source, embeddedAttachments)
     ? "audio"
     : [".jpg", ".jpeg", ".png", ".gif", ".webp"].includes(extension)
       ? "image"
@@ -944,7 +956,7 @@ function describePreviewPart(part) {
 
   return {
     caption: part.caption || "",
-    filename: path.basename(source) || source,
+    filename,
     source,
     type: mediaType,
   };
@@ -2444,7 +2456,7 @@ function renderGuiHtml() {
       </div>
       <div class="header-actions">
         <div class="status-pill" id="statusPill">Aguardando</div>
-        <button id="updateButton" class="icon-button" type="button" data-hint="${escapeHtml(GUI_HINTS.update)}" aria-label="Atualizar">${renderGuiIcon("save")}</button>
+        <button id="updateButton" class="icon-button" type="button" data-hint="${escapeHtml(GUI_HINTS.update)}" aria-label="Atualizar">${renderGuiIcon("settings")}</button>
         <button id="settingsButton" class="icon-button" type="button" data-hint="${escapeHtml(GUI_HINTS.settings)}" aria-label="Configurações">${renderGuiIcon("settings")}</button>
         <button id="shutdownButton" class="icon-button shutdown-button" type="button" data-hint="${escapeHtml(GUI_HINTS.shutdown)}" aria-label="Desligar">${renderGuiIcon("power")}</button>
       </div>
@@ -2476,6 +2488,7 @@ function renderGuiHtml() {
         <section>
           <h2>Modelo de mensagem</h2>
           <input id="templateFile" class="visually-hidden-field" type="file" accept=".md,text/markdown,text/plain" tabindex="-1" aria-hidden="true">
+          <input id="embeddedAttachmentInput" class="visually-hidden-field" type="file" accept="${getEmbeddedAttachmentAccept()}" tabindex="-1" aria-hidden="true">
           <div id="templateMediaStatus" class="field-message"></div>
           <div id="templateBaseDirBox" class="template-base-dir">
             <label for="templateBaseDir">Pasta de referência dos anexos</label>
@@ -2623,6 +2636,24 @@ function renderGuiHtml() {
     </div>
   </div>
 
+  <div id="updateOverlay" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="updateTitle">
+    <div class="modal-dialog">
+      <h2 id="updateTitle">Atualizar</h2>
+      <p>Atualizações de software ou dependências podem introduzir incompatibilidades e quebrar um ambiente estável.</p>
+      <div class="settings-grid" id="updateOptions">
+        <button type="button" data-update-action="whatsapp-web.js">Atualizar whatsapp-web.js<br><small>Somente o motor crítico.</small></button>
+        <button type="button" data-update-action="dependencies">Atualizar dependências<br><small>Inclui whatsapp-web.js.</small></button>
+        <button type="button" data-update-action="software">Atualizar software<br><small>Repositório oficial e sincronização.</small></button>
+        <button type="button" data-update-action="revert">Reverter atualização<br><small>Restaura a última atualização válida.</small></button>
+      </div>
+      <div id="updateWarning" class="hint">Selecione uma operação. A confirmação explícita inicia o processo.</div>
+      <div class="modal-actions">
+        <button id="updateCancel" class="secondary-button" type="button">Cancelar</button>
+        <button id="updateConfirm" type="button" disabled>Confirmar atualização</button>
+      </div>
+    </div>
+  </div>
+
   <script>
     const form = document.getElementById("runForm");
     const button = document.getElementById("runButton");
@@ -2639,6 +2670,7 @@ function renderGuiHtml() {
     const renameSessionButton = document.getElementById("renameSessionButton");
     const removeSessionButton = document.getElementById("removeSessionButton");
     const templateFileInput = document.getElementById("templateFile");
+    const embeddedAttachmentInput = document.getElementById("embeddedAttachmentInput");
     const templateBaseDirInput = document.getElementById("templateBaseDir");
     const templateBaseDirBox = document.getElementById("templateBaseDirBox");
     const templateMediaStatus = document.getElementById("templateMediaStatus");
@@ -2662,6 +2694,11 @@ function renderGuiHtml() {
     const executionConfirmRows = document.getElementById("executionConfirmRows");
     const executionConfirmOk = document.getElementById("executionConfirmOk");
     const executionConfirmCancel = document.getElementById("executionConfirmCancel");
+    const updateOverlay = document.getElementById("updateOverlay");
+    const updateOptions = document.getElementById("updateOptions");
+    const updateWarning = document.getElementById("updateWarning");
+    const updateCancel = document.getElementById("updateCancel");
+    const updateConfirm = document.getElementById("updateConfirm");
     let activeSessionId = "";
     let lastSessionCount = 0;
     let knownSessions = [];
@@ -2676,6 +2713,10 @@ function renderGuiHtml() {
     let isComposingTemplate = false;
     let scrollSyncSource = "";
     let settingsSnapshot = null;
+    let embeddedFooter = "";
+    let selectedUpdateAction = "";
+    const embeddedAttachmentCapabilities = ${JSON.stringify(getEmbeddedAttachmentCapabilities())};
+    const maxEmbeddedAttachmentBytes = ${MAX_EMBEDDED_ATTACHMENT_BYTES};
     const tabDeleteIcon = ${JSON.stringify(renderGuiIcon("trash"))};
     const emojiOptions = [
       ["⚠️", "alerta"],
@@ -2858,6 +2899,13 @@ function renderGuiHtml() {
       return blocks.length ? blocks : [""];
     }
 
+    function splitEmbeddedFooter(text) {
+      const normalized = normalizeUploadedText(text);
+      const match = /(?:^|\\n)@@embedded[ \\t]*\\n[\\s\\S]*\\n@@end[ \\t]*$/u.exec(normalized);
+      if (!match) return { content: normalized, footer: "" };
+      return { content: normalized.slice(0, match.index).replace(/\\n+$/u, ""), footer: match[0].replace(/^\\n/u, "") };
+    }
+
     function getPersistableTemplateBlocks() {
       const blocks = templateBlocks.map((block) => String(block || ""));
       const nonEmpty = blocks.filter((block) => block.trim());
@@ -2865,7 +2913,8 @@ function renderGuiHtml() {
     }
 
     function joinEditorBlocks() {
-      return getPersistableTemplateBlocks().join("\\n\\n^^^\\n\\n");
+      const content = getPersistableTemplateBlocks().join("\\n\\n^^^\\n\\n");
+      return embeddedFooter ? content.replace(/\\n+$/u, "") + "\\n\\n" + embeddedFooter : content;
     }
 
     function saveActiveTemplateBlock() {
@@ -2984,7 +3033,9 @@ function renderGuiHtml() {
     }
 
     function setEditorContent(text, options = {}) {
-      const blocks = splitEditorBlocks(text);
+      const document = splitEmbeddedFooter(text);
+      embeddedFooter = document.footer;
+      const blocks = splitEditorBlocks(document.content);
       templateBlocks = blocks.length ? blocks : [""];
       activeTemplateBlock = Math.min(
         Math.max(0, Number(options.activeIndex || 0)),
@@ -3026,6 +3077,33 @@ function renderGuiHtml() {
       templateEditorInput.scrollLeft = scrollLeft;
       syncHighlightScroll();
       templateEditorInput.focus();
+    }
+
+    function createEmbeddedId(filename) {
+      const slug = String(filename || "arquivo").toLocaleLowerCase("pt-BR")
+        .replace(/\\.[^.]+$/u, "").replace(/[^a-z0-9]+/gu, "-").replace(/^-+|-+$/gu, "") || "arquivo";
+      return ("embed-" + slug + "-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 7)).slice(0, 64);
+    }
+
+    function appendEmbeddedDefinition(id, file, data) {
+      const definition = "[id=" + id + "]\\nname=" + file.name + "\\nmime=" + file.type + "\\nencoding=base64\\ndata=" + data;
+      embeddedFooter = embeddedFooter
+        ? embeddedFooter.replace(/\\n@@end[ \\t]*$/u, "\\n\\n" + definition + "\\n@@end")
+        : "@@embedded\\n\\n" + definition + "\\n@@end";
+    }
+
+    function isSupportedEmbeddedFile(file) {
+      const extension = "." + String(file.name || "").split(".").pop().toLocaleLowerCase("pt-BR");
+      return embeddedAttachmentCapabilities.some((capability) => capability.extensions.includes(extension) && capability.mime === file.type);
+    }
+
+    function readEmbeddedAttachment(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onerror = () => reject(new Error("Falha ao ler o anexo selecionado."));
+        reader.onload = () => resolve(String(reader.result || ""));
+        reader.readAsDataURL(file);
+      });
     }
 
     function wrapSelection(marker) {
@@ -3881,10 +3959,28 @@ function renderGuiHtml() {
     window.addEventListener("resize", closeEmojiMenu);
     window.addEventListener("scroll", closeEmojiMenu, true);
 
-    insertAttachmentButton.addEventListener("click", () => {
-      const filename = window.prompt("Arquivo do anexo:", "arquivo.pdf");
-      if (filename && filename.trim()) {
-        insertTextAtCursor("![](" + filename.trim() + ")");
+    insertAttachmentButton.addEventListener("click", () => embeddedAttachmentInput.click());
+
+    embeddedAttachmentInput.addEventListener("change", async () => {
+      const file = embeddedAttachmentInput.files && embeddedAttachmentInput.files[0];
+      embeddedAttachmentInput.value = "";
+      if (!file) return;
+      if (file.size > maxEmbeddedAttachmentBytes) {
+        showMessage("Anexo excede o limite de 8 MiB.", "error");
+        return;
+      }
+      if (!isSupportedEmbeddedFile(file)) {
+        showMessage("Formato do anexo não é suportado pelo motor de envio.", "error");
+        return;
+      }
+      try {
+        const data = await readEmbeddedAttachment(file);
+        const id = createEmbeddedId(file.name);
+        appendEmbeddedDefinition(id, file, data);
+        insertTextAtCursor("![" + file.name + "](@embed:" + id + ")");
+        setTemplateMediaStatus("Anexo incorporado: " + file.name + " (" + Math.ceil(file.size / 1024) + " KiB).", "success");
+      } catch (err) {
+        showMessage(err.message, "error");
       }
     });
 
@@ -3913,24 +4009,37 @@ function renderGuiHtml() {
       });
     });
 
-    updateButton.addEventListener("click", async () => {
-      const choice = window.prompt("Atualizar: 1) whatsapp-web.js  2) todas as dependências  3) software oficial  4) reverter última atualização", "1");
-      const actions = { "1": "whatsapp-web.js", "2": "dependencies", "3": "software", "4": "revert" };
-      const action = actions[choice || ""];
-      if (!action) return;
-      const warning = action === "revert"
-        ? "Reverter a última atualização? Software, dependências e metadados serão restaurados."
-        : "Atualizações podem introduzir incompatibilidades e quebrar o ambiente estável. Confirmar?";
-      if (!window.confirm(warning)) return;
+    function closeUpdatePanel() {
+      updateOverlay.classList.remove("visible");
+      selectedUpdateAction = "";
+      updateConfirm.disabled = true;
+      updateOptions.querySelectorAll("[data-update-action]").forEach((item) => item.classList.remove("selected"));
+    }
+
+    updateButton.addEventListener("click", () => updateOverlay.classList.add("visible"));
+    updateOptions.addEventListener("click", (event) => {
+      const option = event.target.closest("[data-update-action]");
+      if (!option) return;
+      selectedUpdateAction = option.getAttribute("data-update-action") || "";
+      updateConfirm.disabled = !selectedUpdateAction;
+      updateOptions.querySelectorAll("[data-update-action]").forEach((item) => item.classList.toggle("selected", item === option));
+      updateWarning.textContent = selectedUpdateAction === "revert"
+        ? "A reversão restaura software, dependências e metadados da última atualização válida."
+        : "A confirmação explícita inicia a atualização e o progresso será registrado.";
+    });
+    updateCancel.addEventListener("click", closeUpdatePanel);
+    updateOverlay.addEventListener("click", (event) => { if (event.target === updateOverlay) closeUpdatePanel(); });
+    updateConfirm.addEventListener("click", async () => {
+      if (!selectedUpdateAction) return;
       try {
-        updateButton.disabled = true;
-        await postJson("/api/update", { action, confirmed: true });
+        updateConfirm.disabled = true;
+        await postJson("/api/update", { action: selectedUpdateAction, confirmed: true });
+        closeUpdatePanel();
         showMessage("Atualização iniciada. O progresso será mostrado no registro.", "warning");
         startStatusPolling();
       } catch (err) {
+        updateConfirm.disabled = false;
         showMessage(err.message, "error");
-      } finally {
-        window.setTimeout(() => { updateButton.disabled = false; }, 800);
       }
     });
 
