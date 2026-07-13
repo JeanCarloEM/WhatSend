@@ -201,7 +201,7 @@ verificacoes_concluidas=
 pendencias=
 - Nenhuma.
 
-FT-004|nome=Anexos embedded e painel visual de atualizacao|escopo=Tecnico|prioridade=alta|status=em_andamento
+FT-004|nome=Anexos embedded e painel visual de atualizacao|escopo=Tecnico|prioridade=alta|status=concluido
 inicio=20260713.0020.05
 ultima_atualizacao=20260713.0405.00
 conclusao=20260713.0405.00
@@ -250,3 +250,38 @@ verificacoes_concluidas=
 
 pendencias=
 - Nenhuma.
+
+FT-005|nome=Aprimoramentos de toolbar e release 0.2.2-beta|escopo=Tecnico|prioridade=alta|status=em_andamento
+inicio=20260713.0415.00
+ultima_atualizacao=20260713.0445.00
+conclusao=
+objetivo=Reordenar controles da toolbar, adicionar salvamento local sem versionamento, corrigir icone e hints do cabecalho e publicar 0.2.2-beta como Latest.
+estado_atual=Etapa 3/3 - Release 0.2.2-beta; Tarefa 1/3 - Registrar commits e executar preflight.
+proximo_ponto_executavel=Registrar os commits da FT, publicar pelo workflow oficial e confirmar Latest, assets, tag e convergencia.
+
+etapas=
+1/3 GUI e contrato [concluido]
+  1/4 Reordenar Abrir e Salvar todas as abas [concluido]
+  2/4 Adicionar salvamento local sem nome e sem versionamento [concluido]
+  3/4 Corrigir icone Atualizar para cloud-download f0ed e hints inferiores no cabecalho [concluido]
+  4/4 Sincronizar RCF, README e guia operacional [concluido]
+2/3 Validacao [concluido]
+  1/3 Cobrir renderizacao, ordem, icones, hints e localStorage por testes [concluido]
+  2/3 Executar sintaxe, testes, check, build e validacao dist [concluido]
+  3/3 Confirmar ausencia de regressao em GUI, CLI e distribuicao [concluido]
+3/3 Release 0.2.2-beta [em_andamento]
+  1/3 Registrar commits e executar preflight [em_andamento]
+  2/3 Publicar por workflow oficial com Latest [pendente]
+  3/3 Confirmar tag, assets, Latest e convergencia dev/main [pendente]
+
+decisoes=
+- Salvamento local usara somente localStorage do navegador, com chave interna fixa, sem arquivo, nome ou versionamento.
+- O workflow oficial ja declara `--latest`; a validacao remota deve continuar exigindo que `/releases/latest` corresponda a versao publicada.
+
+verificacoes_concluidas=
+- FT-004 encerrada e convergida em dev/main antes da nova FT.
+- node --check e test/gui-ui.test.js: 4/4 aprovados.
+- npm test: 122/122; npm run check:test; npm run build:dist e npm run validate:dist com cache isolado concluiram.
+
+pendencias=
+- Implementar e validar FT-005.

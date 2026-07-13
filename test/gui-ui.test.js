@@ -24,11 +24,18 @@ test("GUI usa Font Awesome por sprite, hints e toolbar integrada", () => {
 
   assert.match(html, /wa-icon-sprite/);
   assert.match(html, /id="openTemplateButton"/);
+  assert.match(html, /id="saveTemplateLocalButton"/);
   assert.match(html, /id="saveTemplateButton"/);
   assert.match(html, /data-hint="Salvar todas as abas em um arquivo \.md separado por \^\^\^/);
   assert.doesNotMatch(html, /<button[^>]*>💾<\/button>/u);
   assert.equal(resolveGuiIconKey("f56d"), "save");
   assert.equal(resolveGuiIconKey("f574"), "open");
+  assert.equal(resolveGuiIconKey("f0c7"), "saveLocal");
+  assert.equal(resolveGuiIconKey("f0ed"), "cloudDownload");
+  assert.ok(html.indexOf('id="saveTemplateLocalButton"') < html.indexOf('id="saveTemplateButton"'));
+  assert.ok(html.indexOf('id="saveTemplateButton"') < html.indexOf('id="openTemplateButton"'));
+  assert.match(html, /LOCAL_TEMPLATE_STORAGE_KEY/);
+  assert.match(html, /header-actions \[data-hint\]:hover::after/);
 });
 
 test("configurações ENV persistem por escopo global e sessão", () => {
