@@ -74,6 +74,7 @@ const GUI_HINTS = Object.freeze({
   newPosting: "Inserir $postagem$ para enviar uma nova postagem sequencial.",
   open: "Abrir arquivo Markdown no editor.",
   removeModel: "Excluir este modelo.",
+  saveLocal: "Salvar o modelo completo neste navegador.",
   save: "Salvar todas as abas em um arquivo .md separado por ^^^.",
   settings: "Abrir configurações desta execução.",
   shutdown: "Desligar o processo local e fechar o navegador controlado.",
@@ -1456,6 +1457,20 @@ function renderGuiHtml() {
       z-index: 1201;
     }
 
+    .header-actions [data-hint]:hover::after,
+    .header-actions [data-hint]:focus-visible::after {
+      bottom: auto;
+      top: calc(100% + 8px);
+    }
+
+    .header-actions [data-hint]:hover::before,
+    .header-actions [data-hint]:focus-visible::before {
+      border-bottom-color: #101828;
+      border-top-color: transparent;
+      bottom: auto;
+      top: calc(100% - 3px);
+    }
+
     body {
       margin: 0;
       background: var(--bg);
@@ -2456,7 +2471,7 @@ function renderGuiHtml() {
       </div>
       <div class="header-actions">
         <div class="status-pill" id="statusPill">Aguardando</div>
-        <button id="updateButton" class="icon-button" type="button" data-hint="${escapeHtml(GUI_HINTS.update)}" aria-label="Atualizar">${renderGuiIcon("settings")}</button>
+        <button id="updateButton" class="icon-button" type="button" data-hint="${escapeHtml(GUI_HINTS.update)}" aria-label="Atualizar">${renderGuiIcon("f0ed")}</button>
         <button id="settingsButton" class="icon-button" type="button" data-hint="${escapeHtml(GUI_HINTS.settings)}" aria-label="Configurações">${renderGuiIcon("settings")}</button>
         <button id="shutdownButton" class="icon-button shutdown-button" type="button" data-hint="${escapeHtml(GUI_HINTS.shutdown)}" aria-label="Desligar">${renderGuiIcon("power")}</button>
       </div>
@@ -2506,8 +2521,9 @@ function renderGuiHtml() {
               <button id="newTemplateTabButton" class="wa-tab wa-tab-create" type="button" data-hint="${escapeHtml(GUI_HINTS.newModel)}" aria-label="Novo modelo">${renderGuiIcon("plus")}</button>
             </div>
             <div class="wa-toolbar" aria-label="Ferramentas de edição textual">
-              <button type="button" id="openTemplateButton" data-hint="${escapeHtml(GUI_HINTS.open)}" aria-label="Abrir">${renderGuiIcon("f574")}</button>
+              <button type="button" id="saveTemplateLocalButton" data-hint="${escapeHtml(GUI_HINTS.saveLocal)}" aria-label="Salvar localmente">${renderGuiIcon("f0c7")}</button>
               <button type="button" id="saveTemplateButton" data-hint="${escapeHtml(GUI_HINTS.save)}" aria-label="Salvar">${renderGuiIcon("f56d")}</button>
+              <button type="button" id="openTemplateButton" data-hint="${escapeHtml(GUI_HINTS.open)}" aria-label="Abrir">${renderGuiIcon("f574")}</button>
               <span class="toolbar-separator" aria-hidden="true"></span>
               <button type="button" data-wrap="*" data-hint="${escapeHtml(GUI_HINTS.bold)}" aria-label="Negrito">${renderGuiIcon("bold")}</button>
               <button type="button" data-wrap="_" data-hint="${escapeHtml(GUI_HINTS.italic)}" aria-label="Itálico">${renderGuiIcon("italic")}</button>
@@ -2681,6 +2697,7 @@ function renderGuiHtml() {
     const templateTabs = document.getElementById("templateTabs");
     const newTemplateTabButton = document.getElementById("newTemplateTabButton");
     const openTemplateButton = document.getElementById("openTemplateButton");
+    const saveTemplateLocalButton = document.getElementById("saveTemplateLocalButton");
     const saveTemplateButton = document.getElementById("saveTemplateButton");
     const insertEmojiButton = document.getElementById("insertEmojiButton");
     const emojiMenu = document.getElementById("emojiMenu");
@@ -2713,6 +2730,7 @@ function renderGuiHtml() {
     let isComposingTemplate = false;
     let scrollSyncSource = "";
     let settingsSnapshot = null;
+    const LOCAL_TEMPLATE_STORAGE_KEY = "whatsend.template.local";
     let embeddedFooter = "";
     let selectedUpdateAction = "";
     const embeddedAttachmentCapabilities = ${JSON.stringify(getEmbeddedAttachmentCapabilities())};
@@ -3427,6 +3445,24 @@ function renderGuiHtml() {
       window.setTimeout(() => URL.revokeObjectURL(url), 1000);
     }
 
+    function saveTemplateLocally() {
+      syncTemplateHidden();
+      try {
+        window.localStorage.setItem(LOCAL_TEMPLATE_STORAGE_KEY, templateTextHidden.value);
+        showMessage("Modelo salvo neste navegador.", "ok");
+      } catch (err) {
+        showMessage("Não foi possível salvar o modelo neste navegador: " + err.message, "error");
+      }
+    }
+
+    function getStoredTemplate() {
+      try {
+        return window.localStorage.getItem(LOCAL_TEMPLATE_STORAGE_KEY) || "";
+      } catch (_) {
+        return "";
+      }
+    }
+
     function normalizeDownloadBasename(value) {
       return String(value || "")
         .trim()
@@ -4000,6 +4036,7 @@ function renderGuiHtml() {
       templateEditorInput.focus();
     });
 
+    saveTemplateLocalButton.addEventListener("click", saveTemplateLocally);
     saveTemplateButton.addEventListener("click", downloadTemplateAsFile);
 
     settingsButton.addEventListener("click", () => {
@@ -4169,7 +4206,7 @@ function renderGuiHtml() {
       showMessage("Não foi possível carregar o status: " + err.message, "error");
     });
     renderEmojiMenu();
-    setEditorContent("");
+    setEditorContent(getStoredTemplate());
     initializeHints();
     startStatusPolling();
   </script>

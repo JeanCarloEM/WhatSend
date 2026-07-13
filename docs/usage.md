@@ -42,6 +42,8 @@ Um arquivo pode conter multiplas variacoes separadas por uma linha com `^^^`. Qu
 
 O editor da GUI trabalha sempre com texto cru. A toolbar por ícones apenas insere ou remove marcadores textuais, como `*`, `_`, `~`, três crases para monoespaçado, `![](arquivo.pdf)`, `$diatarde$`, `$postagem$` e `^^^`; emojis são escolhidos por menu suspenso. Nenhum HTML ou conteúdo rico é persistido no modelo. A prévia renderiza negrito, itálico, tachado e monoespaçado para aproximar o resultado visual sem mudar o texto do editor, sempre limitada à aba ativa e com rolagem proporcional sincronizada.
 
+A toolbar começa por Salvar localmente (disquete), Salvar todas as abas em `.md` e Abrir. O primeiro conserva o modelo integral em `localStorage`, sem nome, arquivo ou versionamento.
+
 O quadro de notações da GUI é retrátil e recolhido por padrão. Ao adicionar novas marcações, a implementação, a GUI, o RCF, o README e este guia devem ser atualizados na mesma alteração para evitar divergência.
 
 Cada postagem gerada por `$postagem$` é normalizada individualmente antes da prévia e do envio: sobras no início/fim e caracteres não imprimíveis excedentes são removidos, enquanto recuos intencionais de pelo menos quatro espaços em linha de conteúdo são preservados.
