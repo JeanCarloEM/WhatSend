@@ -5,7 +5,7 @@ $postagem$
 
 ![](./assets/chat-avaliar-falecom.png)
 
-Estamos precisando de uma ajudinha sua, *${nome}*. Você poderia nos enviar *qualquer* mensagem pelo *chat oficial*? Pode ser até um simples "*oi*". 🙂
+Estamos precisando de uma ajudinha sua, *${nome}*. Você poderia nos enviar *qualquer* mensagem pelo *chat oficial*? Pode ser até um simples "*oi*". 🙂 _(Detalhe: entre 09h até *16h*)_
 
 *Só um detalhe:* a mensagem precisa ser enviada pelo *App BB* ou pelo *Gerenciador Financeiro*, exatamente como mostrado na imagem.
 
@@ -41,7 +41,7 @@ $postagem$
 
 Será que você consegue nos dar uma ajudinha, *${nome}*?
 
-Basta enviar *qualquer* mensagem pelo *chat oficial* do BB. Pode ser até um simples "*oi*". 😉
+Basta enviar *qualquer* mensagem pelo *chat oficial* do BB. Pode ser até um simples "*oi*". 😉 _(Detalhe: entre 09h até *16h*)_
 
 *Importante:* o envio precisa ser feito pelo *App BB* ou pelo *Gerenciador Financeiro*, conforme a imagem.
 
@@ -74,7 +74,7 @@ $postagem$
 ![](./assets/chat-avaliar-falecom.png)
 Então *${nome}*, posso te pedir um favor rapidinho?
 
-Envie uma mensagem pelo *chat oficial* do BB. Pode escrever apenas "*oi*" mesmo.
+Envie uma mensagem pelo *chat oficial* do BB. Pode escrever apenas "*oi*" mesmo. _(Detalhe: entre 09h até *16h*)_
 
 ⚠️ Só lembrando: precisa ser pelo *App BB* ou pelo *Gerenciador Financeiro*, como na imagem.
 
@@ -112,7 +112,7 @@ $postagem$
 ![](./assets/chat-avaliar-falecom.png)
 Estamos contando com uma pequena ajuda sua, *${nome}*.
 
-Você poderia enviar *qualquer mensagem* pelo *chat oficial* do BB? Um simples "*oi*" já resolve.
+Você poderia enviar *qualquer mensagem* pelo *chat oficial* do BB? Um simples "*oi*" já resolve. _(Detalhe: entre 09h até *16h*)_
 
 📲 O único detalhe é que a mensagem precisa ser enviada pelo *App BB* ou pelo *Gerenciador Financeiro*, exatamente como mostrado na imagem.
 
