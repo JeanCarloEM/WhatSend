@@ -41,7 +41,8 @@ permissions:
 
 jobs:
   publish:
-    if: ${{ github.event_name == 'workflow_dispatch' || startsWith(github.event.head_commit.message, 'chore: aciona release v') }}
+    if: >-
+      ${{ github.event_name == 'workflow_dispatch' || startsWith(github.event.head_commit.message, 'chore: aciona release v') }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     env:
@@ -50,7 +51,8 @@ jobs:
 
     steps:
       - name: Validate confirmation
-        if: ${{ github.event_name == 'workflow_dispatch' && !inputs.confirm_official_release }}
+        if: >-
+          ${{ github.event_name == 'workflow_dispatch' && !inputs.confirm_official_release }}
         run: |
           echo "A publicação oficial precisa ser confirmada no workflow_dispatch."
           exit 1
