@@ -303,6 +303,7 @@ verificacoes_concluidas=
 - Toolbar passou a conter Nova edicao f15b, Salvar no navegador, Abrir do armazenamento local f07c, modelos, download e abrir .md.
 - Ajuste posterior distinguiu os dois icones de abertura: Abrir salvamentos locais usa folderOpenRegular outline, modelos preexistentes mantem folderOpen solido; separador fica imediatamente apos Nova edicao.
 - Regressao apontada no botao Desligar corrigida com requestGuiShutdown dedicado, cancelamento de polling/heartbeat/timer e POST keepalive para /api/runtime/stop.
+- Regressao apontada em editor/preview/adicionar guia causada por JS invalido emitido no HTML: aspas de confirmacao de sobrescrita escapadas insuficientemente dentro de template string. Corrigido com string de aspas simples e teste que compila o script renderizado.
 - Painel HTML de salvamentos locais lista nomes definitivos em ordem alfabetica e .autosave separado como recuperacao automatica.
 - node --check src/gui.js e src/gui-icons.js concluiu.
 - node --test concluiu com 129/129 testes aprovados.

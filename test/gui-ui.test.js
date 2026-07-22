@@ -66,6 +66,16 @@ test("GUI usa Font Awesome por sprite, hints e toolbar integrada", () => {
   assert.match(html, /header-actions \[data-hint\]:hover::after/);
 });
 
+test("GUI emite script de navegador sintaticamente válido", () => {
+  const html = renderGuiHtml();
+  const scripts = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map((match) => match[1]);
+
+  assert.ok(scripts.length > 0);
+  scripts.forEach((script) => {
+    assert.doesNotThrow(() => new Function(script));
+  });
+});
+
 test("configurações ENV persistem por escopo global e sessão", () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "whatsend-env-"));
 

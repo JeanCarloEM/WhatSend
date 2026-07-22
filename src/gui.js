@@ -4372,7 +4372,7 @@ function renderGuiHtml() {
         }
         const existing = localTemplateStore.readIndex();
         if (existing.includes(name) || activeDocument.activeName === name) {
-          const confirmed = window.confirm("Atualizar o salvamento local \"" + name + "\"?");
+          const confirmed = window.confirm('Atualizar o salvamento local "' + name + '"?');
           if (!confirmed) return;
         }
         const record = localTemplateStore.save(name, buildLocalSaveRecord(name, { origin: "local" }));
