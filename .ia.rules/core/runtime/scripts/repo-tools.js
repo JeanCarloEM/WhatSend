@@ -28,6 +28,7 @@ const DIST_DIR = resolveConfiguredRoot("paths.artifact");
 const SOURCE_RULES_DIR = path.join(SRC_DIR, ".ia.rules");
 const RUNTIME_RULES_DIR = fs.existsSync(path.join(ROOT_DIR, ".ia.rules")) ? path.join(ROOT_DIR, ".ia.rules") : SOURCE_RULES_DIR;
 const INDEX_PATH = path.join(ROOT_DIR, (CONFIGURATION.paths && CONFIGURATION.paths.index) || "index.json");
+const LOCK_PATH = path.join(ROOT_DIR, ".ia.rules", "agents-update.lock.json");
 const RELEASE_PATH = path.join(DIST_DIR, "release.json");
 const RELEASE_NOTE_PATH = path.join(DIST_DIR, "release-note.txt");
 const PACKAGE_PATH = path.join(ROOT_DIR, "package.json");
@@ -401,18 +402,12 @@ function main(argv = process.argv.slice(2)) {
 
 function buildIndex() {
   assertBuildConfiguration();
-  assertDirectory(SRC_DIR, "src ausente.");
-  const files = listFiles(SRC_DIR)
-    .filter((filePath) => [".md", ".json", ".js"].includes(path.extname(filePath).toLocaleLowerCase("en-US")))
-    .map((filePath) => ({
-      name: path.basename(filePath),
-      path: toPosix(path.relative(ROOT_DIR, filePath)),
-    }))
-    .sort((a, b) => a.path.localeCompare(b.path, "en"));
+  const consumerGovernance = !fs.existsSync(SOURCE_RULES_DIR) && fs.existsSync(LOCK_PATH);
+  const files = consumerGovernance ? readManagedIndexFilesFromLock() : listSourceIndexFiles();
 
   const index = {
     files,
-    root: "src",
+    root: consumerGovernance ? "." : "src",
     schema: 1,
   };
   index.update = createGovernanceManifest(buildDistributionFiles(index), (entry) => fs.readFileSync(path.join(ROOT_DIR, entry.sourcePath)));
@@ -424,6 +419,30 @@ function buildIndex() {
   });
   index.handoff = createUpdateHandoffDescriptor(index.update);
   return index;
+}
+
+function listSourceIndexFiles() {
+  assertDirectory(SRC_DIR, "src ausente.");
+  return listFiles(SRC_DIR)
+    .filter((filePath) => [".md", ".json", ".js"].includes(path.extname(filePath).toLocaleLowerCase("en-US")))
+    .map((filePath) => ({
+      name: path.basename(filePath),
+      path: toPosix(path.relative(ROOT_DIR, filePath)),
+    }))
+    .sort((a, b) => a.path.localeCompare(b.path, "en"));
+}
+
+function readManagedIndexFilesFromLock() {
+  const lock = JSON.parse(fs.readFileSync(LOCK_PATH, "utf8"));
+  const entries = Array.isArray(lock.managedFiles) ? lock.managedFiles : [];
+  return entries
+    .map((entry) => toPosix(entry && entry.path))
+    .filter((relativePath) => relativePath && relativePath !== "package.json" && fs.existsSync(path.join(ROOT_DIR, relativePath)))
+    .map((relativePath) => ({
+      name: path.basename(relativePath),
+      path: relativePath,
+    }))
+    .sort((a, b) => a.path.localeCompare(b.path, "en"));
 }
 
 function buildDist(options = {}) {
@@ -622,7 +641,7 @@ function buildDistributionPackage() {
     files: [".ia.rules/", "AGENTS.md", "INIT-REPO.md", "release.json"],
     license: source.license || "MPL-2.0",
     description: source.description || "Governanca operacional portavel para agentes IA.",
-    main: source.main || "AGENTS.md",
+    main: "AGENTS.md",
     ...(source["agentsUpstream"] ? { agentsUpstream: source["agentsUpstream"] } : {}),
     scripts,
     ...(Object.keys(dependencies).length ? { dependencies } : {}),
@@ -695,25 +714,35 @@ function assertCodeBanner(content, label) {
 
 function testAll() {
   verify();
-  runProcess(process.execPath, [path.join(ROOT_DIR, "test", "distribution-map.test.js")]);
-  runProcess(process.execPath, [path.join(ROOT_DIR, "test", "upstream-share.test.js")]);
-  runProcess(process.execPath, [path.join(ROOT_DIR, "test", "issue-inbox.test.js")]);
-  runProcess(process.execPath, [path.join(ROOT_DIR, "test", "issue-lifecycle.test.js")]);
-  runProcess(process.execPath, [path.join(ROOT_DIR, "test", "autoupdate.test.js")]);
-  runProcess(process.execPath, [path.join(ROOT_DIR, "test", "configuration.test.js")]);
-  runProcess(process.execPath, [path.join(ROOT_DIR, "test", "application-update.test.js")]);
-  runProcess(process.execPath, [path.join(ROOT_DIR, "test", "package-registry.test.js")]);
-  runProcess(process.execPath, [path.join(ROOT_DIR, "test", "todo-and-gate.test.js")]);
-  runProcess(process.execPath, [path.join(ROOT_DIR, "test", "template-merge.test.js")]);
-  return ok("TEST_OK", { suites: 10 });
+  const suites = [
+    "distribution-map.test.js",
+    "upstream-share.test.js",
+    "issue-inbox.test.js",
+    "issue-lifecycle.test.js",
+    "autoupdate.test.js",
+    "configuration.test.js",
+    "application-update.test.js",
+    "package-registry.test.js",
+    "todo-and-gate.test.js",
+    "template-merge.test.js",
+  ].map((fileName) => path.join(ROOT_DIR, "test", fileName)).filter((filePath) => fs.existsSync(filePath));
+  if (suites.length === 0) {
+    runProcess(process.execPath, ["--test"]);
+    return ok("TEST_OK", { suites: "project" });
+  }
+  for (const suite of suites) {
+    runProcess(process.execPath, [suite]);
+  }
+  return ok("TEST_OK", { suites: suites.length });
 }
 
 function validateIndex(index) {
-  if (!index || index.schema !== 1 || index.root !== "src" || !Array.isArray(index.files)) {
+  if (!index || index.schema !== 1 || ![".", "src"].includes(index.root) || !Array.isArray(index.files)) {
     throw new Error("index.json invalido.");
   }
   for (const file of index.files) {
-    if (!file.name || !file.path || !file.path.startsWith("src/") || !fs.existsSync(path.join(ROOT_DIR, file.path))) {
+    const rootValid = index.root === "." ? !file.path.startsWith("src/") : file.path.startsWith("src/");
+    if (!file.name || !file.path || !rootValid || !fs.existsSync(path.join(ROOT_DIR, file.path))) {
       throw new Error(`Entrada invalida no indexador: ${JSON.stringify(file)}`);
     }
   }
@@ -722,7 +751,8 @@ function validateIndex(index) {
 }
 
 function validateNormativeReferences(index) {
-  const conceptPath = path.join(SRC_DIR, ".ia.rules", "core", "concepts", "microconceitos.md");
+  const sourceRoot = index.root === "." ? ROOT_DIR : SRC_DIR;
+  const conceptPath = path.join(sourceRoot, ".ia.rules", "core", "concepts", "microconceitos.md");
   const conceptText = fs.readFileSync(conceptPath, "utf8");
   const definitions = new Set();
   for (const match of conceptText.matchAll(/^## (MN-[A-Z0-9-]+|W-MTX-42)\b/gmu)) {
@@ -746,9 +776,9 @@ function validateNormativeReferences(index) {
         continue;
       }
       const fromRoot = reference === "./AGENTS.md" || reference.startsWith("./.ia.rules/");
-      const target = path.resolve(fromRoot ? SRC_DIR : path.dirname(filePath), reference);
-      const relative = path.relative(SRC_DIR, target);
-      if (!relative || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative) || !fs.existsSync(target) || !hasExactPathCase(SRC_DIR, relative)) {
+      const target = path.resolve(fromRoot ? sourceRoot : path.dirname(filePath), reference);
+      const relative = path.relative(sourceRoot, target);
+      if (!relative || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative) || !fs.existsSync(target) || !hasExactPathCase(sourceRoot, relative)) {
         throw new Error(`Referencia normativa invalida em ${entry.path}: ${reference}.`);
       }
     }

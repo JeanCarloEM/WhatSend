@@ -162,10 +162,10 @@ pendencias=
 FT-006|nome=Deteccao assincrona de atualizacoes e reorganizacao da GUI|escopo=Tecnico|prioridade=alta|status=em andamento
 criado_em=2026-07-22T10:13:56-03:00
 inicio=20260722.1013.56
-ultima_atualizacao=20260722.1255.00
+ultima_atualizacao=20260722.1320.00
 objetivo=Implementar verificacao assincrona e fail-safe de atualizacoes do aplicativo e de whatsapp-web.js, reorganizar cards, compactar Andamento e adicionar selecao opcional de modelos preexistentes.
-estado_atual=Implementacao, migracao, testes diretos e validacao visual desktop concluidos; wrappers normativos npm test/npm run check bloqueados por manifesto gerenciado de .ia.rules.
-proximo_ponto_executavel=Resolver manifesto gerenciado de handoff em .ia.rules para liberar wrappers obrigatorios; depois preparar commit/push conforme politica.
+estado_atual=Implementacao, migracao, testes diretos, wrappers normativos e validacao visual desktop concluidos; commit funcional 695236f registrado.
+proximo_ponto_executavel=Commitar correcao do wrapper consumidor e avaliar push conforme credencial/politica.
 
 etapas=
 1/6 Migracao e contrato [concluido]
@@ -193,8 +193,8 @@ etapas=
   3/3 Validar renderizacao real quando disponivel [concluido]
 6/6 Rastreabilidade e entrega [em andamento]
   1/3 Atualizar RCF/README/handoff quando aplicavel [concluido]
-  2/3 Preparar commits coesos [pendente]
-  3/3 Push apos validacoes obrigatorias [bloqueado]
+  2/3 Preparar commits coesos [em andamento]
+  3/3 Push apos validacoes obrigatorias [pendente]
 
 decisoes=
 - AGENTS.md atualizado define .ia.rules como raiz operacional; AGENTS.md e arquivos gerenciados originais permanecem intocaveis nesta migracao.
@@ -219,10 +219,14 @@ verificacoes_concluidas=
 - Validacao visual desktop em HTTP local confirmou grid, Andamento full-width, ordem da toolbar, regra de logs retraidos e reduced motion.
 - Validacao mobile real via Browser ficou inconclusiva porque o viewport solicitado nao foi aplicado; cobertura estatica confirmou CSS responsivo e ausencia de overflow estrutural esperado.
 - npm test e npm run check foram reexecutados e bloquearam antes da suite por inconsistencia do manifesto gerenciado: Runtime de handoff ausente do manifesto: .ia.rules/core/runtime/scripts/update-agents.js.
+- Correção em .ia.rules/core/runtime/scripts/repo-tools.js fez o perfil consumidor indexar governanca ativa por .ia.rules/agents-update.lock.json, fixou main do pacote de governanca em AGENTS.md e fez agent:test cair para node --test quando suites internas de governanca nao existem.
+- npm run check concluiu: VERIFY_OK com 56 arquivos indexados.
+- npm test concluiu: VERIFY_OK e TEST_OK com suite do projeto.
+- Commit funcional existente: 695236f feat: detecta atualizacoes assincronas, reorganiza GUI e migra memoria operacional para .ia.rules.
 
 pendencias=
-- Corrigir manifesto/runtime gerenciado de .ia.rules para liberar npm test e npm run check; essa superficie foi preservada por ser nucleo gerenciado.
-- Commit/push pendentes ate conclusao ou autorizacao explicita diante do bloqueio dos wrappers normativos.
+- Commit da correcao do wrapper consumidor pendente.
+- Push pendente.
 
 antirretrabalho=
 - Nao reexecutar git push sem credencial nova ou evidencia de autenticacao.

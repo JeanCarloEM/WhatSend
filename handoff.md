@@ -94,7 +94,7 @@ Objetivo: Implementar verificacao assincrona e fail-safe de atualizacoes do apli
 </tr>
 <tr>
 <td>Preparar commits coesos</td>
-<td><span style="color:#64748b">&#9679;</span> pendente</td>
+<td><span style="color:#ca8a04">&#9679;</span> em andamento</td>
 </tr>
 <tr>
 <td>Push apos validacoes obrigatorias</td>
