@@ -239,6 +239,65 @@ antirretrabalho=
 - Nao executar atualizacao real de dependencia/software durante teste; usar fixtures e stubs.
 - Alteracoes preexistentes de notice, env-settings, config-restrictions e compliance-notice foram revisadas, testadas e consolidadas no commit 870728d.
 
+FT-007|nome=Persistencia nomeada e encerramento fail-safe da GUI|escopo=Tecnico|prioridade=alta|status=em andamento
+criado_em=2026-07-22T00:00:00-03:00
+inicio=20260722.0000.00
+ultima_atualizacao=20260722.0000.00
+objetivo=Implementar encerramento automatico seguro da instancia GUI quando a sessao local se ausentar, consolidar salvamentos nomeados no navegador, autosave .autosave, painel de abertura local e nova edicao com protecao contra perda de dados.
+estado_atual=Etapa 1/7 em andamento; normas, prompt e estado atual do repositorio relidos.
+proximo_ponto_executavel=Mapear pontos exatos de servidor, processos filhos, toolbar e persistencia antes de editar codigo.
+
+etapas=
+1/7 Contrato e mapeamento [em andamento]
+  1/4 Reler AGENTS, RCF, README, cenarios e prompt anexo [concluido]
+  2/4 Mapear servidor, processos filhos, hooks, GUI, editor e persistencia [em andamento]
+  3/4 Sincronizar RCF/README com o novo contrato de persistencia e sessao [pendente]
+  4/4 Validar escopo cirurgico e conflitos com FT-006 [pendente]
+2/7 Sessao GUI e desligamento seguro [pendente]
+  1/4 Centralizar clientes conectados, heartbeat e expiracao [pendente]
+  2/4 Centralizar operacoes ativas e filhos adotados por instancia [pendente]
+  3/4 Implementar shutdown gracioso idempotente com tolerancia e fallback [pendente]
+  4/4 Proteger recarga, multiplas abas e servidor persistente [pendente]
+3/7 Persistencia local nomeada [pendente]
+  1/4 Criar servico unico de localStorage com namespace e schema [pendente]
+  2/4 Salvar conjunto completo de guias com nome definitivo [pendente]
+  3/4 Reservar .autosave e migrar fluxo legado [pendente]
+  4/4 Validar colisao, quota, indisponibilidade e registros invalidos [pendente]
+4/7 Autosave e dirty centralizado [pendente]
+  1/4 Centralizar snapshot salvo, estado sujo e indicador visual [pendente]
+  2/4 Autosave de 60 segundos por destino definitivo ou .autosave [pendente]
+  3/4 Evitar concorrencia, loop e perda de estado em falha [pendente]
+  4/4 Detectar conflitos entre abas quando aplicavel [pendente]
+5/7 Interface e acessibilidade [pendente]
+  1/5 Adicionar Nova edicao antes de Salvar no navegador [pendente]
+  2/5 Adicionar Abrir do armazenamento local apos Salvar no navegador [pendente]
+  3/5 Implementar painel integrado de salvamentos locais [pendente]
+  4/5 Exibir nome/origem ativa e preservar separacao modelo/arquivo/local [pendente]
+  5/5 Ajustar ordem, foco, teclado, Escape, responsividade e hints [pendente]
+6/7 Testes e validacao [pendente]
+  1/4 Cobrir sessao, shutdown, processos filhos e servidor persistente [pendente]
+  2/4 Cobrir persistencia, autosave e interface por testes determinísticos [pendente]
+  3/4 Executar node --check, node --test, npm test e npm run check [pendente]
+  4/4 Executar validacao visual funcional quando viavel [pendente]
+7/7 Rastreabilidade e entrega [pendente]
+  1/4 Atualizar memoria e handoff [pendente]
+  2/4 Compactar contexto por agent:compress [pendente]
+  3/4 Criar commits coesos [pendente]
+  4/4 Push somente com autorizacao/credencial explicita [pendente]
+
+decisoes=
+- Prompt anexo de 2026-07-22 autoriza consolidar o contrato de persistencia da GUI, substituindo o salvamento local antigo sem nome por salvamentos nomeados versionados e .autosave reservado.
+- Encerramento automatico deve preservar o servidor quando qualquer condicao for desconhecida, quando houver processamento ativo ou quando o servidor for marcado persistente.
+- A implementacao deve reaproveitar HTTP local e localStorage ja existentes, evitando dependencia nova.
+
+verificacoes_concluidas=
+- git status inicial: dev limpo e sincronizado com origin/dev.
+- .agents existe vazio e nao deve ser removido.
+- AGENTS.md, .ia.rules/continue.ia, RCF.md, README.md, contratos e cenario Web Page Like/Browser foram relidos.
+
+pendencias=
+- Implementacao, testes, validacao, commits e push.
+
 FT-003|nome=Auditoria e publicacao da release 0.2.0-beta|escopo=Tecnico|prioridade=alta|status=concluido
 inicio=20260713.0013.37
 ultima_atualizacao=20260713.0020.05
