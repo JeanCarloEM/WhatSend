@@ -100,6 +100,13 @@ test("GUI confirma descarte e reseta seleção antes de abrir modelo ou arquivo"
   assert.match(html, /templateFileInput\.value = "";\s*templateFileInput\.click\(\);/);
   assert.match(html, /confirmDiscardUnsavedTemplateChanges\("carregar o modelo selecionado"\)/);
   assert.match(html, /selectedTemplatePath = "";\s*setEditorContent\(normalizeUploadedText\(templateFile\.content\)\)/);
+  assert.match(html, /item\.dataset\.templateModelIndex/);
+  assert.match(html, /templateModelsMenu\.addEventListener\("pointerdown", handleTemplateModelsMenuSelection\)/);
+  assert.match(html, /templateModelsMenu\.addEventListener\("click", handleTemplateModelsMenuSelection\)/);
+  assert.match(html, /insideTemplateModels = event\.target === templateModelsButton \|\| templateModelsMenu\.contains\(event\.target\)/);
+  assert.match(html, /\.template-menu button:hover,[\s\S]*color: #fff;/);
+  assert.match(html, /\.template-menu button:hover small,[\s\S]*color: #fff;/);
+  assert.match(html, /templateBlocks = blocks\.length \? blocks : \[""\]/);
   assert.doesNotMatch(html, /if \(!templateFileInput\.files \|\| !templateFileInput\.files\.length\) \{\s*resetTemplateMediaAnalysis\(\);\s*setEditorContent\(""\);/);
 });
 

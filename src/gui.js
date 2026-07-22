@@ -1863,6 +1863,18 @@ function renderGuiHtml() {
       font-weight: 600;
     }
 
+    .template-menu button:hover,
+    .template-menu button:focus-visible {
+      background: var(--brand-dark);
+      border-color: var(--brand-dark);
+      color: #fff;
+    }
+
+    .template-menu button:hover small,
+    .template-menu button:focus-visible small {
+      color: #fff;
+    }
+
     .toolbar-separator {
       align-self: stretch;
       background: #d8dde6;
@@ -4270,8 +4282,8 @@ function renderGuiHtml() {
         const item = document.createElement("button");
         item.type = "button";
         item.setAttribute("role", "menuitem");
+        item.dataset.templateModelIndex = String(templateModels.indexOf(model));
         item.innerHTML = "<span>" + escapeMarkup(model.name || model.path) + "</span><small>" + escapeMarkup(model.context || model.path) + "</small>";
-        item.addEventListener("click", () => selectTemplateModel(model));
         templateModelsMenu.append(item);
       });
     }
@@ -4391,7 +4403,31 @@ function renderGuiHtml() {
       }
     });
 
-    templateModelsMenu.addEventListener("click", (event) => event.stopPropagation());
+    function handleTemplateModelsMenuSelection(event) {
+      const item = event.target.closest("[data-template-model-index]");
+      if (!item) {
+        event.stopPropagation();
+        return;
+      }
+
+      event.preventDefault();
+      event.stopPropagation();
+      if (event.type === "click" && item.dataset.templateSelectionHandled === "1") {
+        delete item.dataset.templateSelectionHandled;
+        return;
+      }
+      if (event.type === "pointerdown") {
+        item.dataset.templateSelectionHandled = "1";
+      }
+      const index = Number(item.dataset.templateModelIndex);
+      const model = templateModels[index];
+      if (model) {
+        selectTemplateModel(model);
+      }
+    }
+
+    templateModelsMenu.addEventListener("pointerdown", handleTemplateModelsMenuSelection);
+    templateModelsMenu.addEventListener("click", handleTemplateModelsMenuSelection);
 
     insertEmojiButton.addEventListener("click", (event) => {
       event.stopPropagation();
@@ -4412,8 +4448,11 @@ function renderGuiHtml() {
     });
 
     document.addEventListener("focusin", (event) => {
+      const insideTemplateModels = event.target === templateModelsButton || templateModelsMenu.contains(event.target);
       if (event.target !== insertEmojiButton && !emojiMenu.contains(event.target)) {
         closeEmojiMenu();
+      }
+      if (!insideTemplateModels) {
         closeTemplateModelsMenu();
       }
     });
@@ -4421,11 +4460,14 @@ function renderGuiHtml() {
     document.addEventListener("keydown", (event) => {
       if (event.key === "Escape") {
         closeEmojiMenu();
+        closeTemplateModelsMenu();
       }
     });
 
     window.addEventListener("resize", closeEmojiMenu);
     window.addEventListener("scroll", closeEmojiMenu, true);
+    window.addEventListener("resize", closeTemplateModelsMenu);
+    window.addEventListener("scroll", closeTemplateModelsMenu, true);
 
     insertAttachmentButton.addEventListener("click", () => embeddedAttachmentInput.click());
 
