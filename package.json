@@ -134,6 +134,7 @@
     "build": "npm run agent:build",
     "clean": "npm run agent:clean",
     "check": "npm run agent:verify",
+    "check:test": "npm run check",
     "release": "npm run shared:lifecycle:release --",
     "publish": "npm run shared:lifecycle:publish --"
   },
