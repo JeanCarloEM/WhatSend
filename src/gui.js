@@ -467,6 +467,10 @@ function hasActiveGuiClients(state) {
   return Object.values((state.guiClients && state.guiClients.clients) || {}).some((client) => client.state === "active");
 }
 
+function hasKnownGuiClients(state) {
+  return Object.keys((state.guiClients && state.guiClients.clients) || {}).length > 0;
+}
+
 function hasActiveGuiOperations(state) {
   return Boolean(
     state.busy ||
@@ -536,7 +540,7 @@ function isAutoGuiShutdownAllowed(context) {
 
 function scheduleAutoGuiShutdown(context, reason = "gui_session_absent") {
   const { state } = context;
-  if (!isAutoGuiShutdownAllowed(context) || hasActiveGuiClients(state)) {
+  if (!isAutoGuiShutdownAllowed(context) || !hasKnownGuiClients(state) || hasActiveGuiClients(state)) {
     return false;
   }
   if (hasActiveGuiOperations(state)) {
@@ -603,7 +607,6 @@ async function routeGuiRequest(req, res, context) {
 
   if (req.method === "GET" && url.pathname === "/api/status") {
     context.state.sessions = listSessions(context.basePaths);
-    scheduleAutoGuiShutdown(context, "gui_heartbeat_expired");
     sendJson(res, 200, {
       ok: true,
       state: serializeGuiState(context.state),
@@ -4391,9 +4394,13 @@ function renderGuiHtml() {
     }
 
     function notifyLocalSaveLimitIfNeeded() {
-      const count = localTemplateStore.readIndex().length;
-      if (count >= LOCAL_SAVE_MAX_NAMED_ITEMS) {
-        showMessage("Limite de " + LOCAL_SAVE_MAX_NAMED_ITEMS + " salvamentos locais atingido.", "warning");
+      try {
+        const count = localTemplateStore.readIndex().length;
+        if (count >= LOCAL_SAVE_MAX_NAMED_ITEMS) {
+          showMessage("Limite de " + LOCAL_SAVE_MAX_NAMED_ITEMS + " salvamentos locais atingido.", "warning");
+        }
+      } catch (err) {
+        showMessage("Armazenamento local indisponível: " + err.message, "warning");
       }
     }
 
@@ -5481,6 +5488,7 @@ function renderGuiHtml() {
       }
     });
 
+    startGuiHeartbeat();
     refreshStatus().catch((err) => {
       showMessage("Não foi possível carregar o status: " + err.message, "error");
     });
@@ -5492,7 +5500,6 @@ function renderGuiHtml() {
     notifyLocalSaveLimitIfNeeded();
     initializeHints();
     startStatusPolling();
-    startGuiHeartbeat();
     window.addEventListener("pagehide", stopGuiHeartbeat);
     window.addEventListener("beforeunload", stopGuiHeartbeat);
     window.addEventListener("storage", handleLocalStorageChanged);

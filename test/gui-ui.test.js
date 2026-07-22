@@ -22,6 +22,7 @@ const {
   registerGuiHeartbeat,
   renderGuiHtml,
   resolveGuiIconKey,
+  scheduleAutoGuiShutdown,
   saveEnvSettings,
 } = require("../main");
 
@@ -74,6 +75,12 @@ test("GUI emite script de navegador sintaticamente válido", () => {
   scripts.forEach((script) => {
     assert.doesNotThrow(() => new Function(script));
   });
+});
+
+test("GUI inicia heartbeat antes de consultar status", () => {
+  const html = renderGuiHtml();
+
+  assert.match(html, /startGuiHeartbeat\(\);\s*refreshStatus\(\)\.catch/);
 });
 
 test("configurações ENV persistem por escopo global e sessão", () => {
@@ -160,6 +167,13 @@ test("GUI centraliza clientes conectados e operações ativas para encerramento 
   endGuiOperation(state, operationId, "concluido");
   state.busy = false;
   assert.equal(hasActiveGuiOperations(state), false);
+});
+
+test("GUI não agenda encerramento antes de existir cliente conhecido", () => {
+  const state = createGuiState();
+
+  assert.equal(scheduleAutoGuiShutdown({ state, baseOptions: {} }, "teste"), false);
+  assert.equal(state._guiShutdownTimer, undefined);
 });
 
 test("GUI mantém botão de desligar funcional com requisição dedicada", () => {
