@@ -162,10 +162,10 @@ pendencias=
 FT-006|nome=Deteccao assincrona de atualizacoes e reorganizacao da GUI|escopo=Tecnico|prioridade=alta|status=em andamento
 criado_em=2026-07-22T10:13:56-03:00
 inicio=20260722.1013.56
-ultima_atualizacao=20260722.1320.00
+ultima_atualizacao=20260722.1340.00
 objetivo=Implementar verificacao assincrona e fail-safe de atualizacoes do aplicativo e de whatsapp-web.js, reorganizar cards, compactar Andamento e adicionar selecao opcional de modelos preexistentes.
-estado_atual=Implementacao, migracao, testes diretos, wrappers normativos e validacao visual desktop concluidos; commit funcional 695236f registrado.
-proximo_ponto_executavel=Commitar correcao do wrapper consumidor e avaliar push conforme credencial/politica.
+estado_atual=Ajuste de abertura/modelos aplicado sobre a implementacao concluida; wrappers normativos e testes diretos aprovados.
+proximo_ponto_executavel=Commitar ajuste de GUI e avaliar push conforme autorizacao explicita.
 
 etapas=
 1/6 Migracao e contrato [concluido]
@@ -223,9 +223,13 @@ verificacoes_concluidas=
 - npm run check concluiu: VERIFY_OK com 56 arquivos indexados.
 - npm test concluiu: VERIFY_OK e TEST_OK com suite do projeto.
 - Commit funcional existente: 695236f feat: detecta atualizacoes assincronas, reorganiza GUI e migra memoria operacional para .ia.rules.
+- Icone de modelos passou a usar chave semantica folderOpen com path consistente.
+- Abrir arquivo e selecionar modelo agora confirmam descarte quando ha edicao nao salva/baixada, resetam a selecao anterior e carregam completamente o conteudo selecionado, com divisao multi-guia via separador ^^^.
+- Criar/remover guia marca o modelo como alterado; baixar arquivo marca como salvo.
+- node --check src/gui.js e src/gui-icons.js concluiu; node --test test/gui-ui.test.js concluiu 6/6; node --test concluiu 128/128; npm run check e npm test concluíram.
 
 pendencias=
-- Commit da correcao do wrapper consumidor pendente.
+- Commit do ajuste de GUI pendente.
 - Push pendente.
 
 antirretrabalho=

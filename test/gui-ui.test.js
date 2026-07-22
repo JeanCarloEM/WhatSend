@@ -32,12 +32,14 @@ test("GUI usa Font Awesome por sprite, hints e toolbar integrada", () => {
   assert.equal(resolveGuiIconKey("f574"), "open");
   assert.equal(resolveGuiIconKey("f0c7"), "saveLocal");
   assert.equal(resolveGuiIconKey("f07c"), "folderOpen");
+  assert.equal(resolveGuiIconKey("folderOpen"), "folderOpen");
   assert.equal(resolveGuiIconKey("f0ed"), "cloudDownload");
   assert.ok(html.indexOf('id="saveTemplateLocalButton"') < html.indexOf('id="saveTemplateButton"'));
   assert.ok(html.indexOf('id="saveTemplateLocalButton"') < html.indexOf('id="templateModelsButton"'));
   assert.ok(html.indexOf('id="templateModelsButton"') < html.indexOf('id="saveTemplateButton"'));
   assert.ok(html.indexOf('id="saveTemplateButton"') < html.indexOf('id="openTemplateButton"'));
   assert.match(html, /id="templateModelsMenu"/);
+  assert.match(html, /renderGuiIcon\("folderOpen"\)|wa-icon-folderOpen/);
   assert.match(html, /LOCAL_TEMPLATE_STORAGE_KEY/);
   assert.match(html, /header-actions \[data-hint\]:hover::after/);
 });
@@ -86,6 +88,19 @@ test("GUI organiza modelo e andamento em largura total com log retraível", () =
   assert.match(html, /\.log\.expanded/);
   assert.match(html, /visibleItems = logExpanded \? items : items\.slice\(-2\)/);
   assert.doesNotMatch(html, /<aside>/);
+});
+
+test("GUI confirma descarte e reseta seleção antes de abrir modelo ou arquivo", () => {
+  const html = renderGuiHtml();
+
+  assert.match(html, /function hasUnsavedTemplateChanges\(\)/);
+  assert.match(html, /function confirmDiscardUnsavedTemplateChanges\(actionLabel\)/);
+  assert.match(html, /ainda não foi salvo localmente nem baixado em arquivo/);
+  assert.match(html, /confirmDiscardUnsavedTemplateChanges\("abrir outro arquivo"\)/);
+  assert.match(html, /templateFileInput\.value = "";\s*templateFileInput\.click\(\);/);
+  assert.match(html, /confirmDiscardUnsavedTemplateChanges\("carregar o modelo selecionado"\)/);
+  assert.match(html, /selectedTemplatePath = "";\s*setEditorContent\(normalizeUploadedText\(templateFile\.content\)\)/);
+  assert.doesNotMatch(html, /if \(!templateFileInput\.files \|\| !templateFileInput\.files\.length\) \{\s*resetTemplateMediaAnalysis\(\);\s*setEditorContent\(""\);/);
 });
 
 test("GUI incorpora anexos com seletor nativo e Data URI", () => {

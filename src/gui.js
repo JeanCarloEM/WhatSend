@@ -2785,7 +2785,7 @@ function renderGuiHtml() {
             <div class="wa-toolbar" aria-label="Ferramentas de edição textual">
               <button type="button" id="saveTemplateLocalButton" data-hint="${escapeHtml(GUI_HINTS.saveLocal)}" aria-label="Salvar localmente">${renderGuiIcon("f0c7")}</button>
               <div class="wa-toolbar-group">
-                <button type="button" id="templateModelsButton" data-hint="${escapeHtml(GUI_HINTS.templateModels)}" aria-label="Selecionar modelo" aria-haspopup="menu" aria-expanded="false">${renderGuiIcon("f07c")}</button>
+                <button type="button" id="templateModelsButton" data-hint="${escapeHtml(GUI_HINTS.templateModels)}" aria-label="Selecionar modelo" aria-haspopup="menu" aria-expanded="false">${renderGuiIcon("folderOpen")}</button>
                 <div id="templateModelsMenu" class="template-menu" role="menu" aria-label="Modelos preexistentes"></div>
               </div>
               <span class="toolbar-separator" aria-hidden="true"></span>
@@ -3344,6 +3344,19 @@ function renderGuiHtml() {
       templateDirty = Boolean(options.dirty);
     }
 
+    function hasUnsavedTemplateChanges() {
+      syncTemplateHidden();
+      return templateDirty && Boolean(templateTextHidden.value.trim() || embeddedFooter.trim());
+    }
+
+    function confirmDiscardUnsavedTemplateChanges(actionLabel) {
+      if (!hasUnsavedTemplateChanges()) return true;
+      return window.confirm(
+        "Há conteúdo do modelo carregado ou editado que ainda não foi salvo localmente nem baixado em arquivo.\\n\\n" +
+        "Deseja descartar essas alterações e " + actionLabel + "?",
+      );
+    }
+
     function handleTemplateInputChanged() {
       templateDirty = true;
       if (!isComposingTemplate && hasTemplateSeparator(templateEditorInput.value)) {
@@ -3475,6 +3488,7 @@ function renderGuiHtml() {
       renderTemplateTabs();
       renderTemplateHighlight();
       refreshTemplatePreviewNow();
+      templateDirty = true;
       templateEditorInput.focus();
     }
 
@@ -3698,10 +3712,10 @@ function renderGuiHtml() {
 
       if (!templateFile || !String(templateFile.content || "").trim()) {
         resetTemplateMediaAnalysis();
-        setEditorContent("");
         return;
       }
 
+      selectedTemplatePath = "";
       setEditorContent(normalizeUploadedText(templateFile.content));
       scheduleTemplateMediaAnalysis();
     }
@@ -3722,6 +3736,8 @@ function renderGuiHtml() {
       link.click();
       link.remove();
       window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+      templateDirty = false;
+      showMessage("Modelo baixado em arquivo.", "ok");
     }
 
     function saveTemplateLocally() {
@@ -4261,10 +4277,11 @@ function renderGuiHtml() {
     }
 
     function selectTemplateModel(model) {
-      if (templateDirty && !window.confirm("Carregar este modelo e substituir alterações não salvas no editor?")) {
+      if (!confirmDiscardUnsavedTemplateChanges("carregar o modelo selecionado")) {
         return;
       }
       selectedTemplatePath = model.path || "";
+      templateFileInput.value = "";
       templateBaseDirInput.value = model.baseDir || "";
       setTemplateBaseDirVisible(Boolean(templateBaseDirInput.value.trim()));
       setEditorContent(model.content || "", { dirty: false });
@@ -4360,6 +4377,8 @@ function renderGuiHtml() {
     });
 
     openTemplateButton.addEventListener("click", () => {
+      if (!confirmDiscardUnsavedTemplateChanges("abrir outro arquivo")) return;
+      templateFileInput.value = "";
       templateFileInput.click();
     });
 
@@ -4446,6 +4465,7 @@ function renderGuiHtml() {
       renderTemplateTabs();
       renderTemplateHighlight();
       refreshTemplatePreviewNow();
+      templateDirty = true;
       templateEditorInput.focus();
     });
 
@@ -4512,8 +4532,6 @@ function renderGuiHtml() {
 
     templateFileInput.addEventListener("change", () => {
       if (!templateFileInput.files || !templateFileInput.files.length) {
-        resetTemplateMediaAnalysis();
-        setEditorContent("");
         return;
       }
 
