@@ -14,6 +14,12 @@ const test = require("node:test");
 const {
   applyStartupEnvSettings,
   getEnvSettingsSnapshot,
+  createGuiState,
+  beginGuiOperation,
+  endGuiOperation,
+  hasActiveGuiClients,
+  hasActiveGuiOperations,
+  registerGuiHeartbeat,
   renderGuiHtml,
   resolveGuiIconKey,
   saveEnvSettings,
@@ -24,6 +30,8 @@ test("GUI usa Font Awesome por sprite, hints e toolbar integrada", () => {
 
   assert.match(html, /wa-icon-sprite/);
   assert.match(html, /id="openTemplateButton"/);
+  assert.match(html, /id="newEditionButton"/);
+  assert.match(html, /id="openLocalSavesButton"/);
   assert.match(html, /id="saveTemplateLocalButton"/);
   assert.match(html, /id="saveTemplateButton"/);
   assert.match(html, /data-hint="Salvar todas as abas em um arquivo \.md separado por \^\^\^/);
@@ -31,16 +39,30 @@ test("GUI usa Font Awesome por sprite, hints e toolbar integrada", () => {
   assert.equal(resolveGuiIconKey("f56d"), "save");
   assert.equal(resolveGuiIconKey("f574"), "open");
   assert.equal(resolveGuiIconKey("f0c7"), "saveLocal");
+  assert.equal(resolveGuiIconKey("f15b"), "newEdition");
   assert.equal(resolveGuiIconKey("f07c"), "folderOpen");
   assert.equal(resolveGuiIconKey("folderOpen"), "folderOpen");
+  assert.equal(resolveGuiIconKey("folderOpenRegular"), "folderOpenRegular");
   assert.equal(resolveGuiIconKey("f0ed"), "cloudDownload");
-  assert.ok(html.indexOf('id="saveTemplateLocalButton"') < html.indexOf('id="saveTemplateButton"'));
-  assert.ok(html.indexOf('id="saveTemplateLocalButton"') < html.indexOf('id="templateModelsButton"'));
+  assert.ok(html.indexOf('id="newEditionButton"') < html.indexOf('id="saveTemplateLocalButton"'));
+  assert.ok(html.indexOf('id="newEditionButton"') < html.indexOf('class="toolbar-separator"'));
+  assert.ok(html.indexOf('class="toolbar-separator"') < html.indexOf('id="saveTemplateLocalButton"'));
+  assert.ok(html.indexOf('id="saveTemplateLocalButton"') < html.indexOf('id="openLocalSavesButton"'));
+  assert.ok(html.indexOf('id="openLocalSavesButton"') < html.indexOf('id="templateModelsButton"'));
   assert.ok(html.indexOf('id="templateModelsButton"') < html.indexOf('id="saveTemplateButton"'));
   assert.ok(html.indexOf('id="saveTemplateButton"') < html.indexOf('id="openTemplateButton"'));
   assert.match(html, /id="templateModelsMenu"/);
   assert.match(html, /renderGuiIcon\("folderOpen"\)|wa-icon-folderOpen/);
-  assert.match(html, /LOCAL_TEMPLATE_STORAGE_KEY/);
+  assert.match(html, /id="openLocalSavesButton"[\s\S]*wa-icon-folderOpenRegular/);
+  assert.match(html, /LEGACY_LOCAL_TEMPLATE_STORAGE_KEY = "whatsend\.template\.local"/);
+  assert.match(html, /LOCAL_SAVE_INDEX_KEY = "whatsend\.templateSets\.v1\.index"/);
+  assert.match(html, /LOCAL_SAVE_AUTOSAVE_NAME = "\.autosave"/);
+  assert.match(html, /LOCAL_SAVE_MAX_NAMED_ITEMS = 10/);
+  assert.match(html, /LOCAL_SAVE_MAX_NAMED_ITEMS \+ " salvamentos locais atingido/);
+  assert.match(html, /id="localSavesOverlay"/);
+  assert.match(html, /function openLocalSavesPanel\(\)/);
+  assert.match(html, /function createNewEdition\(\)/);
+  assert.match(html, /function autosaveTemplate\(\)/);
   assert.match(html, /header-actions \[data-hint\]:hover::after/);
 });
 
@@ -99,7 +121,9 @@ test("GUI confirma descarte e reseta seleção antes de abrir modelo ou arquivo"
   assert.match(html, /confirmDiscardUnsavedTemplateChanges\("abrir outro arquivo"\)/);
   assert.match(html, /templateFileInput\.value = "";\s*templateFileInput\.click\(\);/);
   assert.match(html, /confirmDiscardUnsavedTemplateChanges\("carregar o modelo selecionado"\)/);
-  assert.match(html, /selectedTemplatePath = "";\s*setEditorContent\(normalizeUploadedText\(templateFile\.content\)\)/);
+  assert.match(html, /selectedTemplatePath = "";/);
+  assert.match(html, /origin: "file"/);
+  assert.match(html, /setEditorContent\(normalizeUploadedText\(templateFile\.content\)\)/);
   assert.match(html, /item\.dataset\.templateModelIndex/);
   assert.match(html, /templateModelsMenu\.addEventListener\("pointerdown", handleTemplateModelsMenuSelection\)/);
   assert.match(html, /templateModelsMenu\.addEventListener\("click", handleTemplateModelsMenuSelection\)/);
@@ -108,6 +132,35 @@ test("GUI confirma descarte e reseta seleção antes de abrir modelo ou arquivo"
   assert.match(html, /\.template-menu button:hover small,[\s\S]*color: #fff;/);
   assert.match(html, /templateBlocks = blocks\.length \? blocks : \[""\]/);
   assert.doesNotMatch(html, /if \(!templateFileInput\.files \|\| !templateFileInput\.files\.length\) \{\s*resetTemplateMediaAnalysis\(\);\s*setEditorContent\(""\);/);
+});
+
+test("GUI centraliza clientes conectados e operações ativas para encerramento seguro", () => {
+  const state = createGuiState();
+
+  assert.equal(hasActiveGuiClients(state), false);
+  registerGuiHeartbeat(state, {
+    clientId: "cliente-gui-001",
+    sessionId: "sessao-gui-001",
+  });
+  assert.equal(hasActiveGuiClients(state), true);
+  assert.equal(hasActiveGuiOperations(state), false);
+
+  const operationId = beginGuiOperation(state, "campaign", { interruptible: false });
+  assert.equal(hasActiveGuiOperations(state), true);
+  endGuiOperation(state, operationId, "concluido");
+  state.busy = false;
+  assert.equal(hasActiveGuiOperations(state), false);
+});
+
+test("GUI mantém botão de desligar funcional com requisição dedicada", () => {
+  const html = renderGuiHtml();
+
+  assert.match(html, /id="shutdownButton"/);
+  assert.match(html, /function requestGuiShutdown\(\)/);
+  assert.match(html, /fetch\("\/api\/runtime\/stop", \{/);
+  assert.match(html, /keepalive: true/);
+  assert.match(html, /shutdownButton\.addEventListener\("click", async \(\) => \{/);
+  assert.match(html, /await requestGuiShutdown\(\)/);
 });
 
 test("GUI incorpora anexos com seletor nativo e Data URI", () => {

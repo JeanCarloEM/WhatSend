@@ -180,7 +180,7 @@ A interface local abre no inicio do fluxo, mostra autenticacao/carregamento do W
 
 O editor da GUI não salva HTML nem formato rico: a toolbar por ícones apenas insere ou remove texto compatível com WhatsApp, como `*negrito*`, `_itálico_`, `~tachado~`, monoespaçado com três crases, emoji pelo menu suspenso, `![](arquivo.pdf)`, `$diatarde$`, `$postagem$` e `^^^`. Linhas `^^^` viram abas visuais automaticamente; ao salvar ou enviar, as abas são recombinadas com o mesmo separador. A prévia lateral mostra somente a aba ativa, renderiza a marcação básica como resultado visual e mantém rolagem sincronizada com o editor.
 
-Antes do download `.md` e de Abrir, a toolbar oferece Salvar localmente: conserva o modelo integral neste navegador por `localStorage`, sem nome, arquivo ou versionamento.
+Antes do download `.md` e de Abrir, a toolbar oferece Nova edição, Salvar no navegador e Abrir do armazenamento local. O salvamento no navegador usa `localStorage` com nome definitivo, preserva o conjunto completo de guias e mantém `.autosave` apenas para recuperação automática de edição sem nome. Por padrão, até 10 salvamentos nomeados ficam disponíveis por navegador; ajuste com `LOCAL_TEMPLATE_SAVE_LIMIT`.
 
 O quadro de notações fica recolhido por padrão e não depende de JavaScript. Links de documentação e ajuda em vídeo ficam próximos dos campos de modelo, expressão e CSV.
 

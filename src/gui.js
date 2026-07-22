@@ -62,6 +62,10 @@ const GUI_PORT = readIntegerEnv("GUI_PORT", 3137);
 const GUI_PORT_ATTEMPTS = 20;
 const GUI_RUNTIME_DIR = path.join(ROOT_DIR, ".runtime", "gui");
 const MAX_JSON_BODY_BYTES = 15 * 1024 * 1024;
+const GUI_CLIENT_HEARTBEAT_TTL_MS = readIntegerEnv("GUI_CLIENT_HEARTBEAT_TTL_MS", 45000);
+const GUI_CLIENT_RECONNECT_GRACE_MS = readIntegerEnv("GUI_CLIENT_RECONNECT_GRACE_MS", 10000);
+const GUI_SHUTDOWN_GRACE_MS = readIntegerEnv("GUI_SHUTDOWN_GRACE_MS", 5000);
+const LOCAL_TEMPLATE_SAVE_LIMIT = readIntegerEnv("LOCAL_TEMPLATE_SAVE_LIMIT", 10);
 const DOCS_USAGE_GITHUB_URL = "https://github.com/JeanCarloEM/WhatSend/blob/main/docs/usage.md";
 const HELP_VIDEO_URLS = Object.freeze({
   clients: "https://tools.jcem.pro/to/csv-rapido",
@@ -78,8 +82,10 @@ const GUI_HINTS = Object.freeze({
   newModel: "Criar novo modelo separado por ^^^.",
   newPosting: "Inserir $postagem$ para enviar uma nova postagem sequencial.",
   open: "Abrir arquivo Markdown no editor.",
+  newEdition: "Criar nova edição vazia.",
+  openLocal: "Abrir conjunto salvo neste navegador.",
   removeModel: "Excluir este modelo.",
-  saveLocal: "Salvar o modelo completo neste navegador.",
+  saveLocal: "Salvar o conjunto de guias neste navegador.",
   templateModels: "Selecionar modelo preexistente do repositório.",
   save: "Salvar todas as abas em um arquivo .md separado por ^^^.",
   settings: "Abrir configurações desta execução.",
@@ -254,9 +260,11 @@ function createGuiState(paths = PATHS) {
   return {
     activeSession: paths.activeSession || null,
     busy: false,
+    guiClients: createGuiClientsState(),
     finishedAt: null,
     lastError: "",
     log: [],
+    operations: createGuiOperationsState(),
     progress: createEmptyGuiProgress(),
     update: { active: false, action: "", result: "" },
     updateCheck: createUpdateCheckState(),
@@ -274,6 +282,24 @@ function createEmptyGuiProgress() {
     current: 0,
     percent: 0,
     total: 0,
+  };
+}
+
+function createGuiClientsState() {
+  return {
+    clients: {},
+    heartbeatTtlMs: GUI_CLIENT_HEARTBEAT_TTL_MS,
+    lastClosedAt: "",
+    reconnectGraceMs: GUI_CLIENT_RECONNECT_GRACE_MS,
+    shutdownScheduledAt: "",
+  };
+}
+
+function createGuiOperationsState() {
+  return {
+    active: {},
+    children: {},
+    sequence: 0,
   };
 }
 
@@ -297,9 +323,34 @@ function serializeUpdateCheckState(updateCheck) {
 }
 
 function serializeGuiState(state) {
+  sweepExpiredGuiClients(state);
   return {
     ...state,
+    guiClients: serializeGuiClientsState(state.guiClients || createGuiClientsState()),
+    operations: serializeGuiOperationsState(state.operations || createGuiOperationsState()),
     updateCheck: serializeUpdateCheckState(state.updateCheck || createUpdateCheckState()),
+  };
+}
+
+function serializeGuiClientsState(guiClients) {
+  return {
+    count: Object.values(guiClients.clients || {}).filter((client) => client.state === "active").length,
+    heartbeatTtlMs: guiClients.heartbeatTtlMs || GUI_CLIENT_HEARTBEAT_TTL_MS,
+    lastClosedAt: guiClients.lastClosedAt || "",
+    reconnectGraceMs: guiClients.reconnectGraceMs || GUI_CLIENT_RECONNECT_GRACE_MS,
+    shutdownScheduledAt: guiClients.shutdownScheduledAt || "",
+  };
+}
+
+function serializeGuiOperationsState(operations) {
+  return {
+    active: Object.keys(operations.active || {}).length,
+    children: Object.values(operations.children || {}).map((child) => ({
+      id: child.id,
+      kind: child.kind,
+      pid: child.pid,
+      state: child.state,
+    })),
   };
 }
 
@@ -356,6 +407,172 @@ function listMarkdownFiles(dirPath) {
   return files;
 }
 
+function registerGuiHeartbeat(state, payload = {}) {
+  const clientId = sanitizeGuiClientId(payload.clientId);
+  const sessionId = sanitizeGuiClientId(payload.sessionId);
+  if (!clientId || !sessionId) {
+    throw new Error("Sessão da GUI inválida.");
+  }
+
+  const now = Date.now();
+  const clients = state.guiClients || createGuiClientsState();
+  clients.clients[clientId] = {
+    clientId,
+    firstSeenAt: clients.clients[clientId]?.firstSeenAt || new Date(now).toISOString(),
+    lastSeenAt: new Date(now).toISOString(),
+    lastSeenMs: now,
+    sessionId,
+    state: "active",
+  };
+  clients.shutdownScheduledAt = "";
+  state.guiClients = clients;
+  clearScheduledGuiShutdown(state);
+  return serializeGuiClientsState(clients);
+}
+
+function markGuiClientClosed(state, payload = {}) {
+  const clientId = sanitizeGuiClientId(payload.clientId);
+  if (!clientId || !state.guiClients || !state.guiClients.clients[clientId]) {
+    return serializeGuiClientsState(state.guiClients || createGuiClientsState());
+  }
+
+  state.guiClients.clients[clientId].state = "closed";
+  state.guiClients.clients[clientId].closedAt = new Date().toISOString();
+  state.guiClients.lastClosedAt = state.guiClients.clients[clientId].closedAt;
+  return serializeGuiClientsState(state.guiClients);
+}
+
+function sweepExpiredGuiClients(state) {
+  if (!state.guiClients) {
+    state.guiClients = createGuiClientsState();
+  }
+  const now = Date.now();
+  const ttl = state.guiClients.heartbeatTtlMs || GUI_CLIENT_HEARTBEAT_TTL_MS;
+  for (const client of Object.values(state.guiClients.clients || {})) {
+    if (client.state === "active" && now - Number(client.lastSeenMs || 0) > ttl) {
+      client.state = "expired";
+      client.expiredAt = new Date(now).toISOString();
+    }
+  }
+  return state.guiClients;
+}
+
+function sanitizeGuiClientId(value) {
+  const id = String(value || "").trim();
+  return /^[a-z0-9._:-]{8,96}$/iu.test(id) ? id : "";
+}
+
+function hasActiveGuiClients(state) {
+  sweepExpiredGuiClients(state);
+  return Object.values((state.guiClients && state.guiClients.clients) || {}).some((client) => client.state === "active");
+}
+
+function hasActiveGuiOperations(state) {
+  return Boolean(
+    state.busy ||
+      (state.update && state.update.active) ||
+      Object.keys((state.operations && state.operations.active) || {}).length,
+  );
+}
+
+function beginGuiOperation(state, kind, options = {}) {
+  if (!state.operations) {
+    state.operations = createGuiOperationsState();
+  }
+  state.operations.sequence += 1;
+  const id = `${kind}-${state.operations.sequence}`;
+  state.operations.active[id] = {
+    id,
+    interruptible: options.interruptible !== false,
+    kind,
+    startedAt: new Date().toISOString(),
+    state: "ativo",
+  };
+  return id;
+}
+
+function endGuiOperation(state, id, result = "encerrado") {
+  if (!state.operations || !state.operations.active[id]) {
+    return;
+  }
+  state.operations.active[id].finishedAt = new Date().toISOString();
+  state.operations.active[id].state = result;
+  delete state.operations.active[id];
+}
+
+function adoptGuiChildProcess(state, child, kind, operationId) {
+  if (!child || !Number.isInteger(child.pid)) {
+    return;
+  }
+  if (!state.operations) {
+    state.operations = createGuiOperationsState();
+  }
+  const id = `${kind}-${child.pid}`;
+  state.operations.children[id] = {
+    id,
+    kind,
+    operationId,
+    pid: child.pid,
+    startedAt: new Date().toISOString(),
+    state: "ativo",
+  };
+  child.once("exit", () => {
+    if (state.operations && state.operations.children[id]) {
+      state.operations.children[id].state = "encerrado";
+      state.operations.children[id].finishedAt = new Date().toISOString();
+    }
+  });
+}
+
+function isAutoGuiShutdownAllowed(context) {
+  if (context.baseOptions && (context.baseOptions.persistentGui || context.baseOptions.noAutoShutdown)) {
+    return false;
+  }
+  if (String(process.env.GUI_PERSISTENT_SERVER || "").trim()) {
+    return false;
+  }
+  return true;
+}
+
+function scheduleAutoGuiShutdown(context, reason = "gui_session_absent") {
+  const { state } = context;
+  if (!isAutoGuiShutdownAllowed(context) || hasActiveGuiClients(state)) {
+    return false;
+  }
+  if (hasActiveGuiOperations(state)) {
+    return false;
+  }
+  if (state._guiShutdownTimer) {
+    return true;
+  }
+  const clients = state.guiClients || createGuiClientsState();
+  clients.shutdownScheduledAt = new Date().toISOString();
+  state.guiClients = clients;
+  state._guiShutdownTimer = setTimeout(() => {
+    state._guiShutdownTimer = null;
+    if (!hasActiveGuiClients(state) && !hasActiveGuiOperations(state) && isAutoGuiShutdownAllowed(context)) {
+      shutdownCurrentGuiProcess(context, reason).catch((err) => {
+        state.lastError = err.message || String(err);
+        state.status = "erro";
+      });
+    }
+  }, clients.reconnectGraceMs || GUI_CLIENT_RECONNECT_GRACE_MS);
+  if (typeof state._guiShutdownTimer.unref === "function") {
+    state._guiShutdownTimer.unref();
+  }
+  return true;
+}
+
+function clearScheduledGuiShutdown(state) {
+  if (state && state._guiShutdownTimer) {
+    clearTimeout(state._guiShutdownTimer);
+    state._guiShutdownTimer = null;
+  }
+  if (state && state.guiClients) {
+    state.guiClients.shutdownScheduledAt = "";
+  }
+}
+
 async function routeGuiRequest(req, res, context) {
   const url = new URL(req.url, `http://${GUI_HOST}`);
 
@@ -386,9 +603,31 @@ async function routeGuiRequest(req, res, context) {
 
   if (req.method === "GET" && url.pathname === "/api/status") {
     context.state.sessions = listSessions(context.basePaths);
+    scheduleAutoGuiShutdown(context, "gui_heartbeat_expired");
     sendJson(res, 200, {
       ok: true,
       state: serializeGuiState(context.state),
+    });
+    return;
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/gui/heartbeat") {
+    const payload = await readJsonBody(req);
+    const clients = registerGuiHeartbeat(context.state, payload);
+    sendJson(res, 200, {
+      clients,
+      ok: true,
+    });
+    return;
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/gui/close") {
+    const payload = await readJsonBody(req);
+    const clients = markGuiClientClosed(context.state, payload);
+    scheduleAutoGuiShutdown(context, "gui_session_closed");
+    sendJson(res, 202, {
+      clients,
+      ok: true,
     });
     return;
   }
@@ -404,7 +643,7 @@ async function routeGuiRequest(req, res, context) {
       sendJson(res, 409, { error: "Já existe uma atualização em andamento.", ok: false });
       return;
     }
-    startGuiUpdate(context.state, action);
+    startGuiUpdate(context, action);
     sendJson(res, 202, { message: "Atualização iniciada. Acompanhe o progresso abaixo.", ok: true });
     return;
   }
@@ -753,6 +992,7 @@ async function routeGuiRequest(req, res, context) {
         message: `Processamento interrompido: ${context.state.lastError}`,
         type: "error",
       });
+      scheduleAutoGuiShutdown(context, "gui_processing_finished");
     });
 
     sendJson(res, 202, {
@@ -770,6 +1010,7 @@ async function routeGuiRequest(req, res, context) {
 
 async function runGuiCampaign(payload, context) {
   const { state } = context;
+  const operationId = beginGuiOperation(state, "campaign", { interruptible: false });
   state.busy = true;
   state.finishedAt = null;
   state.lastError = "";
@@ -827,17 +1068,25 @@ async function runGuiCampaign(payload, context) {
   }
 
   state.status = "executando";
-  await processCampaign(context.client, executionPaths, options);
-  state.busy = false;
-  state.finishedAt = new Date().toISOString();
-  state.progress = {
-    active: false,
-    current: state.progress && state.progress.total ? state.progress.total : 0,
-    percent: 100,
-    total: state.progress ? state.progress.total : 0,
-  };
-  state.status = "concluido";
-  state.whatsappReady = true;
+  try {
+    await processCampaign(context.client, executionPaths, options);
+    state.busy = false;
+    state.finishedAt = new Date().toISOString();
+    state.progress = {
+      active: false,
+      current: state.progress && state.progress.total ? state.progress.total : 0,
+      percent: 100,
+      total: state.progress ? state.progress.total : 0,
+    };
+    state.status = "concluido";
+    state.whatsappReady = true;
+    endGuiOperation(state, operationId, "concluido");
+  } finally {
+    if (state.operations && state.operations.active[operationId]) {
+      endGuiOperation(state, operationId, "encerrado");
+    }
+    scheduleAutoGuiShutdown(context, "gui_processing_finished");
+  }
 }
 
 function materializeGuiExecutionPaths(payload, basePaths = PATHS) {
@@ -1328,6 +1577,7 @@ async function restartGuiProcess(context, sessionId, options = {}) {
 }
 
 async function shutdownCurrentGuiProcess(context, reason) {
+  clearScheduledGuiShutdown(context.state);
   context.state.status = "encerrando";
   context.state.whatsappReady = false;
   pushGuiLog(context.state, {
@@ -1340,7 +1590,7 @@ async function shutdownCurrentGuiProcess(context, reason) {
 
   await destroyWhatsAppClient(context.client);
 
-  await closeServer(context.server);
+  await closeServer(context.server, GUI_SHUTDOWN_GRACE_MS);
 
   if (
     context.baseOptions.guiRuntime &&
@@ -1352,14 +1602,21 @@ async function shutdownCurrentGuiProcess(context, reason) {
   process.exit(0);
 }
 
-function closeServer(server) {
+function closeServer(server, timeoutMs = GUI_SHUTDOWN_GRACE_MS) {
   return new Promise((resolve) => {
     if (!server || !server.listening) {
       resolve();
       return;
     }
 
-    server.close(() => resolve());
+    const timer = setTimeout(() => resolve(), timeoutMs);
+    if (typeof timer.unref === "function") {
+      timer.unref();
+    }
+    server.close(() => {
+      clearTimeout(timer);
+      resolve();
+    });
   });
 }
 
@@ -1884,6 +2141,31 @@ function renderGuiHtml() {
       min-height: 24px;
     }
 
+    .editor-identity {
+      align-items: center;
+      color: var(--muted);
+      display: flex;
+      flex-wrap: wrap;
+      font-size: 12px;
+      gap: 8px;
+      justify-content: space-between;
+      margin-top: 8px;
+    }
+
+    .editor-identity strong {
+      color: var(--text);
+      font-size: 12px;
+    }
+
+    .save-state {
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 800;
+      padding: 3px 8px;
+    }
+
     .emoji-menu {
       background: #fff;
       border: 1px solid var(--line);
@@ -1904,6 +2186,49 @@ function renderGuiHtml() {
 
     .emoji-menu.open {
       display: grid;
+    }
+
+    .local-saves-list {
+      display: grid;
+      gap: 8px;
+      margin-top: 12px;
+      max-height: min(420px, 58vh);
+      overflow: auto;
+    }
+
+    .local-save-item {
+      align-items: center;
+      background: #fff;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      color: var(--text);
+      cursor: pointer;
+      display: grid;
+      gap: 3px;
+      justify-items: start;
+      padding: 10px 12px;
+      text-align: left;
+      width: 100%;
+    }
+
+    .local-save-item:hover,
+    .local-save-item:focus-visible {
+      background: #ecfdf3;
+      border-color: #12b76a;
+      outline: none;
+    }
+
+    .local-save-item small {
+      color: var(--muted);
+      font-weight: 700;
+    }
+
+    .local-autosave-title {
+      color: #067647;
+      font-size: 12px;
+      font-weight: 900;
+      margin-top: 14px;
+      text-transform: uppercase;
     }
 
     .emoji-menu button {
@@ -2790,12 +3115,19 @@ function renderGuiHtml() {
             <label for="templateEditorInput">Texto do modelo</label>
             <span class="help-links">${renderHelpLink("youtube", HELP_VIDEO_URLS.template, GUI_HINTS.videoTemplate, "video-help")}</span>
           </div>
+          <div class="editor-identity" aria-live="polite">
+            <span>Origem ativa: <strong id="templateActiveName">Sem nome</strong></span>
+            <span id="templateSaveState" class="save-state">Sem alterações</span>
+          </div>
           <div class="wa-editor">
             <div class="wa-tabs" id="templateTabs" aria-label="Blocos do modelo">
               <button id="newTemplateTabButton" class="wa-tab wa-tab-create" type="button" data-hint="${escapeHtml(GUI_HINTS.newModel)}" aria-label="Novo modelo">${renderGuiIcon("plus")}</button>
             </div>
             <div class="wa-toolbar" aria-label="Ferramentas de edição textual">
-              <button type="button" id="saveTemplateLocalButton" data-hint="${escapeHtml(GUI_HINTS.saveLocal)}" aria-label="Salvar localmente">${renderGuiIcon("f0c7")}</button>
+              <button type="button" id="newEditionButton" data-hint="${escapeHtml(GUI_HINTS.newEdition)}" aria-label="Nova edição">${renderGuiIcon("f15b")}</button>
+              <span class="toolbar-separator" aria-hidden="true"></span>
+              <button type="button" id="saveTemplateLocalButton" data-hint="${escapeHtml(GUI_HINTS.saveLocal)}" aria-label="Salvar no navegador">${renderGuiIcon("f0c7")}</button>
+              <button type="button" id="openLocalSavesButton" data-hint="${escapeHtml(GUI_HINTS.openLocal)}" aria-label="Abrir do armazenamento local" aria-haspopup="dialog">${renderGuiIcon("folderOpenRegular")}</button>
               <div class="wa-toolbar-group">
                 <button type="button" id="templateModelsButton" data-hint="${escapeHtml(GUI_HINTS.templateModels)}" aria-label="Selecionar modelo" aria-haspopup="menu" aria-expanded="false">${renderGuiIcon("folderOpen")}</button>
                 <div id="templateModelsMenu" class="template-menu" role="menu" aria-label="Modelos preexistentes"></div>
@@ -2932,6 +3264,17 @@ function renderGuiHtml() {
     </div>
   </div>
 
+  <div id="localSavesOverlay" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="localSavesTitle">
+    <div class="modal-dialog">
+      <h2 id="localSavesTitle">Abrir salvamento local</h2>
+      <p class="hint">Selecione um conjunto salvo neste navegador. A abertura substitui integralmente as guias atuais.</p>
+      <div id="localSavesList" class="local-saves-list"></div>
+      <div class="modal-actions">
+        <button id="localSavesClose" class="secondary-button" type="button">Fechar</button>
+      </div>
+    </div>
+  </div>
+
   <div id="updateOverlay" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="updateTitle">
     <div class="modal-dialog">
       <h2 id="updateTitle">Atualizar</h2>
@@ -2978,9 +3321,13 @@ function renderGuiHtml() {
     const templatePreview = document.getElementById("templatePreview");
     const templateTabs = document.getElementById("templateTabs");
     const newTemplateTabButton = document.getElementById("newTemplateTabButton");
+    const newEditionButton = document.getElementById("newEditionButton");
     const openTemplateButton = document.getElementById("openTemplateButton");
+    const openLocalSavesButton = document.getElementById("openLocalSavesButton");
     const saveTemplateLocalButton = document.getElementById("saveTemplateLocalButton");
     const saveTemplateButton = document.getElementById("saveTemplateButton");
+    const templateActiveName = document.getElementById("templateActiveName");
+    const templateSaveState = document.getElementById("templateSaveState");
     const templateModelsButton = document.getElementById("templateModelsButton");
     const templateModelsMenu = document.getElementById("templateModelsMenu");
     const insertEmojiButton = document.getElementById("insertEmojiButton");
@@ -2995,6 +3342,9 @@ function renderGuiHtml() {
     const executionConfirmRows = document.getElementById("executionConfirmRows");
     const executionConfirmOk = document.getElementById("executionConfirmOk");
     const executionConfirmCancel = document.getElementById("executionConfirmCancel");
+    const localSavesOverlay = document.getElementById("localSavesOverlay");
+    const localSavesList = document.getElementById("localSavesList");
+    const localSavesClose = document.getElementById("localSavesClose");
     const updateOverlay = document.getElementById("updateOverlay");
     const updateOptions = document.getElementById("updateOptions");
     const updateStatusList = document.getElementById("updateStatusList");
@@ -3010,6 +3360,12 @@ function renderGuiHtml() {
     let templatePreviewTimer = null;
     let templatePreviewToken = 0;
     let templateFileLoadToken = 0;
+    const AUTOSAVE_INTERVAL_MS = 60000;
+    const LOCAL_SAVE_AUTOSAVE_NAME = ".autosave";
+    const LOCAL_SAVE_INDEX_KEY = "whatsend.templateSets.v1.index";
+    const LOCAL_SAVE_KEY_PREFIX = "whatsend.templateSets.v1.item.";
+    const LEGACY_LOCAL_TEMPLATE_STORAGE_KEY = "whatsend.template.local";
+    let activeDocument = createEmptyTemplateDocument();
     let templateBlocks = [""];
     let templateDirty = false;
     let templateModels = [];
@@ -3018,7 +3374,11 @@ function renderGuiHtml() {
     let isComposingTemplate = false;
     let scrollSyncSource = "";
     let settingsSnapshot = null;
-    const LOCAL_TEMPLATE_STORAGE_KEY = "whatsend.template.local";
+    let autosaveTimer = null;
+    let autosaveInFlight = false;
+    let autosaveRetryCount = 0;
+    let lastSavedSnapshot = "";
+    let lastLocalSavesFocus = null;
     let embeddedFooter = "";
     let selectedUpdateAction = "";
     let logExpanded = false;
@@ -3192,6 +3552,185 @@ function renderGuiHtml() {
       return /^[ \\t]*\\^{3,}[ \\t]*$/mu.test(String(text || ""));
     }
 
+    function createEmptyTemplateDocument() {
+      return {
+        activeName: "",
+        createdAt: new Date().toISOString(),
+        displayName: "Sem nome",
+        id: createStableId(),
+        linkedContext: "",
+        linkedModel: "",
+        origin: "empty",
+        sourceName: "",
+        updatedAt: "",
+      };
+    }
+
+    function createStableId() {
+      if (window.crypto && typeof window.crypto.randomUUID === "function") return window.crypto.randomUUID();
+      return "doc-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 10);
+    }
+
+    function stableStringify(value) {
+      if (Array.isArray(value)) return "[" + value.map(stableStringify).join(",") + "]";
+      if (value && typeof value === "object") {
+        return "{" + Object.keys(value).sort().map((key) => JSON.stringify(key) + ":" + stableStringify(value[key])).join(",") + "}";
+      }
+      return JSON.stringify(value);
+    }
+
+    const LOCAL_SAVE_MAX_NAMED_ITEMS = ${LOCAL_TEMPLATE_SAVE_LIMIT};
+    const APP_VERSION = ${JSON.stringify(require("../package.json").version)};
+
+    const localTemplateStore = {
+      keyFor(name) {
+        return LOCAL_SAVE_KEY_PREFIX + encodeURIComponent(name);
+      },
+      normalizeName(name) {
+        return String(name || "").replace(/\\s+/gu, " ").trim();
+      },
+      validateName(name) {
+        const normalized = this.normalizeName(name);
+        if (!normalized) throw new Error("Informe um nome para o salvamento.");
+        if (normalized === LOCAL_SAVE_AUTOSAVE_NAME) throw new Error("O nome .autosave é reservado para recuperação automática.");
+        return normalized;
+      },
+      readIndex() {
+        try {
+          const parsed = JSON.parse(window.localStorage.getItem(LOCAL_SAVE_INDEX_KEY) || "[]");
+          return Array.isArray(parsed) ? parsed.filter((name) => typeof name === "string" && name !== LOCAL_SAVE_AUTOSAVE_NAME) : [];
+        } catch (_) {
+          return [];
+        }
+      },
+      writeIndex(names) {
+        const unique = Array.from(new Set(names.map((name) => this.normalizeName(name)).filter((name) => name && name !== LOCAL_SAVE_AUTOSAVE_NAME)));
+        unique.sort((left, right) => left.localeCompare(right, "pt-BR"));
+        window.localStorage.setItem(LOCAL_SAVE_INDEX_KEY, JSON.stringify(unique));
+      },
+      read(name) {
+        const raw = window.localStorage.getItem(this.keyFor(name));
+        if (!raw) return null;
+        return this.validateRecord(JSON.parse(raw));
+      },
+      save(name, record) {
+        const normalized = name === LOCAL_SAVE_AUTOSAVE_NAME ? name : this.validateName(name);
+        if (normalized !== LOCAL_SAVE_AUTOSAVE_NAME) {
+          const existing = this.readIndex();
+          if (!existing.includes(normalized) && existing.length >= LOCAL_SAVE_MAX_NAMED_ITEMS) {
+            throw new Error("Limite de " + LOCAL_SAVE_MAX_NAMED_ITEMS + " salvamentos locais atingido. Exclua ou sobrescreva um salvamento existente.");
+          }
+        }
+        const payload = this.validateRecord({ ...record, name: normalized });
+        const body = stableStringify(payload);
+        const tmpKey = this.keyFor(normalized) + ".tmp";
+        window.localStorage.setItem(tmpKey, body);
+        window.localStorage.setItem(this.keyFor(normalized), body);
+        window.localStorage.removeItem(tmpKey);
+        if (normalized !== LOCAL_SAVE_AUTOSAVE_NAME) {
+          const names = this.readIndex().filter((item) => item !== normalized);
+          names.push(normalized);
+          this.writeIndex(names);
+        }
+        return payload;
+      },
+      remove(name) {
+        window.localStorage.removeItem(this.keyFor(name));
+        if (name !== LOCAL_SAVE_AUTOSAVE_NAME) {
+          this.writeIndex(this.readIndex().filter((item) => item !== name));
+        }
+      },
+      list() {
+        const invalid = [];
+        const saves = this.readIndex().map((name) => {
+          try { return this.read(name); } catch (err) { invalid.push(name + ": " + err.message); return null; }
+        }).filter(Boolean);
+        saves.sort((left, right) => left.name.localeCompare(right.name, "pt-BR"));
+        let autosave = null;
+        try { autosave = this.read(LOCAL_SAVE_AUTOSAVE_NAME); } catch (err) { invalid.push(LOCAL_SAVE_AUTOSAVE_NAME + ": " + err.message); }
+        return { autosave, invalid, saves };
+      },
+      migrateLegacy() {
+        try {
+          const legacy = window.localStorage.getItem(LEGACY_LOCAL_TEMPLATE_STORAGE_KEY);
+          if (legacy && !this.read(LOCAL_SAVE_AUTOSAVE_NAME)) {
+            this.save(LOCAL_SAVE_AUTOSAVE_NAME, buildLocalSaveRecord(LOCAL_SAVE_AUTOSAVE_NAME, { origin: "autosave", text: legacy }));
+          }
+        } catch (_) {}
+      },
+      validateRecord(record) {
+        if (!record || typeof record !== "object" || record.schema !== 1) throw new Error("Schema de salvamento incompatível.");
+        if (!String(record.name || "").trim()) throw new Error("Salvamento sem nome.");
+        if (!Array.isArray(record.tabs) || !record.tabs.length) throw new Error("Salvamento sem guias válidas.");
+        return {
+          activeTab: Math.max(0, Math.min(Number(record.activeTab || 0), record.tabs.length - 1)),
+          appVersion: String(record.appVersion || ""),
+          context: record.context && typeof record.context === "object" ? record.context : {},
+          createdAt: String(record.createdAt || new Date().toISOString()),
+          id: String(record.id || createStableId()),
+          integrity: String(record.integrity || ""),
+          lastModifiedAt: String(record.lastModifiedAt || record.createdAt || new Date().toISOString()),
+          metadata: record.metadata && typeof record.metadata === "object" ? record.metadata : {},
+          name: String(record.name || "").trim(),
+          origin: record.origin && typeof record.origin === "object" ? record.origin : {},
+          schema: 1,
+          tabs: record.tabs.map((tab, index) => ({
+            content: String((tab && tab.content) || ""),
+            id: String((tab && tab.id) || "tab-" + (index + 1)),
+            title: String((tab && tab.title) || "M" + (index + 1)),
+          })),
+        };
+      },
+    };
+
+    function buildLocalSaveRecord(name, options = {}) {
+      syncTemplateHidden();
+      const text = Object.prototype.hasOwnProperty.call(options, "text") ? String(options.text || "") : templateTextHidden.value;
+      const documentParts = splitEmbeddedFooter(text);
+      const blocks = splitEditorBlocks(documentParts.content);
+      const now = new Date().toISOString();
+      const record = {
+        activeTab: Math.min(activeTemplateBlock, Math.max(0, blocks.length - 1)),
+        appVersion: APP_VERSION,
+        context: { baseDir: templateBaseDirInput.value.trim(), embeddedFooter: documentParts.footer },
+        createdAt: activeDocument.createdAt || now,
+        id: activeDocument.id || createStableId(),
+        lastModifiedAt: now,
+        metadata: { linkedContext: activeDocument.linkedContext || "", linkedModel: activeDocument.linkedModel || "" },
+        name,
+        origin: { name: activeDocument.sourceName || "", type: options.origin || activeDocument.origin || "local" },
+        schema: 1,
+        tabs: blocks.map((block, index) => ({ content: block, id: "tab-" + (index + 1), title: "M" + (index + 1) })),
+      };
+      record.integrity = String(record.tabs.length) + ":" + String(text.length);
+      return record;
+    }
+
+    function applyLocalSaveRecord(record) {
+      const validated = localTemplateStore.validateRecord(record);
+      const content = validated.tabs.map((tab) => tab.content).join("\\n\\n^^^\\n\\n");
+      const fullContent = validated.context.embeddedFooter ? content.replace(/\\n+$/u, "") + "\\n\\n" + validated.context.embeddedFooter : content;
+      const autosave = validated.name === LOCAL_SAVE_AUTOSAVE_NAME;
+      activeDocument = {
+        activeName: autosave ? "" : validated.name,
+        createdAt: validated.createdAt,
+        displayName: autosave ? "Sem nome" : validated.name,
+        id: validated.id,
+        linkedContext: validated.metadata.linkedContext || "",
+        linkedModel: validated.metadata.linkedModel || "",
+        origin: autosave ? "autosave" : "local",
+        sourceName: autosave ? "" : validated.name,
+        updatedAt: validated.lastModifiedAt,
+      };
+      templateBaseDirInput.value = validated.context.baseDir || "";
+      selectedTemplatePath = activeDocument.linkedModel || "";
+      templateFileInput.value = "";
+      setTemplateBaseDirVisible(Boolean(templateBaseDirInput.value.trim()));
+      setEditorContent(fullContent, { activeIndex: validated.activeTab, dirty: false });
+      markTemplateSaved();
+      scheduleTemplateMediaAnalysis();
+    }
+
     function splitEditorBlocks(text) {
       const normalized = normalizeUploadedText(text);
 
@@ -3354,10 +3893,14 @@ function renderGuiHtml() {
       renderTemplateHighlight();
       refreshTemplatePreviewNow();
       templateDirty = Boolean(options.dirty);
+      updateTemplateIdentity();
     }
 
     function hasUnsavedTemplateChanges() {
       syncTemplateHidden();
+      const currentSnapshot = stableStringify(buildLocalSaveRecord(activeDocument.activeName || LOCAL_SAVE_AUTOSAVE_NAME));
+      templateDirty = currentSnapshot !== lastSavedSnapshot;
+      updateTemplateIdentity();
       return templateDirty && Boolean(templateTextHidden.value.trim() || embeddedFooter.trim());
     }
 
@@ -3370,7 +3913,7 @@ function renderGuiHtml() {
     }
 
     function handleTemplateInputChanged() {
-      templateDirty = true;
+      markTemplateDirty();
       if (!isComposingTemplate && hasTemplateSeparator(templateEditorInput.value)) {
         const splitBlocks = splitEditorBlocks(templateEditorInput.value);
         templateBlocks.splice(activeTemplateBlock, 1, ...splitBlocks);
@@ -3386,6 +3929,68 @@ function renderGuiHtml() {
       syncTemplateHidden();
       renderTemplateHighlight();
       scheduleTemplatePreview();
+    }
+
+    function markTemplateDirty() {
+      templateDirty = true;
+      updateTemplateIdentity();
+      scheduleAutosave();
+    }
+
+    function markTemplateSaved() {
+      syncTemplateHidden();
+      lastSavedSnapshot = stableStringify(buildLocalSaveRecord(activeDocument.activeName || LOCAL_SAVE_AUTOSAVE_NAME));
+      activeDocument.updatedAt = new Date().toISOString();
+      templateDirty = false;
+      autosaveRetryCount = 0;
+      updateTemplateIdentity();
+    }
+
+    function updateTemplateIdentity() {
+      if (!templateActiveName || !templateSaveState) return;
+      const display = activeDocument.activeName || activeDocument.sourceName || "Sem nome";
+      templateActiveName.textContent = display === LOCAL_SAVE_AUTOSAVE_NAME ? "Sem nome" : display;
+      templateSaveState.textContent = autosaveInFlight
+        ? "Salvando"
+        : templateDirty
+          ? "Alterações pendentes"
+          : activeDocument.updatedAt
+            ? "Salvo"
+            : "Sem alterações";
+    }
+
+    function scheduleAutosave() {
+      if (autosaveTimer) clearTimeout(autosaveTimer);
+      autosaveTimer = window.setTimeout(() => {
+        autosaveTimer = null;
+        autosaveTemplate().catch((err) => {
+          autosaveRetryCount += 1;
+          templateDirty = true;
+          updateTemplateIdentity();
+          if (autosaveRetryCount <= 2) {
+            autosaveTimer = window.setTimeout(() => autosaveTemplate().catch(() => {}), 5000);
+          }
+          setTemplateMediaStatus("Falha no autosave: " + err.message, "error");
+        });
+      }, AUTOSAVE_INTERVAL_MS);
+    }
+
+    async function autosaveTemplate() {
+      if (autosaveInFlight || !hasUnsavedTemplateChanges()) return;
+      autosaveInFlight = true;
+      updateTemplateIdentity();
+      try {
+        const name = activeDocument.activeName || LOCAL_SAVE_AUTOSAVE_NAME;
+        const record = localTemplateStore.save(name, buildLocalSaveRecord(name, { origin: activeDocument.activeName ? "local" : "autosave" }));
+        if (name !== LOCAL_SAVE_AUTOSAVE_NAME) {
+          try { localTemplateStore.remove(LOCAL_SAVE_AUTOSAVE_NAME); } catch (_) {}
+        }
+        activeDocument.updatedAt = record.lastModifiedAt;
+        markTemplateSaved();
+      } finally {
+        autosaveInFlight = false;
+        updateTemplateIdentity();
+      }
     }
 
     function insertTextAtCursor(text) {
@@ -3500,7 +4105,7 @@ function renderGuiHtml() {
       renderTemplateTabs();
       renderTemplateHighlight();
       refreshTemplatePreviewNow();
-      templateDirty = true;
+      markTemplateDirty();
       templateEditorInput.focus();
     }
 
@@ -3728,7 +4333,13 @@ function renderGuiHtml() {
       }
 
       selectedTemplatePath = "";
+      activeDocument = {
+        ...createEmptyTemplateDocument(),
+        origin: "file",
+        sourceName: templateFile.name || "arquivo .md",
+      };
       setEditorContent(normalizeUploadedText(templateFile.content));
+      markTemplateSaved();
       scheduleTemplateMediaAnalysis();
     }
 
@@ -3748,27 +4359,130 @@ function renderGuiHtml() {
       link.click();
       link.remove();
       window.setTimeout(() => URL.revokeObjectURL(url), 1000);
-      templateDirty = false;
+      markTemplateSaved();
       showMessage("Modelo baixado em arquivo.", "ok");
     }
 
     function saveTemplateLocally() {
       syncTemplateHidden();
       try {
-        window.localStorage.setItem(LOCAL_TEMPLATE_STORAGE_KEY, templateTextHidden.value);
-        templateDirty = false;
-        showMessage("Modelo salvo neste navegador.", "ok");
+        let name = activeDocument.activeName;
+        if (!name) {
+          name = localTemplateStore.validateName(window.prompt("Nome do salvamento:", activeDocument.sourceName || ""));
+        }
+        const existing = localTemplateStore.readIndex();
+        if (existing.includes(name) || activeDocument.activeName === name) {
+          const confirmed = window.confirm("Atualizar o salvamento local \"" + name + "\"?");
+          if (!confirmed) return;
+        }
+        const record = localTemplateStore.save(name, buildLocalSaveRecord(name, { origin: "local" }));
+        activeDocument.activeName = name;
+        activeDocument.displayName = name;
+        activeDocument.origin = "local";
+        activeDocument.sourceName = name;
+        activeDocument.updatedAt = record.lastModifiedAt;
+        try { localTemplateStore.remove(LOCAL_SAVE_AUTOSAVE_NAME); } catch (_) {}
+        markTemplateSaved();
+        showMessage("Conjunto salvo neste navegador como " + name + ".", "ok");
+        notifyLocalSaveLimitIfNeeded();
       } catch (err) {
-        showMessage("Não foi possível salvar o modelo neste navegador: " + err.message, "error");
+        showMessage("Não foi possível salvar no navegador: " + err.message, "error");
       }
     }
 
-    function getStoredTemplate() {
-      try {
-        return window.localStorage.getItem(LOCAL_TEMPLATE_STORAGE_KEY) || "";
-      } catch (_) {
-        return "";
+    function notifyLocalSaveLimitIfNeeded() {
+      const count = localTemplateStore.readIndex().length;
+      if (count >= LOCAL_SAVE_MAX_NAMED_ITEMS) {
+        showMessage("Limite de " + LOCAL_SAVE_MAX_NAMED_ITEMS + " salvamentos locais atingido.", "warning");
       }
+    }
+
+    function renderLocalSavesPanel() {
+      const listing = localTemplateStore.list();
+      localSavesList.innerHTML = "";
+      if (listing.autosave) {
+        const title = document.createElement("div");
+        title.className = "local-autosave-title";
+        title.textContent = "Recuperação automática";
+        localSavesList.append(title, renderLocalSaveItem(listing.autosave));
+      }
+      if (listing.saves.length) {
+        listing.saves.forEach((record) => localSavesList.append(renderLocalSaveItem(record)));
+      }
+      if (!listing.autosave && !listing.saves.length) {
+        const empty = document.createElement("div");
+        empty.className = "hint";
+        empty.textContent = "Nenhum salvamento local encontrado.";
+        localSavesList.append(empty);
+      }
+      if (listing.invalid.length) {
+        const invalid = document.createElement("div");
+        invalid.className = "field-message warning";
+        invalid.textContent = "Registros incompatíveis ignorados: " + listing.invalid.length + ".";
+        localSavesList.append(invalid);
+      }
+    }
+
+    function renderLocalSaveItem(record) {
+      const item = document.createElement("button");
+      item.type = "button";
+      item.className = "local-save-item";
+      item.dataset.localSaveName = record.name;
+      const label = record.name === LOCAL_SAVE_AUTOSAVE_NAME ? "Recuperação automática" : record.name;
+      item.innerHTML = "<strong>" + escapeMarkup(label) + "</strong><small>" + escapeMarkup(formatLocalSaveMeta(record)) + "</small>";
+      item.addEventListener("click", () => openLocalSave(record.name));
+      return item;
+    }
+
+    function formatLocalSaveMeta(record) {
+      const date = record.lastModifiedAt ? new Date(record.lastModifiedAt).toLocaleString("pt-BR") : "data indisponível";
+      return date + " · " + record.tabs.length + " guia" + (record.tabs.length === 1 ? "" : "s");
+    }
+
+    function openLocalSavesPanel() {
+      lastLocalSavesFocus = document.activeElement;
+      renderLocalSavesPanel();
+      localSavesOverlay.classList.add("visible");
+      const first = localSavesList.querySelector("button") || localSavesClose;
+      first.focus();
+    }
+
+    function closeLocalSavesPanel() {
+      localSavesOverlay.classList.remove("visible");
+      if (lastLocalSavesFocus && typeof lastLocalSavesFocus.focus === "function") {
+        lastLocalSavesFocus.focus();
+      }
+    }
+
+    function openLocalSave(name) {
+      if (!confirmDiscardUnsavedTemplateChanges("abrir o salvamento local selecionado")) return;
+      try {
+        const record = localTemplateStore.read(name);
+        if (!record) throw new Error("Salvamento não encontrado.");
+        applyLocalSaveRecord(record);
+        closeLocalSavesPanel();
+        showMessage(name === LOCAL_SAVE_AUTOSAVE_NAME ? "Recuperação automática aberta." : "Salvamento local aberto: " + name + ".", "ok");
+      } catch (err) {
+        showMessage("Não foi possível abrir o salvamento local: " + err.message, "error");
+      }
+    }
+
+    function createNewEdition() {
+      if (!confirmDiscardUnsavedTemplateChanges("criar nova edição")) return;
+      if (autosaveTimer) {
+        clearTimeout(autosaveTimer);
+        autosaveTimer = null;
+      }
+      activeDocument = createEmptyTemplateDocument();
+      selectedTemplatePath = "";
+      templateFileInput.value = "";
+      templateBaseDirInput.value = "";
+      embeddedFooter = "";
+      setTemplateBaseDirVisible(false);
+      setEditorContent("", { dirty: false });
+      try { localTemplateStore.remove(LOCAL_SAVE_AUTOSAVE_NAME); } catch (_) {}
+      markTemplateSaved();
+      showMessage("Nova edição criada.", "ok");
     }
 
     function normalizeDownloadBasename(value) {
@@ -4080,6 +4794,73 @@ function renderGuiHtml() {
       return data;
     }
 
+    async function requestGuiShutdown() {
+      if (pollTimer) {
+        window.clearInterval(pollTimer);
+        pollTimer = null;
+      }
+      if (autosaveTimer) {
+        window.clearTimeout(autosaveTimer);
+        autosaveTimer = null;
+      }
+      stopGuiHeartbeat();
+      const response = await fetch("/api/runtime/stop", {
+        body: "{}",
+        headers: { "Content-Type": "application/json" },
+        keepalive: true,
+        method: "POST",
+      });
+      if (!response.ok) {
+        let message = "Falha ao solicitar desligamento.";
+        try {
+          const data = await response.json();
+          message = data.error || message;
+        } catch (_) {}
+        throw new Error(message);
+      }
+    }
+
+    const guiBrowserSession = {
+      clientId: "gui-" + createStableId(),
+      heartbeatTimer: null,
+      sessionId: "browser-" + Date.now().toString(36),
+    };
+
+    function startGuiHeartbeat() {
+      const beat = () => {
+        postJson("/api/gui/heartbeat", {
+          clientId: guiBrowserSession.clientId,
+          sessionId: guiBrowserSession.sessionId,
+        }).catch(() => {});
+      };
+      beat();
+      guiBrowserSession.heartbeatTimer = window.setInterval(beat, 15000);
+    }
+
+    function stopGuiHeartbeat() {
+      if (guiBrowserSession.heartbeatTimer) {
+        window.clearInterval(guiBrowserSession.heartbeatTimer);
+        guiBrowserSession.heartbeatTimer = null;
+      }
+      const payload = JSON.stringify({
+        clientId: guiBrowserSession.clientId,
+        sessionId: guiBrowserSession.sessionId,
+      });
+      if (navigator.sendBeacon) {
+        navigator.sendBeacon("/api/gui/close", new Blob([payload], { type: "application/json" }));
+        return;
+      }
+      fetch("/api/gui/close", { body: payload, headers: { "Content-Type": "application/json" }, keepalive: true, method: "POST" }).catch(() => {});
+    }
+
+    function handleLocalStorageChanged(event) {
+      if (!activeDocument.activeName) return;
+      if (event.key !== localTemplateStore.keyFor(activeDocument.activeName)) return;
+      if (hasUnsavedTemplateChanges()) {
+        showMessage("O salvamento local ativo foi alterado em outra aba. Revise antes de salvar novamente.", "warning");
+      }
+    }
+
     function renderStatus(state) {
       const ready = Boolean(state.whatsappReady);
       statusPill.textContent = state.busy ? "Executando" : statusLabel(state.status, ready);
@@ -4264,8 +5045,8 @@ function renderGuiHtml() {
       none.setAttribute("role", "menuitem");
       none.textContent = "Nenhum modelo selecionado";
       none.addEventListener("click", () => {
-        selectedTemplatePath = "";
-        closeTemplateModelsMenu();
+      selectedTemplatePath = "";
+      closeTemplateModelsMenu();
       });
       templateModelsMenu.append(none);
 
@@ -4293,10 +5074,18 @@ function renderGuiHtml() {
         return;
       }
       selectedTemplatePath = model.path || "";
+      activeDocument = {
+        ...createEmptyTemplateDocument(),
+        linkedContext: model.context || "",
+        linkedModel: model.path || "",
+        origin: "model",
+        sourceName: model.name || model.path || "Modelo",
+      };
       templateFileInput.value = "";
       templateBaseDirInput.value = model.baseDir || "";
       setTemplateBaseDirVisible(Boolean(templateBaseDirInput.value.trim()));
       setEditorContent(model.content || "", { dirty: false });
+      markTemplateSaved();
       setTemplateMediaStatus("Modelo carregado: " + (model.path || model.name), "info");
       closeTemplateModelsMenu();
       scheduleTemplateMediaAnalysis();
@@ -4461,6 +5250,7 @@ function renderGuiHtml() {
       if (event.key === "Escape") {
         closeEmojiMenu();
         closeTemplateModelsMenu();
+        closeLocalSavesPanel();
       }
     });
 
@@ -4507,11 +5297,17 @@ function renderGuiHtml() {
       renderTemplateTabs();
       renderTemplateHighlight();
       refreshTemplatePreviewNow();
-      templateDirty = true;
+      markTemplateDirty();
       templateEditorInput.focus();
     });
 
+    newEditionButton.addEventListener("click", createNewEdition);
     saveTemplateLocalButton.addEventListener("click", saveTemplateLocally);
+    openLocalSavesButton.addEventListener("click", openLocalSavesPanel);
+    localSavesClose.addEventListener("click", closeLocalSavesPanel);
+    localSavesOverlay.addEventListener("click", (event) => {
+      if (event.target === localSavesOverlay) closeLocalSavesPanel();
+    });
     saveTemplateButton.addEventListener("click", downloadTemplateAsFile);
     logToggleButton.addEventListener("click", () => {
       logExpanded = !logExpanded;
@@ -4589,6 +5385,7 @@ function renderGuiHtml() {
         return;
       }
 
+      markTemplateDirty();
       scheduleTemplateMediaAnalysis();
     });
 
@@ -4600,7 +5397,7 @@ function renderGuiHtml() {
       try {
         shutdownButton.disabled = true;
         showMessage("Desligando WhatSend...", "warning");
-        await postJson("/api/runtime/stop", {});
+        await requestGuiShutdown();
       } catch (err) {
         shutdownButton.disabled = false;
         showMessage(err.message, "error");
@@ -4689,9 +5486,16 @@ function renderGuiHtml() {
     });
     refreshUpdateCheck(false).catch(() => {});
     renderEmojiMenu();
-    setEditorContent(getStoredTemplate());
+    localTemplateStore.migrateLegacy();
+    setEditorContent("", { dirty: false });
+    markTemplateSaved();
+    notifyLocalSaveLimitIfNeeded();
     initializeHints();
     startStatusPolling();
+    startGuiHeartbeat();
+    window.addEventListener("pagehide", stopGuiHeartbeat);
+    window.addEventListener("beforeunload", stopGuiHeartbeat);
+    window.addEventListener("storage", handleLocalStorageChanged);
   </script>
 </body>
 </html>`;
@@ -4708,7 +5512,9 @@ function renderTemplateMarkerButtons() {
   }).join("");
 }
 
-function startGuiUpdate(state, action) {
+function startGuiUpdate(context, action) {
+  const { state } = context;
+  const operationId = beginGuiOperation(state, "update", { interruptible: false });
   state.busy = true;
   state.update = { active: true, action, result: "" };
   pushGuiLog(state, { message: `Atualização iniciada: ${action}.`, type: "warning" });
@@ -4716,6 +5522,7 @@ function startGuiUpdate(state, action) {
     path.join(ROOT_DIR, "scripts", "update-project.js"),
     "--action", action, "--confirm",
   ], { cwd: ROOT_DIR, windowsHide: true });
+  adoptGuiChildProcess(state, child, "update", operationId);
   const append = (chunk, type) => String(chunk || "").split(/\r?\n/u).filter(Boolean).forEach((message) => {
     pushGuiLog(state, { message, type });
   });
@@ -4724,19 +5531,22 @@ function startGuiUpdate(state, action) {
   child.on("error", (error) => {
     state.busy = false;
     state.update = { active: false, action, result: error.message };
+    endGuiOperation(state, operationId, "erro");
     pushGuiLog(state, { message: `Atualização não iniciada: ${error.message}`, type: "error" });
+    scheduleAutoGuiShutdown(context, "gui_update_finished");
   });
   child.on("close", (code) => {
     const ok = code === 0;
     state.busy = false;
     state.update = { active: false, action, result: ok ? "concluída" : `falhou (código ${code})` };
+    endGuiOperation(state, operationId, ok ? "concluido" : "erro");
     pushGuiLog(state, {
       message: ok
         ? "Atualização concluída. Reinicie o WhatSend para carregar as versões instaladas."
         : "Atualização falhou; verifique o erro e a recuperação automática registrada acima.",
       type: ok ? "success" : "error",
     });
-
+    scheduleAutoGuiShutdown(context, "gui_update_finished");
   });
 }
 
@@ -4756,13 +5566,20 @@ function escapeHtml(value) {
 module.exports = {
   analyzeGuiTemplateMedia,
   buildGuiTemplatePreview,
+  beginGuiOperation,
+  createGuiState,
   discoverGuiTemplates,
+  endGuiOperation,
+  hasActiveGuiClients,
+  hasActiveGuiOperations,
   materializeGuiExecutionPaths,
   openGuiWhenBrowserIsAvailable,
   registerGuiClientHandlers,
+  registerGuiHeartbeat,
   renderGuiHtml,
   resolveGuiProvidedFilePath,
   resolveGuiTemplateBaseDir,
+  scheduleAutoGuiShutdown,
   startGuiServer,
   validateGuiPayload,
   validateGuiTemplateBaseDir,

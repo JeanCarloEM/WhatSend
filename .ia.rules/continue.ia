@@ -242,61 +242,78 @@ antirretrabalho=
 FT-007|nome=Persistencia nomeada e encerramento fail-safe da GUI|escopo=Tecnico|prioridade=alta|status=em andamento
 criado_em=2026-07-22T00:00:00-03:00
 inicio=20260722.0000.00
-ultima_atualizacao=20260722.0000.00
+ultima_atualizacao=20260722.0000.01
 objetivo=Implementar encerramento automatico seguro da instancia GUI quando a sessao local se ausentar, consolidar salvamentos nomeados no navegador, autosave .autosave, painel de abertura local e nova edicao com protecao contra perda de dados.
-estado_atual=Etapa 1/7 em andamento; normas, prompt e estado atual do repositorio relidos.
-proximo_ponto_executavel=Mapear pontos exatos de servidor, processos filhos, toolbar e persistencia antes de editar codigo.
+estado_atual=Etapa 7/7 concluida localmente; implementacao validada e commitada, push bloqueado por falta de autorizacao explicita de publicacao externa.
+proximo_ponto_executavel=Executar git push somente se houver autorizacao humana explicita para publicar no remoto.
 
 etapas=
-1/7 Contrato e mapeamento [em andamento]
+1/7 Contrato e mapeamento [concluido]
   1/4 Reler AGENTS, RCF, README, cenarios e prompt anexo [concluido]
-  2/4 Mapear servidor, processos filhos, hooks, GUI, editor e persistencia [em andamento]
-  3/4 Sincronizar RCF/README com o novo contrato de persistencia e sessao [pendente]
-  4/4 Validar escopo cirurgico e conflitos com FT-006 [pendente]
-2/7 Sessao GUI e desligamento seguro [pendente]
-  1/4 Centralizar clientes conectados, heartbeat e expiracao [pendente]
-  2/4 Centralizar operacoes ativas e filhos adotados por instancia [pendente]
-  3/4 Implementar shutdown gracioso idempotente com tolerancia e fallback [pendente]
-  4/4 Proteger recarga, multiplas abas e servidor persistente [pendente]
-3/7 Persistencia local nomeada [pendente]
-  1/4 Criar servico unico de localStorage com namespace e schema [pendente]
-  2/4 Salvar conjunto completo de guias com nome definitivo [pendente]
-  3/4 Reservar .autosave e migrar fluxo legado [pendente]
-  4/4 Validar colisao, quota, indisponibilidade e registros invalidos [pendente]
-4/7 Autosave e dirty centralizado [pendente]
-  1/4 Centralizar snapshot salvo, estado sujo e indicador visual [pendente]
-  2/4 Autosave de 60 segundos por destino definitivo ou .autosave [pendente]
-  3/4 Evitar concorrencia, loop e perda de estado em falha [pendente]
-  4/4 Detectar conflitos entre abas quando aplicavel [pendente]
-5/7 Interface e acessibilidade [pendente]
-  1/5 Adicionar Nova edicao antes de Salvar no navegador [pendente]
-  2/5 Adicionar Abrir do armazenamento local apos Salvar no navegador [pendente]
-  3/5 Implementar painel integrado de salvamentos locais [pendente]
-  4/5 Exibir nome/origem ativa e preservar separacao modelo/arquivo/local [pendente]
-  5/5 Ajustar ordem, foco, teclado, Escape, responsividade e hints [pendente]
-6/7 Testes e validacao [pendente]
-  1/4 Cobrir sessao, shutdown, processos filhos e servidor persistente [pendente]
-  2/4 Cobrir persistencia, autosave e interface por testes determinísticos [pendente]
-  3/4 Executar node --check, node --test, npm test e npm run check [pendente]
-  4/4 Executar validacao visual funcional quando viavel [pendente]
-7/7 Rastreabilidade e entrega [pendente]
-  1/4 Atualizar memoria e handoff [pendente]
-  2/4 Compactar contexto por agent:compress [pendente]
-  3/4 Criar commits coesos [pendente]
+  2/4 Mapear servidor, processos filhos, hooks, GUI, editor e persistencia [concluido]
+  3/4 Sincronizar RCF/README com o novo contrato de persistencia e sessao [concluido]
+  4/4 Validar escopo cirurgico e conflitos com FT-006 [concluido]
+2/7 Sessao GUI e desligamento seguro [concluido]
+  1/4 Centralizar clientes conectados, heartbeat e expiracao [concluido]
+  2/4 Centralizar operacoes ativas e filhos adotados por instancia [concluido]
+  3/4 Implementar shutdown gracioso idempotente com tolerancia e fallback [concluido]
+  4/4 Proteger recarga, multiplas abas e servidor persistente [concluido]
+3/7 Persistencia local nomeada [concluido]
+  1/4 Criar servico unico de localStorage com namespace e schema [concluido]
+  2/4 Salvar conjunto completo de guias com nome definitivo [concluido]
+  3/4 Reservar .autosave e migrar fluxo legado [concluido]
+  4/4 Validar colisao, quota, indisponibilidade e registros invalidos [concluido]
+4/7 Autosave e dirty centralizado [concluido]
+  1/4 Centralizar snapshot salvo, estado sujo e indicador visual [concluido]
+  2/4 Autosave de 60 segundos por destino definitivo ou .autosave [concluido]
+  3/4 Evitar concorrencia, loop e perda de estado em falha [concluido]
+  4/4 Detectar conflitos entre abas quando aplicavel [concluido]
+5/7 Interface e acessibilidade [concluido]
+  1/5 Adicionar Nova edicao antes de Salvar no navegador [concluido]
+  2/5 Adicionar Abrir do armazenamento local apos Salvar no navegador [concluido]
+  3/5 Implementar painel integrado de salvamentos locais [concluido]
+  4/5 Exibir nome/origem ativa e preservar separacao modelo/arquivo/local [concluido]
+  5/5 Ajustar ordem, foco, teclado, Escape, responsividade e hints [concluido]
+6/7 Testes e validacao [concluido]
+  1/4 Cobrir sessao, shutdown, processos filhos e servidor persistente [concluido]
+  2/4 Cobrir persistencia, autosave e interface por testes determinísticos [concluido]
+  3/4 Executar node --check, node --test, npm test e npm run check [concluido]
+  4/4 Executar validacao visual funcional quando viavel [concluido]
+7/7 Rastreabilidade e entrega [concluido]
+  1/4 Atualizar memoria e handoff [concluido]
+  2/4 Compactar contexto por agent:compress [concluido]
+  3/4 Criar commits coesos [concluido]
   4/4 Push somente com autorizacao/credencial explicita [pendente]
 
 decisoes=
 - Prompt anexo de 2026-07-22 autoriza consolidar o contrato de persistencia da GUI, substituindo o salvamento local antigo sem nome por salvamentos nomeados versionados e .autosave reservado.
 - Encerramento automatico deve preservar o servidor quando qualquer condicao for desconhecida, quando houver processamento ativo ou quando o servidor for marcado persistente.
 - A implementacao deve reaproveitar HTTP local e localStorage ja existentes, evitando dependencia nova.
+- Limite de salvamentos locais nomeados fica centralizado em LOCAL_TEMPLATE_SAVE_LIMIT, padrao 10, sem contar .autosave.
+- Recuperacao automatica .autosave nao e aberta automaticamente; fica listada separadamente no painel de abertura local.
+- Eventos pagehide/beforeunload/sendBeacon auxiliam encerramento, mas a decisao efetiva usa heartbeat, expiracao, tolerancia de reconexao e ausencia de operacoes ativas.
 
 verificacoes_concluidas=
 - git status inicial: dev limpo e sincronizado com origin/dev.
 - .agents existe vazio e nao deve ser removido.
 - AGENTS.md, .ia.rules/continue.ia, RCF.md, README.md, contratos e cenario Web Page Like/Browser foram relidos.
+- src/gui.js centraliza clientes GUI, operacoes ativas e filhos adotados para bloquear encerramento durante campanha ou atualizacao.
+- GUI usa POST /api/gui/heartbeat, POST /api/gui/close, TTL de 45s e tolerancia de reconexao de 10s; servidor persistente pode bloquear autoencerramento por configuracao.
+- Servico unico localTemplateStore usa namespace whatsend.templateSets.v1, schema 1, escrita temporaria, indice ordenado, validacao e migracao do salvamento legado para .autosave.
+- Toolbar passou a conter Nova edicao f15b, Salvar no navegador, Abrir do armazenamento local f07c, modelos, download e abrir .md.
+- Ajuste posterior distinguiu os dois icones de abertura: Abrir salvamentos locais usa folderOpenRegular outline, modelos preexistentes mantem folderOpen solido; separador fica imediatamente apos Nova edicao.
+- Regressao apontada no botao Desligar corrigida com requestGuiShutdown dedicado, cancelamento de polling/heartbeat/timer e POST keepalive para /api/runtime/stop.
+- Painel HTML de salvamentos locais lista nomes definitivos em ordem alfabetica e .autosave separado como recuperacao automatica.
+- node --check src/gui.js e src/gui-icons.js concluiu.
+- node --test concluiu com 129/129 testes aprovados.
+- npm test concluiu com VERIFY_OK e TEST_OK.
+- npm run check concluiu com VERIFY_OK.
+- npm run build:dist e npm run validate:dist concluiram; artefatos transitórios dist/release-notes.md e index.json foram restaurados/removidos.
+- Commit operacional local criado: feat: adiciona persistencia nomeada e encerramento seguro da gui.
+- git push foi solicitado com escalonamento, mas bloqueado pelo revisor de seguranca por publicar em destino externo sem autorizacao explicita especifica apos identificacao do risco.
 
 pendencias=
-- Implementacao, testes, validacao, commits e push.
+- Push somente com autorizacao explicita para publicar no remoto.
 
 FT-003|nome=Auditoria e publicacao da release 0.2.0-beta|escopo=Tecnico|prioridade=alta|status=concluido
 inicio=20260713.0013.37
