@@ -298,7 +298,7 @@ Todos os controles interativos da GUI devem possuir hint visual centralizado por
 
 Configurações operacionais antes controladas por ENV podem ser ajustadas pela GUI nos escopos execução atual, global e sessão. Configurações por sessão devem ser persistidas em JSON local e carregadas automaticamente na próxima execução da sessão correspondente.
 
-O controle Atualizar da GUI deve usar o ícone Font Awesome `cloud-download` (`f0ed`) e abrir painel visual com as quatro ações centralizadas no backend: atualizar somente `whatsapp-web.js`, todas as dependências, software oficial e reversão da última atualização. A seleção e confirmação explícita são obrigatórias; o painel deve advertir incompatibilidades, exibir progresso/resultado no registro e não conter lógica de atualização. Hints dos controles do cabeçalho devem abrir abaixo deles para não serem cortados pela janela.
+O controle Atualizar da GUI deve usar o ícone Font Awesome `cloud-download` (`f0ed`) e abrir painel visual com as quatro ações centralizadas no backend: atualizar somente `whatsapp-web.js`, todas as dependências, software oficial e reversão da última atualização. A GUI deve verificar de forma assíncrona, cancelável, com cache, timeout, retentativa limitada e estado independente, se há versão remota nova do aplicativo e de `whatsapp-web.js`; falha de consulta deve manter estado inconclusivo ou falha temporária, sem anunciar atualização. Quando houver atualização disponível, o ícone deve mudar de cor e pulsar somente por CSS, respeitando `prefers-reduced-motion`. A seleção e confirmação explícita são obrigatórias; o painel deve advertir incompatibilidades, indicar separadamente o estado de cada componente, exibir progresso/resultado no registro e não conter lógica de atualização. Hints dos controles do cabeçalho devem abrir abaixo deles para não serem cortados pela janela.
 
 Arquivos informados na GUI devem ser materializados temporariamente em área controlada pelo projeto ou sistema operacional, sem alterar `clientes.csv`, `texto.md` ou os modelos originais.
 
@@ -500,9 +500,9 @@ Toda implementação relevante deve ser organizada em Frente de Trabalho registr
 
 `continue.ia` é a memória operacional oficial do projeto. Deve registrar retomada, decisões, comandos relevantes, verificações, falhas objetivas, hipóteses descartadas, pendências e mudanças de planejamento sempre que essas informações forem úteis para evitar retrabalho.
 
-O comando `npm run agents:update` deve verificar e sincronizar a governança operacional remota definida em `.agents/.autoupdate.md`.
+O comando `npm run agents:update` deve verificar e sincronizar a governança operacional remota definida em `.ia.rules/core/update/upstream.json`.
 
-O comando `npm run agents:status` deve gerar, a partir do `continue.ia` canônico do projeto, um resumo Markdown de FTs técnicas em andamento no root, sem reproduzir o detalhamento integral da memória operacional. Esse resumo deve ser linkado no README, não deve ser editado manualmente e não deve integrar a distribuição de runtime.
+O comando `npm run agent:handoff` deve gerar, a partir do `continue.ia` canônico do projeto, um resumo Markdown de FTs técnicas em andamento no root, sem reproduzir o detalhamento integral da memória operacional. Esse resumo deve ser linkado no README, não deve ser editado manualmente e não deve integrar a distribuição de runtime.
 
 Quando arquitetura, regras, UX, build, distribuição, documentação ou fluxos mudarem, a implementação deve sincronizar código, GUI/CLI quando aplicável, `AGENTS.md`, `RCF.md`, `README.md`, documentação pertinente e `continue.ia`.
 

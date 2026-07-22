@@ -10,10 +10,7 @@ const path = require("path");
 
 const ROOT_DIR = path.resolve(__dirname, "..");
 const CANONICAL_FILES = [
-  "continue.ia",
-  "continue.dev",
-  path.join(".agents", "continue.ia"),
-  path.join(".agents", "continue.dev"),
+  path.join(".ia.rules", "continue.ia"),
 ];
 const STATUS_FILE = "IMPLEMENTACOES.md";
 
@@ -32,7 +29,7 @@ function resolveCanonicalContinueFile(rootDir) {
     .filter((entry) => fs.existsSync(entry.path) && fs.statSync(entry.path).isFile());
 
   if (found.length !== 1) {
-    throw new Error(`Deve existir exatamente um arquivo canonico: ${CANONICAL_FILES.join(" ou ")}.`);
+    throw new Error("Deve existir exatamente um arquivo canonico: .ia.rules/continue.ia.");
   }
 
   return found[0];

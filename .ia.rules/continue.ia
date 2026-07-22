@@ -1,6 +1,6 @@
 # continue.ia
 
-CANONICO=.agents/continue.ia
+CANONICO=.ia.rules/continue.ia
 FORMATO=AGENTS-20260710
 MACHINE_ID=JEAN-DESKTOP
 DATA_REF=202607101735
@@ -158,6 +158,71 @@ falhas=
 
 pendencias=
 - Nenhuma.
+
+FT-006|nome=Deteccao assincrona de atualizacoes e reorganizacao da GUI|escopo=Tecnico|prioridade=alta|status=em andamento
+criado_em=2026-07-22T10:13:56-03:00
+inicio=20260722.1013.56
+ultima_atualizacao=20260722.1255.00
+objetivo=Implementar verificacao assincrona e fail-safe de atualizacoes do aplicativo e de whatsapp-web.js, reorganizar cards, compactar Andamento e adicionar selecao opcional de modelos preexistentes.
+estado_atual=Implementacao, migracao, testes diretos e validacao visual desktop concluidos; wrappers normativos npm test/npm run check bloqueados por manifesto gerenciado de .ia.rules.
+proximo_ponto_executavel=Resolver manifesto gerenciado de handoff em .ia.rules para liberar wrappers obrigatorios; depois preparar commit/push conforme politica.
+
+etapas=
+1/6 Migracao e contrato [concluido]
+  1/4 Migrar contexto de .agents para .ia.rules sem alterar AGENTS.md [concluido]
+  2/4 Remover arquivos legados de .agents [concluido]
+  3/4 Atualizar referencias locais para .ia.rules/continue.ia [concluido]
+  4/4 Revalidar comandos de status/contexto [concluido]
+2/6 Deteccao de atualizacao [concluido]
+  1/4 Reutilizar scripts/hooks normatizados de atualizacao aplicacional [concluido]
+  2/4 Centralizar repositorios, versoes, cache, timeout, retry e estado [concluido]
+  3/4 Implementar consulta cancelavel sem concorrencia equivalente [concluido]
+  4/4 Cobrir comparacao de versao e estados independentes [concluido]
+3/6 Integracao visual [concluido]
+  1/4 Sinalizar icone Atualizar com cor, pulsacao CSS e reduced motion [concluido]
+  2/4 Indicar estado por componente no painel [concluido]
+  3/4 Reorganizar cards e posicionar Andamento perto do progresso [concluido]
+  4/4 Compactar e expandir historico de logs [concluido]
+4/6 Modelos [concluido]
+  1/3 Descobrir modelos validos por estrutura canonica [concluido]
+  2/3 Carregar modelo/contexto com protecao de edicao [concluido]
+  3/3 Integrar submenu na toolbar apos salvar localmente com icone f07c [concluido]
+5/6 Testes e validacao [concluido]
+  1/3 Atualizar testes unitarios/GUI com mocks [concluido]
+  2/3 Executar testes e checks aplicaveis [concluido]
+  3/3 Validar renderizacao real quando disponivel [concluido]
+6/6 Rastreabilidade e entrega [em andamento]
+  1/3 Atualizar RCF/README/handoff quando aplicavel [concluido]
+  2/3 Preparar commits coesos [pendente]
+  3/3 Push apos validacoes obrigatorias [bloqueado]
+
+decisoes=
+- AGENTS.md atualizado define .ia.rules como raiz operacional; AGENTS.md e arquivos gerenciados originais permanecem intocaveis nesta migracao.
+- Contexto operacional legado foi migrado para .ia.rules/continue.ia e especializacao local para .ia.rules/local/agents.local.md.
+- Demais arquivos de .agents eram legado de governanca anterior e foram removidos por autorizacao humana explicita.
+- O diretorio .agents e aberto/gerido pelo runtime do Codex durante execucao; nao tentar remover novamente.
+- GOTO.ia.md e artefato normatizado por AGENTS.md e deve ser preservado quando existir.
+- Deteccao runtime fica em src/update-check.js para entrar na distribuicao; .ia.rules/scenarios/application-update orienta contrato e estados normativos.
+- Modelos sao descobertos via backend local em modelos/ e nao por lista manual na GUI.
+
+verificacoes_concluidas=
+- Branch local dev criada sobre o estado atual.
+- .ia.rules ja continha scripts que exigem .ia.rules/continue.ia como canônico.
+- Arquivos de .agents removidos apos migracao de continue.ia e agents.local.md; pasta .agents permanece por gestao ativa do Codex.
+- npm run agent:handoff concluiu e regenerou handoff.md a partir de .ia.rules/continue.ia.
+- README, RCF, .gitignore e scripts/testes legados foram alinhados para .ia.rules.
+- node --check src/gui.js, src/update-check.js e src/gui-icons.js concluiu.
+- node --test test/gui-ui.test.js, test/update-check.test.js e test/agents-update.test.js concluiu.
+- node --check src/gui.js, src/update-check.js, src/index.js, scripts/update-agents.js, scripts/release-publish.js e scripts/generate-agents-status.js concluiu.
+- node --test concluiu com 127/127 testes aprovados.
+- Apos ajuste de serializacao de /api/status, node --check src/gui.js e node --test foram reexecutados com 127/127 testes aprovados.
+- Validacao visual desktop em HTTP local confirmou grid, Andamento full-width, ordem da toolbar, regra de logs retraidos e reduced motion.
+- Validacao mobile real via Browser ficou inconclusiva porque o viewport solicitado nao foi aplicado; cobertura estatica confirmou CSS responsivo e ausencia de overflow estrutural esperado.
+- npm test e npm run check foram reexecutados e bloquearam antes da suite por inconsistencia do manifesto gerenciado: Runtime de handoff ausente do manifesto: .ia.rules/core/runtime/scripts/update-agents.js.
+
+pendencias=
+- Corrigir manifesto/runtime gerenciado de .ia.rules para liberar npm test e npm run check; essa superficie foi preservada por ser nucleo gerenciado.
+- Commit/push pendentes ate conclusao ou autorizacao explicita diante do bloqueio dos wrappers normativos.
 
 antirretrabalho=
 - Nao reexecutar git push sem credencial nova ou evidencia de autenticacao.

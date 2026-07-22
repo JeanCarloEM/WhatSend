@@ -45,7 +45,7 @@ Principais recursos:
 - Compatibilidade com Windows, macOS e Linux quando as dependencias tambem forem compativeis.
 
 O contrato funcional completo fica em [RCF.md](RCF.md).
-O andamento operacional das FTs fica em [IMPLEMENTACOES.md](IMPLEMENTACOES.md), gerado por `npm run agents:status` a partir de [`.agents/continue.ia`](.agents/continue.ia).
+O andamento operacional das FTs fica em [handoff.md](handoff.md), gerado por `npm run agent:handoff` a partir de [`.ia.rules/continue.ia`](.ia.rules/continue.ia).
 
 ## Requisitos
 
@@ -222,8 +222,8 @@ Comandos principais:
 | `npm run validate:dist` | Valida estrutura, segurança e execução do `dist`. |
 | `npm run release-notes:generate -- HASH_INICIAL HASH_FINAL` | Gera `dist/release-notes.md` para uma release formal. |
 | `npm run release-notes:validate` | Valida localmente que `dist/release-notes.md` esteja em commit exclusivo. |
-| `npm run agents:update` | Verifica e sincroniza a governanca operacional remota definida em `.agents/.autoupdate.md`. |
-| `npm run agents:status` | Atualiza o resumo operacional gerado a partir de `.agents/continue.ia`. |
+| `npm run agents:update` | Verifica e sincroniza a governanca operacional remota definida em `.ia.rules/core/update/upstream.json`. |
+| `npm run agent:handoff` | Atualiza o resumo operacional gerado a partir de `.ia.rules/continue.ia`. |
 | `npm run update -- --action software --confirm` | Atualiza o software oficial após confirmação explícita. |
 | `.\atualizar.cmd` | Atualiza pela Release Latest do GitHub, ou por `main` se nao houver release valida, no Windows. |
 | `sh ./atualizar.sh` | Atualiza pela Release Latest do GitHub, ou por `main` se nao houver release valida, no macOS/Linux. |
@@ -276,7 +276,9 @@ Os scripts `.\atualizar.cmd` e `sh ./atualizar.sh` nao dependem de Git nem de um
 
 Quando a Release Latest possuir asset `WhatSend-v<versao>[-<canal>].zip`, o atualizador baixa esse pacote distribuivel. Antes de baixar o pacote, ele compara a versao remota com `whatsend-version.json`, arquivo operacional pequeno mantido no root e tambem publicado na release. Quando o identificador local corresponde ao `tag`/commit da Release ou ao commit da `main`, o download e a reinstalacao de dependencias sao pulados.
 
-Na GUI, o ícone Atualizar abre um painel visual com quatro ações: somente `whatsapp-web.js`, todas as dependências, software oficial e reversão da última atualização. Cada ação exige seleção e confirmação explícitas, alerta que versões novas podem quebrar um ambiente estável e mostra o progresso no registro. Antes da alteração, o sistema cria um snapshot local mínimo em `.runtime/updates`; em falha tenta restaurá-lo, preservando sessões, configurações, dados de clientes e logs. Ao concluir, reinicie o WhatSend para carregar as versões instaladas.
+Na GUI, o ícone Atualizar verifica em segundo plano o aplicativo e `whatsapp-web.js`, com cache, timeout, retentativa limitada e estados independentes. Quando houver atualização disponível, o ícone muda de cor e pulsa por CSS, respeitando redução de movimento. O painel visual mostra qual componente está atualizado, disponível, em verificação, inconclusivo ou em falha temporária, e mantém as quatro ações: somente `whatsapp-web.js`, todas as dependências, software oficial e reversão da última atualização. Cada ação exige seleção e confirmação explícitas, alerta que versões novas podem quebrar um ambiente estável e mostra o progresso no registro. Antes da alteração, o sistema cria um snapshot local mínimo em `.runtime/updates`; em falha tenta restaurá-lo, preservando sessões, configurações, dados de clientes e logs. Ao concluir, reinicie o WhatSend para carregar as versões instaladas.
+
+A GUI lista modelos Markdown válidos de `modelos/` pelo backend local. O botão com ícone Font Awesome `folder-open` (`f07c`) fica na toolbar do editor logo após Salvar localmente; a seleção é opcional, não escolhe automaticamente o primeiro item e pede confirmação antes de substituir edição não salva. O card Modelo de mensagem ocupa a largura total do grid, e o card Andamento fica próximo ao progresso global, retraído por padrão com até dois registros recentes e expansão manual para o histórico completo.
 
 ## Releases
 

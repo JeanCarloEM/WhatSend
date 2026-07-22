@@ -51,6 +51,11 @@ const {
 } = require("./sessions");
 const { destroyWhatsAppClient, readClientPhone } = require("./whatsapp");
 const { getEnvSettingsSnapshot, saveEnvSettings } = require("./env-settings");
+const {
+  cancelUpdateCheck,
+  checkUpdates,
+  createUpdateCheckState,
+} = require("./update-check");
 
 const GUI_HOST = "127.0.0.1";
 const GUI_PORT = readIntegerEnv("GUI_PORT", 3137);
@@ -75,6 +80,7 @@ const GUI_HINTS = Object.freeze({
   open: "Abrir arquivo Markdown no editor.",
   removeModel: "Excluir este modelo.",
   saveLocal: "Salvar o modelo completo neste navegador.",
+  templateModels: "Selecionar modelo preexistente do repositório.",
   save: "Salvar todas as abas em um arquivo .md separado por ^^^.",
   settings: "Abrir configurações desta execução.",
   shutdown: "Desligar o processo local e fechar o navegador controlado.",
@@ -253,6 +259,8 @@ function createGuiState(paths = PATHS) {
     log: [],
     progress: createEmptyGuiProgress(),
     update: { active: false, action: "", result: "" },
+    updateCheck: createUpdateCheckState(),
+    templates: createTemplatesState(),
     startedAt: null,
     status: "iniciando_whatsapp",
     sessions: listSessions(paths),
@@ -267,6 +275,85 @@ function createEmptyGuiProgress() {
     percent: 0,
     total: 0,
   };
+}
+
+function createTemplatesState() {
+  return {
+    items: [],
+    lastError: "",
+    loadedAt: "",
+    selected: null,
+  };
+}
+
+function serializeUpdateCheckState(updateCheck) {
+  return {
+    checkedAt: updateCheck.checkedAt || "",
+    components: updateCheck.components || {},
+    inFlight: Boolean(updateCheck.inFlight),
+    status: updateCheck.status || "desconhecido",
+    updateAvailable: Object.values(updateCheck.components || {}).some((component) => component.updateAvailable),
+  };
+}
+
+function serializeGuiState(state) {
+  return {
+    ...state,
+    updateCheck: serializeUpdateCheckState(state.updateCheck || createUpdateCheckState()),
+  };
+}
+
+function discoverGuiTemplates(basePaths = PATHS) {
+  const modelsDir = basePaths.modelsDir || PATHS.modelsDir;
+  const errors = [];
+  const templates = [];
+
+  try {
+    const resolvedModelsDir = path.resolve(modelsDir);
+    const root = path.resolve(basePaths.root || ROOT_DIR);
+
+    if (!resolvedModelsDir.startsWith(root + path.sep) && resolvedModelsDir !== root) {
+      throw new Error("Diretório de modelos fora da raiz permitida.");
+    }
+
+    if (!fs.existsSync(resolvedModelsDir)) {
+      return { errors, ok: true, templates };
+    }
+
+    for (const filePath of listMarkdownFiles(resolvedModelsDir)) {
+      try {
+        const content = fs.readFileSync(filePath, "utf8");
+        if (!content.trim()) continue;
+        templates.push({
+          baseDir: path.dirname(filePath),
+          content,
+          context: path.relative(resolvedModelsDir, path.dirname(filePath)).replace(/\\/gu, "/") || ".",
+          name: path.basename(filePath, path.extname(filePath)),
+          path: path.relative(root, filePath).replace(/\\/gu, "/"),
+        });
+      } catch (err) {
+        errors.push(`${path.basename(filePath)}: ${err.message}`);
+      }
+    }
+  } catch (err) {
+    errors.push(err.message || String(err));
+  }
+
+  templates.sort((left, right) => left.path.localeCompare(right.path, "pt-BR"));
+  return { errors, ok: errors.length === 0, templates };
+}
+
+function listMarkdownFiles(dirPath) {
+  const files = [];
+  for (const entry of fs.readdirSync(dirPath, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name, "pt-BR"))) {
+    const entryPath = path.join(dirPath, entry.name);
+    if (entry.isDirectory()) {
+      files.push(...listMarkdownFiles(entryPath));
+    } else if (entry.isFile() && path.extname(entry.name).toLocaleLowerCase("pt-BR") === ".md") {
+      files.push(entryPath);
+    }
+  }
+  return files;
 }
 
 async function routeGuiRequest(req, res, context) {
@@ -301,7 +388,7 @@ async function routeGuiRequest(req, res, context) {
     context.state.sessions = listSessions(context.basePaths);
     sendJson(res, 200, {
       ok: true,
-      state: context.state,
+      state: serializeGuiState(context.state),
     });
     return;
   }
@@ -319,6 +406,51 @@ async function routeGuiRequest(req, res, context) {
     }
     startGuiUpdate(context.state, action);
     sendJson(res, 202, { message: "Atualização iniciada. Acompanhe o progresso abaixo.", ok: true });
+    return;
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/updates/check") {
+    const force = url.searchParams.get("force") === "1";
+    checkUpdates(context.state.updateCheck, { force, rootDir: ROOT_DIR })
+      .then((result) => {
+        pushGuiLog(context.state, {
+          message: result.updateAvailable
+            ? "Atualização disponível detectada."
+            : "Verificação de atualização concluída.",
+          type: result.updateAvailable ? "warning" : "info",
+        });
+      })
+      .catch((err) => {
+        pushGuiLog(context.state, {
+          message: `Verificação de atualização inconclusiva: ${err.message || err}`,
+          type: "warning",
+        });
+      });
+    sendJson(res, 202, {
+      ok: true,
+      state: serializeUpdateCheckState(context.state.updateCheck),
+    });
+    return;
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/updates/cancel") {
+    sendJson(res, 200, {
+      cancelled: cancelUpdateCheck(context.state.updateCheck),
+      ok: true,
+      state: serializeUpdateCheckState(context.state.updateCheck),
+    });
+    return;
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/templates") {
+    const result = discoverGuiTemplates(context.basePaths);
+    context.state.templates = {
+      ...context.state.templates,
+      items: result.templates,
+      lastError: result.errors.join("; "),
+      loadedAt: new Date().toISOString(),
+    };
+    sendJson(res, result.ok ? 200 : 207, result);
     return;
   }
 
@@ -1578,6 +1710,14 @@ function renderGuiHtml() {
       align-items: start;
     }
 
+    #runForm {
+      display: contents;
+    }
+
+    .full-card {
+      grid-column: 1 / -1;
+    }
+
     section {
       background: var(--panel);
       border: 1px solid var(--line);
@@ -1585,6 +1725,7 @@ function renderGuiHtml() {
       box-shadow: var(--shadow);
       padding: 17px;
       margin-bottom: 16px;
+      min-width: 0;
     }
 
     label {
@@ -1628,6 +1769,7 @@ function renderGuiHtml() {
       border-radius: 8px;
       background: #fff;
       overflow: visible;
+      min-width: 0;
     }
 
     .wa-toolbar {
@@ -1635,6 +1777,7 @@ function renderGuiHtml() {
       background: #f8fafc;
       border-bottom: 1px solid var(--line);
       display: flex;
+      flex-wrap: wrap;
       gap: 6px;
       min-height: 42px;
       overflow: visible;
@@ -1684,6 +1827,40 @@ function renderGuiHtml() {
 
     .wa-toolbar-group {
       position: relative;
+    }
+
+    .template-menu {
+      background: #fff;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      box-shadow: var(--shadow);
+      display: none;
+      left: 0;
+      max-height: min(320px, 58vh);
+      min-width: 260px;
+      overflow: auto;
+      padding: 7px;
+      position: absolute;
+      top: calc(100% + 6px);
+      z-index: 1002;
+    }
+
+    .template-menu.open {
+      display: grid;
+      gap: 5px;
+    }
+
+    .template-menu button {
+      justify-content: start;
+      min-height: 34px;
+      text-align: left;
+      width: 100%;
+    }
+
+    .template-menu small {
+      color: var(--muted);
+      display: block;
+      font-weight: 600;
     }
 
     .toolbar-separator {
@@ -1813,11 +1990,13 @@ function renderGuiHtml() {
       display: grid;
       grid-template-columns: minmax(0, 1fr) minmax(280px, 0.78fr);
       min-height: 330px;
+      min-width: 0;
     }
 
     .wa-input-pane {
       position: relative;
       min-height: 330px;
+      min-width: 0;
     }
 
     .wa-highlight,
@@ -1934,6 +2113,7 @@ function renderGuiHtml() {
       flex-direction: column;
       gap: 10px;
       max-height: 430px;
+      min-width: 0;
       overflow: auto;
       padding: 14px;
     }
@@ -2227,6 +2407,27 @@ function renderGuiHtml() {
       line-height: 1;
     }
 
+    .icon-button.update-available {
+      background: #b54708;
+      box-shadow: 0 0 0 3px rgba(181, 71, 8, 0.12);
+    }
+
+    .icon-button.update-available .wa-icon {
+      animation: update-pulse 1.8s ease-in-out infinite;
+    }
+
+    @keyframes update-pulse {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.12); }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .icon-button.update-available .wa-icon,
+      .top-progress.active .top-progress-bar::after {
+        animation: none;
+      }
+    }
+
     .danger-button {
       background: var(--danger);
     }
@@ -2284,19 +2485,24 @@ function renderGuiHtml() {
 
     .log {
       display: grid;
-      gap: 8px;
-      max-height: 520px;
+      gap: 6px;
+      max-height: 96px;
       overflow: auto;
       padding-right: 4px;
     }
 
+    .log.expanded {
+      max-height: min(46vh, 440px);
+    }
+
     .log-row {
       border: 1px solid var(--line);
-      border-left: 4px solid var(--info);
+      border-left: 3px solid var(--info);
       border-radius: 8px;
-      padding: 9px 10px;
+      padding: 6px 8px;
       background: #fff;
       font-size: 13px;
+      line-height: 1.35;
     }
 
     .log-row.sent { border-left-color: var(--ok); }
@@ -2308,6 +2514,58 @@ function renderGuiHtml() {
       display: block;
       font-size: 12px;
       margin-bottom: 2px;
+    }
+
+    .log-header {
+      align-items: center;
+      display: flex;
+      gap: 10px;
+      justify-content: space-between;
+      margin-bottom: 10px;
+    }
+
+    .log-header h2 {
+      margin: 0;
+    }
+
+    .log-toggle {
+      min-height: 32px;
+      padding: 0 10px;
+    }
+
+    .update-status-list {
+      display: grid;
+      gap: 8px;
+      margin-top: 12px;
+    }
+
+    .update-status-item {
+      align-items: center;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      display: grid;
+      gap: 6px;
+      grid-template-columns: minmax(0, 1fr) auto;
+      padding: 9px 10px;
+    }
+
+    .update-status-badge {
+      border-radius: 999px;
+      background: #eef2f6;
+      color: var(--text);
+      font-size: 12px;
+      font-weight: 800;
+      padding: 3px 8px;
+      white-space: nowrap;
+    }
+
+    .update-status-item.available {
+      border-color: #f79009;
+    }
+
+    .update-status-item.available .update-status-badge {
+      background: #fffaeb;
+      color: #b54708;
     }
 
     .modal-overlay {
@@ -2433,6 +2691,10 @@ function renderGuiHtml() {
         display: grid;
       }
 
+      .full-card {
+        grid-column: auto;
+      }
+
       header {
         align-items: start;
       }
@@ -2500,7 +2762,7 @@ function renderGuiHtml() {
           <div class="compliance-notice" role="note" aria-label="Aviso legal resumido">${renderComplianceSummaryHtml()}</div>
         </section>
 
-        <section>
+        <section class="full-card template-card">
           <h2>Modelo de mensagem</h2>
           <input id="templateFile" class="visually-hidden-field" type="file" accept=".md,text/markdown,text/plain" tabindex="-1" aria-hidden="true">
           <input id="embeddedAttachmentInput" class="visually-hidden-field" type="file" accept="${getEmbeddedAttachmentAccept()}" tabindex="-1" aria-hidden="true">
@@ -2522,6 +2784,11 @@ function renderGuiHtml() {
             </div>
             <div class="wa-toolbar" aria-label="Ferramentas de edição textual">
               <button type="button" id="saveTemplateLocalButton" data-hint="${escapeHtml(GUI_HINTS.saveLocal)}" aria-label="Salvar localmente">${renderGuiIcon("f0c7")}</button>
+              <div class="wa-toolbar-group">
+                <button type="button" id="templateModelsButton" data-hint="${escapeHtml(GUI_HINTS.templateModels)}" aria-label="Selecionar modelo" aria-haspopup="menu" aria-expanded="false">${renderGuiIcon("f07c")}</button>
+                <div id="templateModelsMenu" class="template-menu" role="menu" aria-label="Modelos preexistentes"></div>
+              </div>
+              <span class="toolbar-separator" aria-hidden="true"></span>
               <button type="button" id="saveTemplateButton" data-hint="${escapeHtml(GUI_HINTS.save)}" aria-label="Salvar">${renderGuiIcon("f56d")}</button>
               <button type="button" id="openTemplateButton" data-hint="${escapeHtml(GUI_HINTS.open)}" aria-label="Abrir">${renderGuiIcon("f574")}</button>
               <span class="toolbar-separator" aria-hidden="true"></span>
@@ -2610,12 +2877,13 @@ function renderGuiHtml() {
         </section>
       </form>
 
-      <aside>
-        <section>
-          <h2>Andamento</h2>
+        <section class="full-card log-card">
+          <div class="log-header">
+            <h2>Andamento</h2>
+            <button id="logToggleButton" class="secondary-button log-toggle" type="button" aria-expanded="false" aria-controls="log">Expandir histórico</button>
+          </div>
           <div class="log" id="log"></div>
         </section>
-      </aside>
     </div>
     <footer class="global-footer">${renderLegalFooterHtml()}</footer>
   </main>
@@ -2656,6 +2924,7 @@ function renderGuiHtml() {
     <div class="modal-dialog">
       <h2 id="updateTitle">Atualizar</h2>
       <p>Atualizações de software ou dependências podem introduzir incompatibilidades e quebrar um ambiente estável.</p>
+      <div id="updateStatusList" class="update-status-list" aria-live="polite"></div>
       <div class="settings-grid" id="updateOptions">
         <button type="button" data-update-action="whatsapp-web.js">Atualizar whatsapp-web.js<br><small>Somente o motor crítico.</small></button>
         <button type="button" data-update-action="dependencies">Atualizar dependências<br><small>Inclui whatsapp-web.js.</small></button>
@@ -2675,6 +2944,7 @@ function renderGuiHtml() {
     const button = document.getElementById("runButton");
     const message = document.getElementById("message");
     const log = document.getElementById("log");
+    const logToggleButton = document.getElementById("logToggleButton");
     const statusPill = document.getElementById("statusPill");
     const topProgress = document.getElementById("topProgress");
     const topProgressBar = document.getElementById("topProgressBar");
@@ -2699,6 +2969,8 @@ function renderGuiHtml() {
     const openTemplateButton = document.getElementById("openTemplateButton");
     const saveTemplateLocalButton = document.getElementById("saveTemplateLocalButton");
     const saveTemplateButton = document.getElementById("saveTemplateButton");
+    const templateModelsButton = document.getElementById("templateModelsButton");
+    const templateModelsMenu = document.getElementById("templateModelsMenu");
     const insertEmojiButton = document.getElementById("insertEmojiButton");
     const emojiMenu = document.getElementById("emojiMenu");
     const insertAttachmentButton = document.getElementById("insertAttachmentButton");
@@ -2713,6 +2985,7 @@ function renderGuiHtml() {
     const executionConfirmCancel = document.getElementById("executionConfirmCancel");
     const updateOverlay = document.getElementById("updateOverlay");
     const updateOptions = document.getElementById("updateOptions");
+    const updateStatusList = document.getElementById("updateStatusList");
     const updateWarning = document.getElementById("updateWarning");
     const updateCancel = document.getElementById("updateCancel");
     const updateConfirm = document.getElementById("updateConfirm");
@@ -2726,6 +2999,9 @@ function renderGuiHtml() {
     let templatePreviewToken = 0;
     let templateFileLoadToken = 0;
     let templateBlocks = [""];
+    let templateDirty = false;
+    let templateModels = [];
+    let selectedTemplatePath = "";
     let activeTemplateBlock = 0;
     let isComposingTemplate = false;
     let scrollSyncSource = "";
@@ -2733,6 +3009,7 @@ function renderGuiHtml() {
     const LOCAL_TEMPLATE_STORAGE_KEY = "whatsend.template.local";
     let embeddedFooter = "";
     let selectedUpdateAction = "";
+    let logExpanded = false;
     const embeddedAttachmentCapabilities = ${JSON.stringify(getEmbeddedAttachmentCapabilities())};
     const maxEmbeddedAttachmentBytes = ${MAX_EMBEDDED_ATTACHMENT_BYTES};
     const tabDeleteIcon = ${JSON.stringify(renderGuiIcon("trash"))};
@@ -3064,9 +3341,11 @@ function renderGuiHtml() {
       renderTemplateTabs();
       renderTemplateHighlight();
       refreshTemplatePreviewNow();
+      templateDirty = Boolean(options.dirty);
     }
 
     function handleTemplateInputChanged() {
+      templateDirty = true;
       if (!isComposingTemplate && hasTemplateSeparator(templateEditorInput.value)) {
         const splitBlocks = splitEditorBlocks(templateEditorInput.value);
         templateBlocks.splice(activeTemplateBlock, 1, ...splitBlocks);
@@ -3449,6 +3728,7 @@ function renderGuiHtml() {
       syncTemplateHidden();
       try {
         window.localStorage.setItem(LOCAL_TEMPLATE_STORAGE_KEY, templateTextHidden.value);
+        templateDirty = false;
         showMessage("Modelo salvo neste navegador.", "ok");
       } catch (err) {
         showMessage("Não foi possível salvar o modelo neste navegador: " + err.message, "error");
@@ -3778,9 +4058,21 @@ function renderGuiHtml() {
       button.disabled = Boolean(state.busy) || !ready;
       renderTopProgress(state.progress || {});
       renderSessions(state);
+      renderUpdateCheck(state.updateCheck || {});
 
       log.innerHTML = "";
-      for (const item of state.log || []) {
+      const items = (state.log || []).slice().sort((left, right) => String(left.at || "").localeCompare(String(right.at || "")));
+      const visibleItems = logExpanded ? items : items.slice(-2);
+      if (visibleItems.length === 0) {
+        const empty = document.createElement("div");
+        empty.className = "log-row";
+        empty.textContent = "Nenhum registro ainda.";
+        log.append(empty);
+      }
+      const previousScrollTop = log.scrollTop;
+      const wasExpanded = logExpanded;
+      log.classList.toggle("expanded", logExpanded);
+      for (const item of visibleItems) {
         const row = document.createElement("div");
         row.className = "log-row " + (item.type || "info");
         const time = document.createElement("span");
@@ -3792,7 +4084,43 @@ function renderGuiHtml() {
         row.append(time, text);
         log.append(row);
       }
-      log.scrollTop = log.scrollHeight;
+      log.scrollTop = wasExpanded ? previousScrollTop : log.scrollHeight;
+    }
+
+    function renderUpdateCheck(updateCheck) {
+      const components = updateCheck.components || {};
+      const available = Object.values(components).some((component) => component.updateAvailable);
+      updateButton.classList.toggle("update-available", available);
+      updateButton.setAttribute("aria-label", available ? "Atualização disponível" : "Atualizar");
+      updateButton.setAttribute("data-hint", available ? "Há atualização disponível." : "${escapeHtml(GUI_HINTS.update)}");
+
+      if (!updateStatusList) return;
+      updateStatusList.innerHTML = "";
+      [["app", "Aplicativo"], ["whatsappWebJs", "whatsapp-web.js"]].forEach(([key, label]) => {
+        const component = components[key] || { status: updateCheck.inFlight ? "verificando" : "desconhecido" };
+        const item = document.createElement("div");
+        item.className = "update-status-item" + (component.updateAvailable ? " available" : "");
+        const text = document.createElement("div");
+        const version = component.latestVersion ? " " + (component.currentVersion || "?") + " → " + component.latestVersion : "";
+        text.textContent = label + version;
+        const badge = document.createElement("span");
+        badge.className = "update-status-badge";
+        badge.textContent = updateStatusLabel(component.status);
+        item.append(text, badge);
+        updateStatusList.append(item);
+      });
+    }
+
+    function updateStatusLabel(status) {
+      const labels = {
+        atualizado: "atualizado",
+        atualizacao_disponivel: "disponível",
+        consulta_inconclusiva: "inconclusivo",
+        desconhecido: "desconhecido",
+        falha_temporaria: "falha temporária",
+        verificando: "verificando",
+      };
+      return labels[status] || "indisponível";
     }
 
     function renderTopProgress(progress) {
@@ -3890,6 +4218,76 @@ function renderGuiHtml() {
       }, 1200);
     }
 
+    async function refreshUpdateCheck(force) {
+      await getJson("/api/updates/check" + (force ? "?force=1" : ""));
+      startStatusPolling();
+    }
+
+    async function loadTemplateModels() {
+      const data = await getJson("/api/templates");
+      templateModels = data.templates || [];
+      renderTemplateModelsMenu();
+    }
+
+    function renderTemplateModelsMenu() {
+      templateModelsMenu.innerHTML = "";
+      const none = document.createElement("button");
+      none.type = "button";
+      none.setAttribute("role", "menuitem");
+      none.textContent = "Nenhum modelo selecionado";
+      none.addEventListener("click", () => {
+        selectedTemplatePath = "";
+        closeTemplateModelsMenu();
+      });
+      templateModelsMenu.append(none);
+
+      if (!templateModels.length) {
+        const empty = document.createElement("button");
+        empty.type = "button";
+        empty.disabled = true;
+        empty.textContent = "Nenhum modelo encontrado";
+        templateModelsMenu.append(empty);
+        return;
+      }
+
+      templateModels.forEach((model) => {
+        const item = document.createElement("button");
+        item.type = "button";
+        item.setAttribute("role", "menuitem");
+        item.innerHTML = "<span>" + escapeMarkup(model.name || model.path) + "</span><small>" + escapeMarkup(model.context || model.path) + "</small>";
+        item.addEventListener("click", () => selectTemplateModel(model));
+        templateModelsMenu.append(item);
+      });
+    }
+
+    function selectTemplateModel(model) {
+      if (templateDirty && !window.confirm("Carregar este modelo e substituir alterações não salvas no editor?")) {
+        return;
+      }
+      selectedTemplatePath = model.path || "";
+      templateBaseDirInput.value = model.baseDir || "";
+      setTemplateBaseDirVisible(Boolean(templateBaseDirInput.value.trim()));
+      setEditorContent(model.content || "", { dirty: false });
+      setTemplateMediaStatus("Modelo carregado: " + (model.path || model.name), "info");
+      closeTemplateModelsMenu();
+      scheduleTemplateMediaAnalysis();
+    }
+
+    function openTemplateModelsMenu() {
+      loadTemplateModels().catch((err) => {
+        templateModels = [];
+        renderTemplateModelsMenu();
+        setTemplateMediaStatus("Falha ao listar modelos: " + err.message, "error");
+      });
+      templateModelsMenu.classList.add("open");
+      templateModelsButton.setAttribute("aria-expanded", "true");
+    }
+
+    function closeTemplateModelsMenu() {
+      templateModelsMenu.classList.remove("open");
+      templateModelsButton.setAttribute("aria-expanded", "false");
+    }
+
     form.addEventListener("submit", async (event) => {
       event.preventDefault();
       clearMessage();
@@ -3965,6 +4363,17 @@ function renderGuiHtml() {
       templateFileInput.click();
     });
 
+    templateModelsButton.addEventListener("click", (event) => {
+      event.stopPropagation();
+      if (templateModelsMenu.classList.contains("open")) {
+        closeTemplateModelsMenu();
+      } else {
+        openTemplateModelsMenu();
+      }
+    });
+
+    templateModelsMenu.addEventListener("click", (event) => event.stopPropagation());
+
     insertEmojiButton.addEventListener("click", (event) => {
       event.stopPropagation();
       toggleEmojiMenu();
@@ -3978,11 +4387,15 @@ function renderGuiHtml() {
       if (event.target !== insertEmojiButton && !emojiMenu.contains(event.target)) {
         closeEmojiMenu();
       }
+      if (event.target !== templateModelsButton && !templateModelsMenu.contains(event.target)) {
+        closeTemplateModelsMenu();
+      }
     });
 
     document.addEventListener("focusin", (event) => {
       if (event.target !== insertEmojiButton && !emojiMenu.contains(event.target)) {
         closeEmojiMenu();
+        closeTemplateModelsMenu();
       }
     });
 
@@ -4014,7 +4427,7 @@ function renderGuiHtml() {
         const id = createEmbeddedId(file.name);
         appendEmbeddedDefinition(id, file, data);
         insertTextAtCursor("![" + file.name + "](@embed:" + id + ")");
-        setTemplateMediaStatus("Anexo incorporado: " + file.name + " (" + Math.ceil(file.size / 1024) + " KiB).", "success");
+        setTemplateMediaStatus("Anexo incorporado: " + file.name + " (" + Math.ceil(file.size / 1024) + " KiB).", "ok");
       } catch (err) {
         showMessage(err.message, "error");
       }
@@ -4038,6 +4451,12 @@ function renderGuiHtml() {
 
     saveTemplateLocalButton.addEventListener("click", saveTemplateLocally);
     saveTemplateButton.addEventListener("click", downloadTemplateAsFile);
+    logToggleButton.addEventListener("click", () => {
+      logExpanded = !logExpanded;
+      logToggleButton.setAttribute("aria-expanded", String(logExpanded));
+      logToggleButton.textContent = logExpanded ? "Recolher histórico" : "Expandir histórico";
+      refreshStatus().catch((err) => showMessage(err.message, "error"));
+    });
 
     settingsButton.addEventListener("click", () => {
       openSettingsPanel().catch((err) => {
@@ -4053,7 +4472,10 @@ function renderGuiHtml() {
       updateOptions.querySelectorAll("[data-update-action]").forEach((item) => item.classList.remove("selected"));
     }
 
-    updateButton.addEventListener("click", () => updateOverlay.classList.add("visible"));
+    updateButton.addEventListener("click", () => {
+      updateOverlay.classList.add("visible");
+      refreshUpdateCheck(true).catch((err) => showMessage(err.message, "error"));
+    });
     updateOptions.addEventListener("click", (event) => {
       const option = event.target.closest("[data-update-action]");
       if (!option) return;
@@ -4205,6 +4627,7 @@ function renderGuiHtml() {
     refreshStatus().catch((err) => {
       showMessage("Não foi possível carregar o status: " + err.message, "error");
     });
+    refreshUpdateCheck(false).catch(() => {});
     renderEmojiMenu();
     setEditorContent(getStoredTemplate());
     initializeHints();
@@ -4273,6 +4696,7 @@ function escapeHtml(value) {
 module.exports = {
   analyzeGuiTemplateMedia,
   buildGuiTemplatePreview,
+  discoverGuiTemplates,
   materializeGuiExecutionPaths,
   openGuiWhenBrowserIsAvailable,
   registerGuiClientHandlers,

@@ -18,7 +18,7 @@ const ROOT_DIR = path.resolve(__dirname, "..");
 const SOURCE_OWNER = "JeanCarloEM";
 const SOURCE_REPO = "agents.md";
 const SOURCE_API = `https://api.github.com/repos/${SOURCE_OWNER}/${SOURCE_REPO}`;
-const LOCK_FILE = path.join(".agents", "agents-update.lock.json");
+const LOCK_FILE = path.join(".ia.rules", "agents-update.lock.json");
 const TEXT_EXTENSIONS = new Set([".md", ".json"]);
 
 async function main(argv = process.argv.slice(2), options = {}) {
@@ -183,7 +183,10 @@ function collectRemoteGovernanceFiles(remoteRoot) {
     addRemoteFile(files, remoteRoot, normalizeGovernanceRelativePath(rel));
   }
 
-  for (const rel of [path.join(".agents", ".autoupdate.md"), path.join(".agents", "webPageLike.md")]) {
+  for (const rel of [
+    path.join(".ia.rules", "core", "update", "upstream.json"),
+    path.join(".ia.rules", "scenarios", "web", "page-like", "scenario.md"),
+  ]) {
     const sourcePath = path.join(remoteRoot, rel);
 
     if (fs.existsSync(sourcePath) && fs.statSync(sourcePath).isFile()) {
@@ -210,7 +213,11 @@ function normalizeGovernanceRelativePath(value) {
   const normalized = toPosixPath(value).replace(/^\.\//u, "");
 
   if (normalized.startsWith("agents/")) {
-    return `.agents/${normalized.slice("agents/".length)}`;
+    return `.ia.rules/${normalized.slice("agents/".length)}`;
+  }
+
+  if (normalized.startsWith(".agents/")) {
+    return `.ia.rules/${normalized.slice(".agents/".length)}`;
   }
 
   return normalized;

@@ -25,6 +25,7 @@ module.exports = {
   ...require("./status"),
   ...require("./template"),
   ...require("./tracking"),
+  ...require("./update-check"),
   ...require("./utils"),
   ...require("./whatsapp"),
 };

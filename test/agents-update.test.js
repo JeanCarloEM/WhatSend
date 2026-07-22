@@ -22,7 +22,7 @@ const {
   parseArgs,
 } = require("../scripts/update-agents");
 
-test("agents:status gera resumo HTML a partir de continue.ia sem detalhar memoria completa", () => {
+test("agent:status gera resumo HTML a partir de continue.ia sem detalhar memoria completa", () => {
   const fronts = parseWorkFronts([
     "FT-001|nome=Governanca|escopo=Tecnico|status=em_andamento",
     "objetivo=Validar fluxo operacional.",
@@ -40,23 +40,23 @@ test("agents:status gera resumo HTML a partir de continue.ia sem detalhar memori
   assert.doesNotMatch(markdown, /decisoes=/);
 });
 
-test("agents:update normaliza paths legados de cenario sem capturar arquivos locais", () => {
+test("agents:update normaliza paths legados de cenario para .ia.rules sem capturar arquivos locais", () => {
   assert.deepEqual(parseArgs(["--check"]), {
     check: true,
     dryRun: false,
     force: false,
   });
-  assert.equal(normalizeGovernanceRelativePath("./agents/webPageLike.md"), ".agents/webPageLike.md");
-  assert.equal(normalizeGovernanceRelativePath("./.agents/webPageLike.md"), ".agents/webPageLike.md");
+  assert.equal(normalizeGovernanceRelativePath("./agents/webPageLike.md"), ".ia.rules/webPageLike.md");
+  assert.equal(normalizeGovernanceRelativePath("./.agents/webPageLike.md"), ".ia.rules/webPageLike.md");
 });
 
 test("agents:update compara apenas arquivos gerenciados pelo lock anterior", () => {
   const rootDir = fs.mkdtempSync(path.join(os.tmpdir(), "whatsender-agents-test-"));
 
   try {
-    fs.mkdirSync(path.join(rootDir, ".agents"), { recursive: true });
+    fs.mkdirSync(path.join(rootDir, ".ia.rules"), { recursive: true });
     fs.writeFileSync(path.join(rootDir, "AGENTS.md"), "local\n", "utf8");
-    fs.writeFileSync(path.join(rootDir, ".agents", "continue.ia"), "nao gerenciado\n", "utf8");
+    fs.writeFileSync(path.join(rootDir, ".ia.rules", "continue.ia"), "nao gerenciado\n", "utf8");
 
     const changes = compareRemoteFiles(rootDir, [
       {
@@ -66,12 +66,12 @@ test("agents:update compara apenas arquivos gerenciados pelo lock anterior", () 
     ], {
       managedFiles: [
         { path: "AGENTS.md" },
-        { path: ".agents/oldScenario.md" },
+        { path: ".ia.rules/oldScenario.md" },
       ],
     });
 
     assert.deepEqual(changes.map((change) => [change.action, change.relativePath.replace(/\\/gu, "/")]), [
-      ["remove", ".agents/oldScenario.md"],
+      ["remove", ".ia.rules/oldScenario.md"],
       ["update", "AGENTS.md"],
     ]);
   } finally {
@@ -83,18 +83,21 @@ test("agents:update coleta AGENTS e cenarios referenciados", () => {
   const remoteRoot = fs.mkdtempSync(path.join(os.tmpdir(), "whatsender-agents-remote-"));
 
   try {
-    fs.mkdirSync(path.join(remoteRoot, ".agents"), { recursive: true });
+    fs.mkdirSync(path.join(remoteRoot, ".ia.rules", "scenarios", "web", "page-like"), { recursive: true });
     fs.writeFileSync(
       path.join(remoteRoot, "AGENTS.md"),
-      "# AGENTS.md\n\n- [Web](./.agents/webPageLike.md)\n",
+      "# AGENTS.md\n\n- [Web](./.ia.rules/scenarios/web/page-like/scenario.md)\n",
       "utf8",
     );
-    fs.writeFileSync(path.join(remoteRoot, ".agents", "webPageLike.md"), "# cenario\n", "utf8");
+    fs.mkdirSync(path.join(remoteRoot, ".ia.rules", "core", "update"), { recursive: true });
+    fs.writeFileSync(path.join(remoteRoot, ".ia.rules", "core", "update", "upstream.json"), "{}\n", "utf8");
+    fs.writeFileSync(path.join(remoteRoot, ".ia.rules", "scenarios", "web", "page-like", "scenario.md"), "# cenario\n", "utf8");
 
     const files = collectRemoteGovernanceFiles(remoteRoot).map((entry) => entry.relativePath.replace(/\\/gu, "/"));
 
     assert.deepEqual(files.sort(), [
-      ".agents/webPageLike.md",
+      ".ia.rules/core/update/upstream.json",
+      ".ia.rules/scenarios/web/page-like/scenario.md",
       "AGENTS.md",
     ]);
   } finally {

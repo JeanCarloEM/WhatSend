@@ -31,9 +31,13 @@ test("GUI usa Font Awesome por sprite, hints e toolbar integrada", () => {
   assert.equal(resolveGuiIconKey("f56d"), "save");
   assert.equal(resolveGuiIconKey("f574"), "open");
   assert.equal(resolveGuiIconKey("f0c7"), "saveLocal");
+  assert.equal(resolveGuiIconKey("f07c"), "folderOpen");
   assert.equal(resolveGuiIconKey("f0ed"), "cloudDownload");
   assert.ok(html.indexOf('id="saveTemplateLocalButton"') < html.indexOf('id="saveTemplateButton"'));
+  assert.ok(html.indexOf('id="saveTemplateLocalButton"') < html.indexOf('id="templateModelsButton"'));
+  assert.ok(html.indexOf('id="templateModelsButton"') < html.indexOf('id="saveTemplateButton"'));
   assert.ok(html.indexOf('id="saveTemplateButton"') < html.indexOf('id="openTemplateButton"'));
+  assert.match(html, /id="templateModelsMenu"/);
   assert.match(html, /LOCAL_TEMPLATE_STORAGE_KEY/);
   assert.match(html, /header-actions \[data-hint\]:hover::after/);
 });
@@ -61,10 +65,27 @@ test("GUI expõe atualização com confirmação explícita", () => {
   const html = renderGuiHtml();
   assert.match(html, /id="updateButton"/);
   assert.match(html, /id="updateOverlay"/);
+  assert.match(html, /id="updateStatusList"/);
+  assert.match(html, /update-available/);
+  assert.match(html, /prefers-reduced-motion/);
+  assert.match(html, /\/api\/updates\/check/);
   assert.match(html, /Confirmar atualização/);
   assert.doesNotMatch(html, /window\.prompt\("Atualizar/u);
   assert.match(html, /\/api\/update/);
   assert.match(html, /incompatibilidades/);
+});
+
+test("GUI organiza modelo e andamento em largura total com log retraível", () => {
+  const html = renderGuiHtml();
+  assert.match(html, /class="full-card template-card"/);
+  assert.match(html, /class="full-card log-card"/);
+  assert.match(html, /section \{[\s\S]*min-width: 0;/);
+  assert.match(html, /\.wa-toolbar \{[\s\S]*flex-wrap: wrap;/);
+  assert.match(html, /@media \(max-width: 860px\)/);
+  assert.match(html, /id="logToggleButton"/);
+  assert.match(html, /\.log\.expanded/);
+  assert.match(html, /visibleItems = logExpanded \? items : items\.slice\(-2\)/);
+  assert.doesNotMatch(html, /<aside>/);
 });
 
 test("GUI incorpora anexos com seletor nativo e Data URI", () => {

@@ -5,7 +5,7 @@
 const childProcess = require("child_process");
 const fs = require("fs");
 const path = require("path");
-const { runReleaseHook } = require("./.agents/release-hooks");
+const { runReleaseHook } = require("../.ia.rules/scenarios/release/scripts/release-hooks");
 const { normalizeVersion, REPOSITORY } = require("./release-metadata");
 
 const ROOT_DIR = path.resolve(__dirname, "..");
