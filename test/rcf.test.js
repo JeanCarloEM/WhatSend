@@ -679,16 +679,37 @@ test("workflow de release usa workflow_dispatch, build único e GitHub CLI", () 
   );
 
   assert.match(releaseWorkflow, /workflow_dispatch:/);
+  assert.match(releaseWorkflow, /push:[\s\S]*branches:[\s\S]*- dev[\s\S]*paths:[\s\S]*- release[\s\S]*- \.github\/workflows\/release\.yml/);
+  assert.match(releaseWorkflow, /startsWith\(github\.event\.head_commit\.message, 'chore: aciona release v'\)/);
   assert.match(releaseWorkflow, /version:/);
   assert.match(releaseWorkflow, /channel:/);
   assert.match(releaseWorkflow, /confirm_official_release:/);
+  assert.match(releaseWorkflow, /id: request/);
   assert.match(releaseWorkflow, /node scripts\/build-dist\.js/);
+  assert.match(releaseWorkflow, /steps\.request\.outputs\.version/);
+  assert.match(releaseWorkflow, /steps\.request\.outputs\.channel/);
   assert.match(releaseWorkflow, /node scripts\/print-release-outputs\.js/);
   assert.match(releaseWorkflow, /gh release (create|edit)/);
   assert.match(releaseWorkflow, /--latest/);
   assert.match(releaseWorkflow, /whatsend-version\.json|metadata_path/);
-  assert.match(releaseWorkflow, /release-workflow\.js finalize/);
+  assert.match(releaseWorkflow, /\.ia\.rules\/scenarios\/release\/scripts\/release-workflow\.js finalize/);
   assert.match(releaseWorkflow, /git merge --ff-only origin\/dev/);
+});
+
+test("publicador de release acompanha workflow oficial e valida assets", () => {
+  const releasePublisher = fs.readFileSync(
+    path.join(PROJECT_ROOT, ".ia.rules", "scenarios", "release", "scripts", "release-publish.js"),
+    "utf8",
+  );
+  const releasePublisherResume = fs.readFileSync(
+    path.join(PROJECT_ROOT, ".ia.rules", "scenarios", "release", "scripts", "release-publish-resume.js"),
+    "utf8",
+  );
+
+  assert.match(releasePublisher, /"--event", "push"/);
+  assert.match(releasePublisher, /ASSETS_RELEASE_INCOMPLETOS/);
+  assert.match(releasePublisherResume, /"--event", "push"/);
+  assert.match(releasePublisherResume, /ASSETS_RELEASE_INCOMPLETOS/);
 });
 
 test("publicador local exige versão explícita e preserva dry-run", () => {

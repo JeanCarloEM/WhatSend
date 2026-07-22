@@ -29,12 +29,19 @@ on:
         required: true
         default: true
         type: boolean
+  push:
+    branches:
+      - dev
+    paths:
+      - release
+      - .github/workflows/release.yml
 
 permissions:
   contents: write
 
 jobs:
   publish:
+    if: ${{ github.event_name == 'workflow_dispatch' || startsWith(github.event.head_commit.message, 'chore: aciona release v') }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     env:
@@ -43,7 +50,7 @@ jobs:
 
     steps:
       - name: Validate confirmation
-        if: ${{ !inputs.confirm_official_release }}
+        if: ${{ github.event_name == 'workflow_dispatch' && !inputs.confirm_official_release }}
         run: |
           echo "A publicação oficial precisa ser confirmada no workflow_dispatch."
           exit 1
@@ -56,6 +63,23 @@ jobs:
       - name: Validate release branch
         run: |
           test "$GITHUB_REF_NAME" = "dev"
+
+      - name: Resolve release request
+        id: request
+        run: |
+          set -eu
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            VERSION="${{ inputs.version }}"
+            CHANNEL="${{ inputs.channel }}"
+          else
+            test -f release
+            VERSION="$(sed -e 's/[[:space:]]//g' release)"
+            CHANNEL="stable"
+          fi
+          test -n "$VERSION"
+          test -n "$CHANNEL"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "channel=$CHANNEL" >> "$GITHUB_OUTPUT"
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -75,8 +99,8 @@ jobs:
       - name: Build release package
         run: >
           node scripts/build-dist.js
-          --version "${{ inputs.version }}"
-          --channel "${{ inputs.channel }}"
+          --version "${{ steps.request.outputs.version }}"
+          --channel "${{ steps.request.outputs.channel }}"
           --official-release
           --commit-sha "${{ github.sha }}"
 
@@ -112,7 +136,7 @@ jobs:
           set -eu
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          node scripts/.agents/release-workflow.js finalize "${{ inputs.version }}"
+          node .ia.rules/scenarios/release/scripts/release-workflow.js finalize "${{ steps.request.outputs.version }}"
           git push origin HEAD:dev
           git fetch origin main
           git checkout main

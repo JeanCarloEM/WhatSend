@@ -189,9 +189,16 @@ function waitForRemoteRelease(version, triggerCommit, options) {
   if (dev !== primaryCommit) {
     throw new Error(`CONVERGENCIA_REMOTA_PENDENTE:dev=${dev};${primary}=${primaryCommit}`);
   }
-  const release = JSON.parse(run("gh", ["release", "view", `v${version}`, "--json", "url,tagName,isDraft,isPrerelease"], { timeout: 120000 }).stdout);
+  const release = JSON.parse(run("gh", ["release", "view", `v${version}`, "--json", "assets,url,tagName,targetCommitish,isDraft,isPrerelease"], { timeout: 120000 }).stdout);
+  const assetNames = (Array.isArray(release.assets) ? release.assets : []).map((asset) => asset.name).sort();
   if (release.tagName !== `v${version}` || release.isDraft || release.isPrerelease) {
     throw new Error(`RELEASE_REMOTO_INVALIDO:v${version}`);
+  }
+  if (release.targetCommitish !== triggerCommit) {
+    throw new Error(`TAG_RELEASE_DIVERGENTE:${release.targetCommitish};${triggerCommit}`);
+  }
+  if (!assetNames.includes(`WhatSend-v${version}.zip`) || !assetNames.includes("whatsend-version.json")) {
+    throw new Error("ASSETS_RELEASE_INCOMPLETOS");
   }
   return { primary, releaseUrl: release.url, workflowRun: Number(runId) };
 }
