@@ -1,5 +1,6 @@
 # GOTO.ia.md
 
+Nome correto é TODO.ia.md, erro ortográfico foi indevidamente aceito pela ia, apesar do contezfo indicar lista de a fazeres.
 Artefato normatizado por AGENTS.md para retomada operacional do Codex.
 
 Estado atual:
